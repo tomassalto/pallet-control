@@ -1,16 +1,14 @@
 FROM php:8.3-cli-alpine
 
-# Dependencias del sistema
+# Dependencias del sistema + extensiones PHP en un solo layer
 RUN apk add --no-cache \
     git curl zip unzip \
     libpng-dev oniguruma-dev libxml2-dev \
     freetype-dev libjpeg-turbo-dev \
-    nodejs npm
-
-# Extensiones PHP
-RUN apk add --no-cache postgresql-dev && \
+    postgresql-dev \
+    nodejs npm && \
     docker-php-ext-configure gd --with-freetype --with-jpeg && \
-    docker-php-ext-install pdo pdo_mysql pdo_pgsql pdo_sqlite mbstring exif bcmath gd intl pcntl
+    docker-php-ext-install pdo pdo_pgsql mbstring exif bcmath gd intl pcntl
 
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
