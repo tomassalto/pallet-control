@@ -1,0 +1,34 @@
+[phases.setup]
+nixPkgs = [
+  "php83",
+  "php83Extensions.pdo",
+  "php83Extensions.pdo_mysql",
+  "php83Extensions.pdo_sqlite",
+  "php83Extensions.mbstring",
+  "php83Extensions.xml",
+  "php83Extensions.gd",
+  "php83Extensions.exif",
+  "php83Extensions.fileinfo",
+  "php83Extensions.tokenizer",
+  "php83Extensions.ctype",
+  "php83Extensions.bcmath",
+  "php83Extensions.intl",
+  "php83Extensions.zip",
+  "php83Extensions.curl",
+  "nodejs_22"
+]
+
+[phases.install]
+cmds = [
+  "cd pallet-frontend && npm ci",
+  "cd pallet-backend && composer install --no-dev --optimize-autoloader"
+]
+
+[phases.build]
+cmds = [
+  "cd pallet-frontend && npm run build",
+  "cd pallet-backend && php artisan config:cache && php artisan route:cache && php artisan view:cache"
+]
+
+[start]
+cmd = "cd pallet-backend && php artisan migrate --force && php artisan storage:link && php artisan serve --host=0.0.0.0 --port=$PORT"
