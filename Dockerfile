@@ -21,13 +21,21 @@ COPY . .
 # Build del frontend (sale a pallet-backend/public/app/)
 RUN cd pallet-frontend && npm ci && npm run build
 
-# Dependencias PHP (sin dev)
-RUN cd pallet-backend && composer install --no-dev --optimize-autoloader
+# Dependencias PHP — sin scripts porque artisan necesita .env que no existe en build
+ENV COMPOSER_MEMORY_LIMIT=-1
+RUN cd pallet-backend && composer install --no-dev --no-scripts --no-autoloader && \
+    composer dump-autoload --no-scripts --optimize
 
 # Permisos de storage
 RUN chown -R www-data:www-data pallet-backend/storage pallet-backend/bootstrap/cache
 
 EXPOSE 8000
 
-# config:cache y route:cache se corren al iniciar (necesitan las env vars de Render)
-CMD sh -c "cd pallet-backend && php artisan config:cache && php artisan route:cache && php artisan migrate --force && php artisan storage:link && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
+# Al iniciar: descubrir paquetes, cachear config, migrar y levantar servidor
+CMD sh -c "cd pallet-backend && \
+    php artisan package:discover --ansi && \
+    php artisan config:cache && \
+    php artisan route:cache && \
+    php artisan migrate --force && \
+    php artisan storage:link && \
+    php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
