@@ -2,69 +2,63 @@
 
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Http\Response;
 
-
-// Ruta para verificar configuración PHP (ejecuta el script directamente)
+// Ruta para verificar configuración PHP
 Route::get('/check-php-config.php', function () {
     ob_start();
     include public_path('check-php-config.php');
     return ob_get_clean();
 });
 
-// PWA: Service Worker - debe estar en la raíz para controlar scope /
-Route::get('/sw.js', function () {
-    $path = public_path('app/sw.js');
-    if (!File::exists($path)) {
-        return response('// service worker not built yet', 200)
-            ->header('Content-Type', 'application/javascript');
-    }
-    return response(File::get($path), 200)
-        ->header('Content-Type', 'application/javascript')
-        ->header('Service-Worker-Allowed', '/');
-});
-
-// PWA: Web App Manifest
-Route::get('/manifest.webmanifest', function () {
-    $path = public_path('app/manifest.webmanifest');
-    if (!File::exists($path)) {
-        abort(404);
-    }
-    return response(File::get($path), 200)
-        ->header('Content-Type', 'application/manifest+json');
-});
-
-// PWA: Iconos en la raíz
-Route::get('/pallet-icon-{size}.png', function (string $size) {
-    $path = public_path("app/pallet-icon-{$size}.png");
-    if (!File::exists($path)) {
-        abort(404);
-    }
-    return response(File::get($path), 200)
-        ->header('Content-Type', 'image/png')
-        ->header('Cache-Control', 'public, max-age=31536000');
-});
-
-Route::get('/{any?}', function () {
-    return File::get(public_path('app/index.html'));
-})->where('any', '^(?!api|storage|check-php-config|sw\.js|manifest\.webmanifest).*$');
-
-// Ruta alternativa para servir imágenes con headers CORS correctos
-Route::get('/storage/{path}', function ($path) {
+// Ruta alternativa para servir imágenes del storage con headers CORS correctos
+Route::get('/storage/{path}', function (string $path) {
     $filePath = storage_path('app/public/' . $path);
+    if (!file_exists($filePath)) abort(404);
 
-    if (!file_exists($filePath)) {
-        abort(404);
-    }
-
-    $file = file_get_contents($filePath);
     $mimeType = mime_content_type($filePath);
-
-    return response($file, 200)
+    return response(file_get_contents($filePath), 200)
         ->header('Content-Type', $mimeType)
         ->header('Access-Control-Allow-Origin', '*')
         ->header('Access-Control-Allow-Methods', 'GET, OPTIONS')
         ->header('Access-Control-Allow-Headers', 'Content-Type')
         ->header('Cache-Control', 'public, max-age=31536000');
 })->where('path', '.*');
+
+// Catch-all: sirve assets del build de Vite o el index.html de la SPA
+Route::get('/{any?}', function (string $any = '') {
+    // Si la URL corresponde a un archivo en public/app/, servirlo directamente
+    if ($any !== '') {
+        $filePath = public_path("app/{$any}");
+        if (File::exists($filePath) && is_file($filePath)) {
+            $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+            $mimes = [
+                'js'           => 'application/javascript',
+                'css'          => 'text/css',
+                'png'          => 'image/png',
+                'svg'          => 'image/svg+xml',
+                'webp'         => 'image/webp',
+                'ico'          => 'image/x-icon',
+                'woff'         => 'font/woff',
+                'woff2'        => 'font/woff2',
+                'ttf'          => 'font/ttf',
+                'json'         => 'application/json',
+                'webmanifest'  => 'application/manifest+json',
+            ];
+            $mime = $mimes[$ext] ?? mime_content_type($filePath);
+
+            $response = response(File::get($filePath), 200)
+                ->header('Content-Type', $mime)
+                ->header('Cache-Control', 'public, max-age=31536000');
+
+            // El service worker necesita este header para controlar scope /
+            if ($ext === 'js' && str_ends_with($any, 'sw.js')) {
+                $response->header('Service-Worker-Allowed', '/');
+            }
+
+            return $response;
+        }
+    }
+
+    // Todo lo demás → SPA
+    return File::get(public_path('app/index.html'));
+})->where('any', '^(?!api|storage|check-php-config).*$');
