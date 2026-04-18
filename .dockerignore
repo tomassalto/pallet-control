@@ -1,0 +1,7 @@
+pallet-backend/.env
+pallet-backend/vendor
+pallet-backend/storage/app/public
+pallet-backend/public/app
+pallet-frontend/node_modules
+.git
+.claude
