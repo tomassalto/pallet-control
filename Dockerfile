@@ -8,8 +8,9 @@ RUN apk add --no-cache \
     nodejs npm
 
 # Extensiones PHP
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg && \
-    docker-php-ext-install pdo pdo_mysql pdo_sqlite mbstring exif bcmath gd intl pcntl
+RUN apk add --no-cache postgresql-dev && \
+    docker-php-ext-configure gd --with-freetype --with-jpeg && \
+    docker-php-ext-install pdo pdo_mysql pdo_pgsql pdo_sqlite mbstring exif bcmath gd intl pcntl
 
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -23,14 +24,12 @@ COPY . .
 RUN cd pallet-frontend && npm ci && npm run build
 
 # Dependencias PHP (sin dev)
-RUN cd pallet-backend && \
-    composer install --no-dev --optimize-autoloader && \
-    php artisan config:cache && \
-    php artisan route:cache
+RUN cd pallet-backend && composer install --no-dev --optimize-autoloader
 
 # Permisos de storage
 RUN chown -R www-data:www-data pallet-backend/storage pallet-backend/bootstrap/cache
 
 EXPOSE 8000
 
-CMD sh -c "cd pallet-backend && php artisan migrate --force && php artisan storage:link && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
+# config:cache y route:cache se corren al iniciar (necesitan las env vars de Render)
+CMD sh -c "cd pallet-backend && php artisan config:cache && php artisan route:cache && php artisan migrate --force && php artisan storage:link && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
