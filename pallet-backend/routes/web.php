@@ -46,7 +46,7 @@ Route::get('/pallet-icon-{size}.png', function (string $size) {
         ->header('Cache-Control', 'public, max-age=31536000');
 });
 
-Route::get('/{any}', function () {
+Route::get('/{any?}', function () {
     return File::get(public_path('app/index.html'));
 })->where('any', '^(?!api|storage|check-php-config|sw\.js|manifest\.webmanifest).*$');
 
