@@ -2,15 +2,15 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('activity_logs', function (Blueprint $table) {
-            $table->index('order_id');
-        });
+        // Usar SQL nativo con IF NOT EXISTS para ser idempotente en PostgreSQL y MySQL
+        DB::statement('CREATE INDEX IF NOT EXISTS activity_logs_order_id_index ON activity_logs (order_id)');
     }
 
     public function down(): void
