@@ -11,8 +11,16 @@ function cx(...arr) {
 export default function SidebarLayout({ title = "Pallet Control", children }) {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
-  const { user } = useAuth() || {};
+  const { user, logout } = useAuth() || {};
   const { dark, toggle } = useTheme();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await logout();
+    setOpen(false);
+    setLoggingOut(false);
+  }
 
   const isPending = user && user.role === null;
 
@@ -126,8 +134,26 @@ export default function SidebarLayout({ title = "Pallet Control", children }) {
           })}
         </nav>
 
-        {/* Theme toggle en el sidebar */}
-        <div className="p-3 border-t flex-shrink-0">
+        {/* Pie del sidebar: usuario + logout + tema */}
+        <div className="p-3 border-t flex-shrink-0 flex flex-col gap-2">
+          {/* Info del usuario y logout */}
+          {user && (
+            <div className="flex items-center justify-between gap-2 px-2 py-1">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold truncate">{user.name}</div>
+                <div className="text-xs text-gray-500 truncate">{user.email}</div>
+              </div>
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+              >
+                {loggingOut ? "…" : "Salir"}
+              </button>
+            </div>
+          )}
+
+          {/* Theme toggle */}
           <button
             onClick={toggle}
             className="w-full flex items-center gap-3 rounded-xl px-4 py-3 border text-sm font-medium bg-white hover:bg-gray-50 transition-colors"
