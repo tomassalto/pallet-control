@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { apiGet, apiPost } from "../api/client";
 import { toastError, toastSuccess } from "../ui/toast";
@@ -26,25 +26,24 @@ export default function MyOrders() {
       setPage(current);
       setHasMore(current < last);
 
-      // Verificar qué pedidos pueden finalizarse
+      // Verificar qué pedidos pueden finalizarse (1 sola request batch)
       const openRows = rows.filter((o) => o.status === "open");
-      const canFinalizePromises = openRows.map(async (order) => {
+      if (openRows.length > 0) {
         try {
-          const data = await apiGet(`/orders/${order.id}/can-finalize`);
-          return { orderId: order.id, canFinalize: data.can_finalize };
+          const result = await apiPost("/orders/can-finalize-batch", {
+            order_ids: openRows.map((o) => o.id),
+          });
+          setCanFinalizeMap((prev) => {
+            const next = new Map(prev);
+            Object.entries(result).forEach(([orderId, canFinalize]) => {
+              next.set(Number(orderId), canFinalize);
+            });
+            return next;
+          });
         } catch {
-          return { orderId: order.id, canFinalize: false };
+          // silently ignore — botones de finalizar simplemente no aparecen
         }
-      });
-
-      const canFinalizeResults = await Promise.all(canFinalizePromises);
-      setCanFinalizeMap((prev) => {
-        const next = new Map(prev);
-        canFinalizeResults.forEach(({ orderId, canFinalize }) => {
-          next.set(orderId, canFinalize);
-        });
-        return next;
-      });
+      }
     } catch (e) {
       toastError(
         e?.message || e?.response?.data?.message || "No se pudo cargar pedidos"
@@ -68,8 +67,10 @@ export default function MyOrders() {
 
   async function checkCanFinalize(orderId) {
     try {
-      const data = await apiGet(`/orders/${orderId}/can-finalize`);
-      return data.can_finalize;
+      const result = await apiPost("/orders/can-finalize-batch", {
+        order_ids: [orderId],
+      });
+      return result[orderId] ?? false;
     } catch {
       return false;
     }

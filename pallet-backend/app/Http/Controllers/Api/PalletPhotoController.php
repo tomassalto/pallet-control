@@ -15,11 +15,6 @@ class PalletPhotoController extends Controller
     {
         $photos = $pallet->photos()->latest()->get();
 
-        // Agregar URLs a las fotos
-        $photos->each(function ($photo) {
-            $photo->url = '/storage/' . $photo->path;
-        });
-
         return response()->json($photos);
     }
 

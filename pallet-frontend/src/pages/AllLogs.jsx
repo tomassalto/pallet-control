@@ -7,14 +7,20 @@ import Title from "../ui/Title";
 export default function AllLogs() {
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState("");
 
-  async function load() {
+  async function load(nextPage = 1, { append = false } = {}) {
     setError("");
     setLoading(true);
     try {
-      const data = await apiGet(`/activity-logs?limit=500`);
-      setLogs(data.logs || []);
+      const data = await apiGet(`/activity-logs?page=${nextPage}&per_page=50`);
+      const rows = data.logs || [];
+
+      setLogs((prev) => (append ? [...prev, ...rows] : rows));
+      setPage(data.current_page ?? nextPage);
+      setHasMore((data.current_page ?? nextPage) < (data.last_page ?? nextPage));
     } catch (e) {
       setError(e.message || "Error cargando logs");
     } finally {
@@ -23,10 +29,10 @@ export default function AllLogs() {
   }
 
   useEffect(() => {
-    load();
+    load(1);
   }, []);
 
-  if (loading) {
+  if (loading && logs.length === 0) {
     return (
       <div className="space-y-3">
         <BackButton to="/" />
@@ -53,7 +59,7 @@ export default function AllLogs() {
       </div>
 
       {logs.length === 0 ? (
-        <div className="bg-white border-border rounded-2xl p-8 text-center text-gray-500">
+        <div className="bg-white border rounded-2xl p-8 text-center text-gray-500">
           No hay actividad registrada aún.
         </div>
       ) : (
@@ -61,7 +67,7 @@ export default function AllLogs() {
           {logs.map((log) => (
             <div
               key={log.id}
-              className="bg-white border-border rounded-xl p-4 space-y-2"
+              className="bg-white border rounded-xl p-4 space-y-2"
             >
               <div className="text-sm text-gray-900">{log.description}</div>
 
@@ -97,6 +103,16 @@ export default function AllLogs() {
             </div>
           ))}
         </div>
+      )}
+
+      {hasMore && (
+        <button
+          disabled={loading}
+          onClick={() => load(page + 1, { append: true })}
+          className="w-full rounded-xl py-3 border bg-white text-sm disabled:opacity-60"
+        >
+          {loading ? "Cargando..." : "Cargar más"}
+        </button>
       )}
     </div>
   );

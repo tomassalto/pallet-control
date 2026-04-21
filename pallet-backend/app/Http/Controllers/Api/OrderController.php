@@ -74,13 +74,6 @@ class OrderController extends Controller
             'tickets.photos'
         ]);
 
-        // Agregar URLs a las fotos de los tickets
-        $order->tickets->each(function ($ticket) {
-            $ticket->photos->each(function ($photo) {
-                $photo->url = '/storage/' . $photo->path;
-            });
-        });
-
         // Para cada item, obtener información de pallets y bases donde está asignado
         $itemsWithLocations = $order->items->map(function ($item) {
             $bases = $item->bases()->with('pallet:id,code')->get();
@@ -209,6 +202,37 @@ class OrderController extends Controller
             'order' => $order,
             'logs' => $logs,
         ]);
+    }
+
+    // POST /orders/can-finalize-batch  { order_ids: [1, 2, 3] }
+    public function canFinalizeBatch(Request $request)
+    {
+        $data = $request->validate([
+            'order_ids'   => ['required', 'array', 'max:100'],
+            'order_ids.*' => ['integer'],
+        ]);
+
+        $orders = Order::with('items', 'pallets')
+            ->whereIn('id', $data['order_ids'])
+            ->get()
+            ->keyBy('id');
+
+        $result = [];
+        foreach ($data['order_ids'] as $id) {
+            $order = $orders->get($id);
+            if (!$order) {
+                $result[$id] = false;
+                continue;
+            }
+            $result[$id] = (
+                $order->items->isNotEmpty() &&
+                $order->pallets->isNotEmpty() &&
+                $order->items->where('status', 'pending')->isEmpty() &&
+                $order->items->where('status', 'done')->isNotEmpty()
+            );
+        }
+
+        return response()->json($result);
     }
 
     // GET /orders/{order}/can-finalize

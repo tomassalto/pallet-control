@@ -48,6 +48,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/orders', [OrderController::class, 'index']);
         Route::post('/orders', [OrderController::class, 'store']);
         Route::get('/orders/last-open', [OrderController::class, 'lastOpen']);
+        Route::post('/orders/can-finalize-batch', [OrderController::class, 'canFinalizeBatch']);
         Route::get('/orders/{order}', [OrderController::class, 'show']);
         Route::patch('/orders/{order}', [OrderController::class, 'updateStatus']);
         Route::post('/orders/{order}/attach-pallet', [OrderController::class, 'attachPallet']);

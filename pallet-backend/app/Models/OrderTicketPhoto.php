@@ -15,6 +15,13 @@ class OrderTicketPhoto extends Model
         'order_index',
     ];
 
+    protected $appends = ['url'];
+
+    public function getUrlAttribute(): string
+    {
+        return '/storage/' . $this->path;
+    }
+
     public function ticket(): BelongsTo
     {
         return $this->belongsTo(OrderTicket::class, 'ticket_id');

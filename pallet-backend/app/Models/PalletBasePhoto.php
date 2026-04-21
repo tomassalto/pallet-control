@@ -15,6 +15,13 @@ class PalletBasePhoto extends Model
         'note',
     ];
 
+    protected $appends = ['url'];
+
+    public function getUrlAttribute(): string
+    {
+        return '/storage/' . $this->path;
+    }
+
     public function base(): BelongsTo
     {
         return $this->belongsTo(PalletBase::class, 'base_id');

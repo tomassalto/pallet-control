@@ -19,13 +19,6 @@ class OrderTicketController extends Controller
     {
         $tickets = $order->tickets()->with('photos')->get();
 
-        // Agregar URLs a las fotos
-        $tickets->each(function ($ticket) {
-            $ticket->photos->each(function ($photo) {
-                $photo->url = '/storage/' . $photo->path;
-            });
-        });
-
         return response()->json($tickets);
     }
 

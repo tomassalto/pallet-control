@@ -16,7 +16,9 @@ class PalletController extends Controller
 {
     public function index(Request $request)
     {
-        $q = Pallet::with('orders')->orderByDesc('id');
+        $q = Pallet::select('id', 'code', 'status', 'note', 'created_at')
+            ->with('orders:id,code,status')
+            ->orderByDesc('id');
 
         if ($request->filled('status')) {
             $q->where('status', $request->string('status'));
@@ -63,48 +65,14 @@ class PalletController extends Controller
     {
         $pallet->load(['orders.items', 'photos', 'bases.photos', 'bases.orderItems']);
 
-        // Agregar URLs a las fotos generales
-        $photos = $pallet->photos->map(function ($photo) {
-            $photo->url = '/storage/' . $photo->path;
-            return $photo;
-        });
-
-        // Agregar URLs a las fotos de bases y asegurar que orderItems se incluyan
-        $bases = $pallet->bases->map(function ($base) {
-            $base->photos->each(function ($photo) {
-                $photo->url = '/storage/' . $photo->path;
-            });
-            // Asegurar que orderItems esté cargado
-            if (!$base->relationLoaded('orderItems')) {
-                $base->load('orderItems');
-            }
-            return $base;
-        });
-
-        // Obtener logs de actividad del pallet - solo cambios en bases
-        $logs = \App\Models\ActivityLog::where('pallet_id', $pallet->id)
-            ->where('entity_type', 'pallet_base')
-            ->with('user:id,name')
-            ->orderByDesc('created_at')
-            ->limit(100)
-            ->get()
-            ->map(function ($log) {
-                return [
-                    'id' => $log->id,
-                    'action' => $log->action,
-                    'description' => $log->description,
-                    'user_name' => $log->user?->name ?? 'Sistema',
-                    'created_at' => $log->created_at->format('Y-m-d H:i:s'),
-                    'created_at_formatted' => $log->created_at->format('d/m/Y H:i:s'),
-                ];
-            });
+        // Los logs están en el endpoint dedicado /activity-logs, no se duplican aquí
 
         return response()->json([
             'pallet' => $pallet,
             'orders' => $pallet->orders,
-            'photos' => $photos,
-            'bases' => $bases,
-            'activity_logs' => $logs,
+            'photos' => $pallet->photos,   // url auto-incluida por el modelo
+            'bases'  => $pallet->bases,    // photos.url auto-incluida por el modelo
+            'activity_logs' => [],
         ]);
     }
 

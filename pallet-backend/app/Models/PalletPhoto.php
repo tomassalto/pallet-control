@@ -13,6 +13,13 @@ class PalletPhoto extends Model
         'note',
     ];
 
+    protected $appends = ['url'];
+
+    public function getUrlAttribute(): string
+    {
+        return '/storage/' . $this->path;
+    }
+
     public function pallet()
     {
         return $this->belongsTo(Pallet::class);

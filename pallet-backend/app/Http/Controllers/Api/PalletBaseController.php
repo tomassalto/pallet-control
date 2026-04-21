@@ -16,13 +16,6 @@ class PalletBaseController extends Controller
     {
         $bases = $pallet->bases()->with(['photos', 'orderItems'])->latest()->get();
 
-        // Agregar URLs a las fotos de cada base
-        $bases->each(function ($base) {
-            $base->photos->each(function ($photo) {
-                $photo->url = '/storage/' . $photo->path;
-            });
-        });
-
         return response()->json($bases);
     }
 
