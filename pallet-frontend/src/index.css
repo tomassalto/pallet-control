@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Habilitar dark mode por clase (.dark en <html>) para Tailwind v4 */
+@variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-gold: #bf953f;
   --color-yellow: #ffa800;
@@ -15,11 +18,48 @@
   --color-light-gray-2: #efeff1;
 }
 
-body {
-  background-color: #f3f4f6;
-}
-
+body,
 #root {
   background-color: #f3f4f6;
   min-height: 100vh;
+}
+
+/* ─── Dark mode: base ──────────────────────────────────────── */
+.dark body,
+.dark #root {
+  background-color: #111010;
+}
+
+/* ─── Dark mode: superficies ───────────────────────────────── */
+.dark .bg-white    { background-color: #1c1c1c; }
+.dark .bg-gray-50  { background-color: #191919; }
+.dark .bg-gray-100 { background-color: #2b2b2b; }
+
+/* ─── Dark mode: texto ─────────────────────────────────────── */
+.dark .text-gray-900 { color: #f3f4f6; }
+.dark .text-gray-800 { color: #e5e7eb; }
+.dark .text-gray-700 { color: #d1d5db; }
+.dark .text-gray-600 { color: #9ca3af; }
+.dark .text-gray-500 { color: #6b7280; }
+.dark .text-gray-400 { color: #4b5563; }
+
+/* ─── Dark mode: bordes ────────────────────────────────────── */
+.dark .border   { border-color: #2b2b2b; }
+.dark .border-b { border-bottom-color: #2b2b2b; }
+.dark .border-r { border-right-color:  #2b2b2b; }
+.dark .border-t { border-top-color:    #2b2b2b; }
+.dark .border-l { border-left-color:   #2b2b2b; }
+
+/* ─── Dark mode: inputs ────────────────────────────────────── */
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+  background-color: #2b2b2b;
+  color: #f3f4f6;
+  border-color: #2b2b2b;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #6b7280;
 }
