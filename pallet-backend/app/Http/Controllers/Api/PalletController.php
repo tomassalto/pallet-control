@@ -300,6 +300,9 @@ class PalletController extends Controller
         $palletCode = $pallet->code;
         $palletId = $pallet->id;
 
+        // Eager-load photos y bases.photos en 2 queries fijas (evita N+1)
+        $pallet->load('photos', 'bases.photos');
+
         // Eliminar fotos del storage
         foreach ($pallet->photos as $photo) {
             Storage::disk('public')->delete($photo->path);

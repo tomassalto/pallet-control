@@ -26,7 +26,7 @@ export default function MyPallets() {
       setHasMore(current < last);
     } catch (e) {
       toastError(
-        e?.message || e?.response?.data?.message || "No se pudo cargar pallets"
+        e?.message || e?.response?.data?.message || "No se pudo cargar pallets",
       );
     } finally {
       setLoading(false);
@@ -50,7 +50,7 @@ export default function MyPallets() {
       </div>
       <div className="flex flex-col gap-2 items-center">
         <Title size="4xl">Mis pallets</Title>
-        <p className="text-sm text-gray-600 w-[200px]">
+        <p className="text-sm text-gray-600 w-[200px] text-center">
           Historial de pallets creados. Tocá uno para ver el detalle.
         </p>
       </div>
@@ -66,10 +66,10 @@ export default function MyPallets() {
           {/* Pallets abiertos */}
           {openPallets.length > 0 && (
             <div className="flex flex-col gap-2">
-              <div className="text-sm font-semibold text-gray-700">
+              <div className="text-sm font-semibold text-gray-700 text-center">
                 Pallets en proceso ({openPallets.length})
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 text-center">
                 {openPallets.map((p) => (
                   <Link
                     key={p.id}

@@ -68,53 +68,49 @@ class OrderController extends Controller
 
     public function show(Order $order)
     {
+        // Eager-load todo en 4 queries fijas (sin N+1 por items)
         $order->load([
             'pallets:id,code,status,created_at',
-            'items' => fn($q) => $q->orderBy('description'),
-            'tickets.photos'
+            'items'                => fn($q) => $q->orderBy('description'),
+            'items.bases'          => fn($q) => $q->select('pallet_bases.id', 'pallet_bases.name', 'pallet_bases.pallet_id'),
+            'items.bases.pallet:id,code',
+            'tickets.photos',
         ]);
 
-        // Para cada item, obtener información de pallets y bases donde está asignado
+        // Mapear usando relaciones ya cargadas (0 queries adicionales)
         $itemsWithLocations = $order->items->map(function ($item) {
-            $bases = $item->bases()->with('pallet:id,code')->get();
+            $bases = $item->bases; // ya cargado
 
-            $locations = $bases->map(function ($base) {
-                return [
-                    'pallet_id' => $base->pallet->id,
-                    'pallet_code' => $base->pallet->code,
-                    'base_id' => $base->id,
-                    'base_name' => $base->name,
-                    'qty' => $base->pivot->qty,
-                ];
-            });
+            $locations = $bases->map(fn($base) => [
+                'pallet_id'   => $base->pallet->id,
+                'pallet_code' => $base->pallet->code,
+                'base_id'     => $base->id,
+                'base_name'   => $base->name,
+                'qty'         => $base->pivot->qty,
+            ]);
 
-            // Calcular done_qty como la suma de todas las cantidades asignadas a las bases
-            $calculatedDoneQty = $bases->sum(function ($base) {
-                return $base->pivot->qty ?? 0;
-            });
+            $calculatedDoneQty = $bases->sum(fn($base) => $base->pivot->qty ?? 0);
 
-            // Si el producto está marcado como "done" y no tiene asignaciones a bases,
-            // asumimos que está completo (done_qty = qty)
             if ($item->status === 'done' && $calculatedDoneQty === 0 && $bases->isEmpty()) {
                 $calculatedDoneQty = $item->qty;
             }
 
             return [
-                'id' => $item->id,
-                'ean' => $item->ean,
-                'ean_last4' => $item->ean_last4,
+                'id'          => $item->id,
+                'ean'         => $item->ean,
+                'ean_last4'   => $item->ean_last4,
                 'description' => $item->description,
-                'qty' => $item->qty,
-                'status' => $item->status,
-                'done_qty' => $calculatedDoneQty, // Usar el valor calculado en lugar del almacenado
-                'locations' => $locations,
+                'qty'         => $item->qty,
+                'status'      => $item->status,
+                'done_qty'    => $calculatedDoneQty,
+                'locations'   => $locations,
             ];
         });
 
         return response()->json([
-            'order' => $order,
+            'order'   => $order,
             'pallets' => $order->pallets,
-            'items' => $itemsWithLocations,
+            'items'   => $itemsWithLocations,
         ]);
     }
 

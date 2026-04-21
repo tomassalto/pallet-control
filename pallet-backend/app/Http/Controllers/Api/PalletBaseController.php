@@ -37,13 +37,35 @@ class PalletBaseController extends Controller
 
         // Asociar items si se enviaron
         if (!empty($data['items'])) {
+            // Pre-fetch todo en 3 queries fijas — sin N+1 dentro del loop
+            $pallet->loadMissing('orders');
+            $requestedItemIds = collect($data['items'])->pluck('order_item_id');
+
+            $orderItemsMap = \App\Models\OrderItem::whereIn('id', $requestedItemIds)
+                ->get()->keyBy('id');
+
+            $orderIds = $orderItemsMap->pluck('order_id')->unique()->values();
+            $ordersMap = \App\Models\Order::whereIn('id', $orderIds)
+                ->get()->keyBy('id');
+
+            // Una sola query agrupa todas las cantidades ya asignadas en otras bases
+            $allocations = DB::table('pallet_base_order_items')
+                ->join('pallet_bases', 'pallet_bases.id', '=', 'pallet_base_order_items.base_id')
+                ->where('pallet_bases.pallet_id', $pallet->id)
+                ->where('pallet_bases.id', '!=', $base->id)
+                ->whereIn('pallet_base_order_items.order_item_id', $requestedItemIds)
+                ->groupBy('pallet_base_order_items.order_item_id')
+                ->selectRaw('pallet_base_order_items.order_item_id, SUM(pallet_base_order_items.qty) as total_qty')
+                ->get()
+                ->pluck('total_qty', 'order_item_id');
+
             $itemsToSync = [];
             foreach ($data['items'] as $item) {
                 // Verificar que el order_item pertenece a un pedido del pallet
-                $orderItem = \App\Models\OrderItem::find($item['order_item_id']);
+                $orderItem = $orderItemsMap->get($item['order_item_id']);
                 if ($orderItem && $pallet->orders->contains('id', $orderItem->order_id)) {
                     // Verificar si el pedido está finalizado
-                    $order = \App\Models\Order::find($orderItem->order_id);
+                    $order = $ordersMap->get($orderItem->order_id);
                     if ($order && $order->status === 'done') {
                         return response()->json([
                             'message' => "No se puede asignar '{$orderItem->description}' porque el pedido '{$order->code}' está finalizado.",
@@ -52,14 +74,7 @@ class PalletBaseController extends Controller
                         ], 422);
                     }
 
-                    // Calcular cuánto ya está asignado de este item en otras bases del pallet
-                    $totalAssigned = DB::table('pallet_base_order_items')
-                        ->join('pallet_bases', 'pallet_bases.id', '=', 'pallet_base_order_items.base_id')
-                        ->where('pallet_bases.pallet_id', $pallet->id)
-                        ->where('pallet_base_order_items.order_item_id', $item['order_item_id'])
-                        ->where('pallet_bases.id', '!=', $base->id) // Excluir la base actual si existe
-                        ->sum('pallet_base_order_items.qty');
-
+                    $totalAssigned = $allocations->get($item['order_item_id'], 0);
                     $available = $orderItem->qty - $totalAssigned;
 
                     if ($item['qty'] > $available) {
@@ -76,9 +91,9 @@ class PalletBaseController extends Controller
             }
             $base->orderItems()->sync($itemsToSync);
 
-            // Registrar logs para productos asignados a la base
+            // Registrar logs — reusar $orderItemsMap (0 queries extra)
             foreach ($itemsToSync as $orderItemId => $pivotData) {
-                $orderItem = \App\Models\OrderItem::find($orderItemId);
+                $orderItem = $orderItemsMap->get($orderItemId);
                 if ($orderItem) {
                     ActivityLogger::log(
                         'item_assigned_to_base',
@@ -147,16 +162,41 @@ class PalletBaseController extends Controller
             $oldItems = $base->orderItems()->get()->mapWithKeys(function ($item) {
                 return [$item->id => ['qty' => $item->pivot->qty]];
             })->toArray();
-            
+
+            // Pre-fetch todo en 3 queries — sin N+1 dentro de los loops
+            $pallet->loadMissing('orders');
+            $requestedItemIds = collect($data['items'])->pluck('order_item_id');
+            $allItemIds = $requestedItemIds->merge(array_keys($oldItems))->unique()->values();
+
+            $orderItemsMap = \App\Models\OrderItem::whereIn('id', $allItemIds)
+                ->get()->keyBy('id');
+
+            $orderIds = $orderItemsMap->pluck('order_id')->unique()->values();
+            $ordersMap = \App\Models\Order::whereIn('id', $orderIds)
+                ->get()->keyBy('id');
+
+            // Una sola query agrupa cantidades ya asignadas en otras bases (solo items solicitados)
+            $allocations = $requestedItemIds->isNotEmpty()
+                ? DB::table('pallet_base_order_items')
+                    ->join('pallet_bases', 'pallet_bases.id', '=', 'pallet_base_order_items.base_id')
+                    ->where('pallet_bases.pallet_id', $pallet->id)
+                    ->where('pallet_bases.id', '!=', $base->id)
+                    ->whereIn('pallet_base_order_items.order_item_id', $requestedItemIds)
+                    ->groupBy('pallet_base_order_items.order_item_id')
+                    ->selectRaw('pallet_base_order_items.order_item_id, SUM(pallet_base_order_items.qty) as total_qty')
+                    ->get()
+                    ->pluck('total_qty', 'order_item_id')
+                : collect();
+
             // Incluir items existentes para no perderlos
             $itemsToSync = $oldItems;
-            
+
             foreach ($data['items'] as $item) {
                 // Verificar que el order_item pertenece a un pedido del pallet
-                $orderItem = \App\Models\OrderItem::find($item['order_item_id']);
+                $orderItem = $orderItemsMap->get($item['order_item_id']);
                 if ($orderItem && $pallet->orders->contains('id', $orderItem->order_id)) {
                     // Verificar si el pedido está finalizado
-                    $order = \App\Models\Order::find($orderItem->order_id);
+                    $order = $ordersMap->get($orderItem->order_id);
                     if ($order && $order->status === 'done') {
                         // Si el item ya existe en la base y la cantidad no cambió, permitir (no modificar)
                         $oldQty = $oldItems[$item['order_item_id']]['qty'] ?? 0;
@@ -171,21 +211,14 @@ class PalletBaseController extends Controller
                         continue;
                     }
 
-                    // Calcular cuánto ya está asignado de este item en otras bases del pallet
-                    $totalAssigned = DB::table('pallet_base_order_items')
-                        ->join('pallet_bases', 'pallet_bases.id', '=', 'pallet_base_order_items.base_id')
-                        ->where('pallet_bases.pallet_id', $pallet->id)
-                        ->where('pallet_base_order_items.order_item_id', $item['order_item_id'])
-                        ->where('pallet_bases.id', '!=', $base->id) // Excluir la base actual
-                        ->sum('pallet_base_order_items.qty');
-
+                    $totalAssigned = $allocations->get($item['order_item_id'], 0);
                     // Si el item ya existe en esta base, incluir su cantidad actual en el cálculo
                     $currentQtyInBase = $oldItems[$item['order_item_id']]['qty'] ?? 0;
                     $available = $orderItem->qty - $totalAssigned + $currentQtyInBase;
 
                     if ($item['qty'] > $available) {
                         return response()->json([
-                            'message' => "No se puede asignar {$item['qty']} unidades. Solo quedan {$available} disponibles de '{$orderItem->description}'.", 
+                            'message' => "No se puede asignar {$item['qty']} unidades. Solo quedan {$available} disponibles de '{$orderItem->description}'.",
                             'order_item_id' => $item['order_item_id'],
                             'available' => $available,
                             'requested' => $item['qty'],
@@ -198,9 +231,9 @@ class PalletBaseController extends Controller
             }
             $base->orderItems()->sync($itemsToSync);
 
-            // Registrar logs para cambios en productos asignados
+            // Registrar logs — reusar $orderItemsMap (0 queries extra)
             foreach ($itemsToSync as $orderItemId => $pivotData) {
-                $orderItem = \App\Models\OrderItem::find($orderItemId);
+                $orderItem = $orderItemsMap->get($orderItemId);
                 if ($orderItem) {
                     $oldQty = $oldItems[$orderItemId]['qty'] ?? 0;
                     if ($oldQty != $pivotData['qty']) {
