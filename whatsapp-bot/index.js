@@ -4,6 +4,7 @@ import makeWASocket, {
   proto,
   initAuthCreds,
   BufferJSON,
+  downloadMediaMessage,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import express from 'express';
@@ -20,6 +21,7 @@ const API_SECRET   = process.env.BOT_API_SECRET   || 'changeme';
 const PORT         = parseInt(process.env.PORT     || '3001', 10);
 const WA_GROUP_ID  = process.env.WHATSAPP_GROUP_ID || '';   // e.g. "120363xxxxxxx@g.us"
 const SESSION_ID   = process.env.SESSION_ID        || 'pallet-bot';
+const LARAVEL_URL  = (process.env.LARAVEL_URL      || '').replace(/\/$/, '');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -109,6 +111,106 @@ async function usePGAuthState(sessionId) {
 }
 
 // ─────────────────────────────────────────────────────────
+// Ayuda
+// ─────────────────────────────────────────────────────────
+const HELP_TEXT = `🤖 *PalletBot — Comandos*
+
+Mandá una foto con el texto (caption):
+
+📦 *pallet PAL-20260418-0001*
+  → foto al pallet
+
+🗂️ *base PAL-20260418-0001 NombreBase*
+  → foto a una base del pallet
+
+🎫 *ticket 12345*
+  → foto al ticket del pedido
+
+_(Todo en minúsculas. El nombre de base puede ser parcial.)_`;
+
+// ─────────────────────────────────────────────────────────
+// Handler de fotos recibidas en el grupo
+// ─────────────────────────────────────────────────────────
+async function handlePhotoMessage(msg) {
+  const imageMsg = msg.message?.imageMessage;
+  if (!imageMsg) return;
+
+  const caption = (imageMsg.caption || '').trim();
+
+  // Sin caption → ayuda
+  if (!caption) {
+    await sock.sendMessage(WA_GROUP_ID, { text: HELP_TEXT, quoted: msg });
+    return;
+  }
+
+  const parts  = caption.split(/\s+/);
+  const type   = parts[0]?.toLowerCase();
+  const code   = parts[1];
+  const extra  = parts.slice(2).join(' ') || null;
+
+  const validTypes = ['pallet', 'base', 'ticket'];
+  if (!validTypes.includes(type) || !code) {
+    await sock.sendMessage(WA_GROUP_ID, {
+      text: `❓ Comando no reconocido.\n\n${HELP_TEXT}`,
+      quoted: msg,
+    });
+    return;
+  }
+
+  if (!LARAVEL_URL) {
+    console.error('[Bot] LARAVEL_URL no configurado');
+    await sock.sendMessage(WA_GROUP_ID, { text: '⚠️ Bot mal configurado (LARAVEL_URL vacío)', quoted: msg });
+    return;
+  }
+
+  try {
+    // Descargar imagen de WhatsApp
+    const buffer = await downloadMediaMessage(
+      msg, 'buffer', {},
+      { logger, reuploadRequest: sock.updateMediaMessage }
+    );
+
+    // Construir FormData (Node 22 tiene FormData nativo)
+    const form = new FormData();
+    form.append('type',  type);
+    form.append('photo', new Blob([buffer], { type: 'image/jpeg' }), 'photo.jpg');
+
+    if (type === 'pallet') {
+      form.append('pallet_code', code);
+    } else if (type === 'base') {
+      form.append('pallet_code', code);
+      if (extra) form.append('base_name', extra);
+    } else if (type === 'ticket') {
+      form.append('order_code', code);
+    }
+
+    const res = await fetch(`${LARAVEL_URL}/api/v1/bot/upload`, {
+      method:  'POST',
+      headers: { 'X-Bot-Secret': API_SECRET },
+      body:    form,
+    });
+
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(json.error || json.message || `HTTP ${res.status}`);
+    }
+
+    await sock.sendMessage(WA_GROUP_ID, {
+      text: json.msg || '✅ Foto guardada correctamente',
+      quoted: msg,
+    });
+
+  } catch (err) {
+    console.error('[Bot] handlePhotoMessage error:', err.message);
+    await sock.sendMessage(WA_GROUP_ID, {
+      text: `❌ Error: ${err.message}`,
+      quoted: msg,
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 // WhatsApp state
 // ─────────────────────────────────────────────────────────
 let sock         = null;
@@ -138,6 +240,18 @@ async function connect() {
     });
 
     sock.ev.on('creds.update', saveCreds);
+
+    // Escuchar mensajes entrantes del grupo
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+      if (type !== 'notify') return;
+      for (const msg of messages) {
+        if (msg.key.remoteJid !== WA_GROUP_ID) continue; // solo el grupo configurado
+        if (msg.key.fromMe) continue;                     // ignorar los propios
+        if (msg.message?.imageMessage) {
+          handlePhotoMessage(msg).catch(e => console.error('[Bot] unhandled:', e.message));
+        }
+      }
+    });
 
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;

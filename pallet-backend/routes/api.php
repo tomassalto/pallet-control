@@ -16,8 +16,12 @@ use App\Http\Controllers\Api\PhotoAnnotationController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\OrderTicketController;
+use App\Http\Controllers\Api\BotController;
 
 Route::prefix('v1')->group(function () {
+    // Ruta del bot de WhatsApp (sin auth Sanctum, usa X-Bot-Secret)
+    Route::post('/bot/upload', [BotController::class, 'uploadPhoto']);
+
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);
     Route::get('/auth/verify/{id}', [AuthController::class, 'verifyEmail'])
