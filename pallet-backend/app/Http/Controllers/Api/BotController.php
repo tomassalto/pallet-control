@@ -30,12 +30,14 @@ class BotController extends Controller
         }
 
         $data = $request->validate([
-            'type'        => ['required', 'in:pallet,base,ticket'],
-            'pallet_code' => ['nullable', 'string', 'max:255'],
-            'base_name'   => ['nullable', 'string', 'max:255'],
-            'order_code'  => ['nullable', 'string', 'max:255'],
-            'note'        => ['nullable', 'string', 'max:1000'],
-            'photo'       => ['required', 'file', 'image', 'max:20480'],
+            'type'         => ['required', 'in:pallet,base,ticket'],
+            'pallet_code'  => ['nullable', 'string', 'max:255'],
+            'pallet_index' => ['nullable', 'integer', 'min:1', 'max:99'],
+            'base_name'    => ['nullable', 'string', 'max:255'],
+            'order_code'   => ['nullable', 'string', 'max:255'],
+            'order_index'  => ['nullable', 'integer', 'min:1', 'max:99'],
+            'note'         => ['nullable', 'string', 'max:1000'],
+            'photo'        => ['required', 'file', 'image', 'max:20480'],
         ]);
 
         try {
@@ -52,9 +54,31 @@ class BotController extends Controller
         }
     }
 
+    private function resolvePallet(array $data): Pallet
+    {
+        if (!empty($data['pallet_index'])) {
+            return Pallet::where('status', 'open')
+                ->orderByDesc('id')
+                ->skip($data['pallet_index'] - 1)
+                ->firstOrFail();
+        }
+        return Pallet::where('code', $data['pallet_code'])->firstOrFail();
+    }
+
+    private function resolveOrder(array $data): Order
+    {
+        if (!empty($data['order_index'])) {
+            return Order::where('status', 'open')
+                ->orderByDesc('id')
+                ->skip($data['order_index'] - 1)
+                ->firstOrFail();
+        }
+        return Order::where('code', $data['order_code'])->firstOrFail();
+    }
+
     private function uploadToPallet(array $data)
     {
-        $pallet = Pallet::where('code', $data['pallet_code'])->firstOrFail();
+        $pallet = $this->resolvePallet($data);
 
         $path = ImageConverter::convertToWebP(
             $data['photo'],
@@ -88,7 +112,7 @@ class BotController extends Controller
 
     private function uploadToBase(array $data)
     {
-        $pallet = Pallet::where('code', $data['pallet_code'])->firstOrFail();
+        $pallet = $this->resolvePallet($data);
 
         $baseName = $data['base_name'] ?? null;
         $baseQuery = $pallet->bases();
@@ -132,7 +156,7 @@ class BotController extends Controller
 
     private function uploadToTicket(array $data)
     {
-        $order = Order::where('code', $data['order_code'])->firstOrFail();
+        $order = $this->resolveOrder($data);
 
         $ticket = OrderTicket::create([
             'order_id' => $order->id,

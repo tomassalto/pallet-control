@@ -117,16 +117,73 @@ const HELP_TEXT = `🤖 *PalletBot — Comandos*
 
 Mandá una foto con el texto (caption):
 
-📦 *pallet PAL-20260418-0001*
-  → foto al pallet
+📦 *p* — último pallet abierto
+📦 *p 2* — segundo pallet más reciente
+🗂️ *b* — última base del último pallet
+🗂️ *b A1* — base "A1" del último pallet
+🗂️ *b 2 A1* — base "A1" del segundo pallet
+🎫 *t* — último pedido abierto
+🎫 *t 12345* — pedido específico
 
-🗂️ *base PAL-20260418-0001 NombreBase*
-  → foto a una base del pallet
+_Escribí *ayuda* (sin foto) para ver esto._`;
 
-🎫 *ticket 12345*
-  → foto al ticket del pedido
+// ─────────────────────────────────────────────────────────
+// Helpers de parsing
+// ─────────────────────────────────────────────────────────
 
-_(Todo en minúsculas. El nombre de base puede ser parcial.)_`;
+// Devuelve true si el string es un índice corto: 1, 2, ... 99
+const isIndex = (s) => s && /^\d{1,2}$/.test(s);
+
+function parseCommand(caption) {
+  const parts = caption.trim().toLowerCase().split(/\s+/);
+  const cmd   = parts[0];
+
+  // Normalizar alias p/b/t → pallet/base/ticket
+  const typeMap = { p: 'pallet', pallet: 'pallet', b: 'base', base: 'base', t: 'ticket', ticket: 'ticket' };
+  const type = typeMap[cmd];
+  if (!type) return null;
+
+  const payload = { type };
+
+  if (type === 'pallet') {
+    // p | p 2 | p PAL-xxx
+    const arg = parts[1];
+    if (!arg || isIndex(arg)) {
+      payload.pallet_index = parseInt(arg || '1', 10);
+    } else {
+      payload.pallet_code = arg;
+    }
+
+  } else if (type === 'base') {
+    // b | b A1 | b 2 A1
+    const arg1 = parts[1];
+    const rest  = parts.slice(2).join(' ');
+
+    if (!arg1) {
+      // solo "b" → último pallet, última base
+      payload.pallet_index = 1;
+    } else if (isIndex(arg1) && rest) {
+      // "b 2 A1" → pallet index 2, base "A1"
+      payload.pallet_index = parseInt(arg1, 10);
+      payload.base_name    = rest;
+    } else {
+      // "b A1" → último pallet, base "A1"
+      payload.pallet_index = 1;
+      payload.base_name    = parts.slice(1).join(' ');
+    }
+
+  } else if (type === 'ticket') {
+    // t | t 12345
+    const arg = parts[1];
+    if (!arg || isIndex(arg)) {
+      payload.order_index = parseInt(arg || '1', 10);
+    } else {
+      payload.order_code = arg;
+    }
+  }
+
+  return payload;
+}
 
 // ─────────────────────────────────────────────────────────
 // Handler de fotos recibidas en el grupo
@@ -137,19 +194,14 @@ async function handlePhotoMessage(msg) {
 
   const caption = (imageMsg.caption || '').trim();
 
-  // Sin caption → ayuda
   if (!caption) {
     await sock.sendMessage(WA_GROUP_ID, { text: HELP_TEXT, quoted: msg });
     return;
   }
 
-  const parts  = caption.split(/\s+/);
-  const type   = parts[0]?.toLowerCase();
-  const code   = parts[1];
-  const extra  = parts.slice(2).join(' ') || null;
+  const payload = parseCommand(caption);
 
-  const validTypes = ['pallet', 'base', 'ticket'];
-  if (!validTypes.includes(type) || !code) {
+  if (!payload) {
     await sock.sendMessage(WA_GROUP_ID, {
       text: `❓ Comando no reconocido.\n\n${HELP_TEXT}`,
       quoted: msg,
@@ -158,30 +210,21 @@ async function handlePhotoMessage(msg) {
   }
 
   if (!LARAVEL_URL) {
-    console.error('[Bot] LARAVEL_URL no configurado');
     await sock.sendMessage(WA_GROUP_ID, { text: '⚠️ Bot mal configurado (LARAVEL_URL vacío)', quoted: msg });
     return;
   }
 
   try {
-    // Descargar imagen de WhatsApp
     const buffer = await downloadMediaMessage(
       msg, 'buffer', {},
       { logger, reuploadRequest: sock.updateMediaMessage }
     );
 
-    // Construir FormData (Node 22 tiene FormData nativo)
     const form = new FormData();
-    form.append('type',  type);
     form.append('photo', new Blob([buffer], { type: 'image/jpeg' }), 'photo.jpg');
 
-    if (type === 'pallet') {
-      form.append('pallet_code', code);
-    } else if (type === 'base') {
-      form.append('pallet_code', code);
-      if (extra) form.append('base_name', extra);
-    } else if (type === 'ticket') {
-      form.append('order_code', code);
+    for (const [key, val] of Object.entries(payload)) {
+      form.append(key, String(val));
     }
 
     const res = await fetch(`${LARAVEL_URL}/api/v1/bot/upload`, {
@@ -192,12 +235,10 @@ async function handlePhotoMessage(msg) {
 
     const json = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      throw new Error(json.error || json.message || `HTTP ${res.status}`);
-    }
+    if (!res.ok) throw new Error(json.error || json.message || `HTTP ${res.status}`);
 
     await sock.sendMessage(WA_GROUP_ID, {
-      text: json.msg || '✅ Foto guardada correctamente',
+      text: json.msg || '✅ Foto guardada',
       quoted: msg,
     });
 
@@ -245,8 +286,21 @@ async function connect() {
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
       if (type !== 'notify') return;
       for (const msg of messages) {
-        if (msg.key.remoteJid !== WA_GROUP_ID) continue; // solo el grupo configurado
-        if (msg.key.fromMe) continue;                     // ignorar los propios
+        if (msg.key.remoteJid !== WA_GROUP_ID) continue;
+        if (msg.key.fromMe) continue;
+
+        // Comando de texto: "ayuda" o "?"
+        const text = (
+          msg.message?.conversation ||
+          msg.message?.extendedTextMessage?.text || ''
+        ).trim().toLowerCase();
+
+        if (text === 'ayuda' || text === '?') {
+          await sock.sendMessage(WA_GROUP_ID, { text: HELP_TEXT, quoted: msg });
+          continue;
+        }
+
+        // Foto con caption → subir imagen
         if (msg.message?.imageMessage) {
           handlePhotoMessage(msg).catch(e => console.error('[Bot] unhandled:', e.message));
         }
