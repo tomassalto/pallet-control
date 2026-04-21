@@ -39,80 +39,85 @@ Route::prefix('v1')->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
 
-        // Customers
-        Route::get('/customers', [CustomerController::class, 'index']);
-        Route::get('/customers/{customer}', [CustomerController::class, 'show']);
-        Route::post('/customers', [CustomerController::class, 'store']);
+        // ── Rutas con control de acceso por rol ───────────────────────────────
+        // has.role: GET/HEAD libres para todos; POST/PATCH/DELETE requieren rol.
+        Route::middleware('has.role')->group(function () {
 
-        // Orders - IMPORTANTE: las rutas específicas deben ir antes de las dinámicas
-        Route::get('/orders', [OrderController::class, 'index']);
-        Route::post('/orders', [OrderController::class, 'store']);
-        Route::get('/orders/last-open', [OrderController::class, 'lastOpen']);
-        Route::post('/orders/can-finalize-batch', [OrderController::class, 'canFinalizeBatch']);
-        Route::get('/orders/{order}', [OrderController::class, 'show']);
-        Route::patch('/orders/{order}', [OrderController::class, 'updateStatus']);
-        Route::post('/orders/{order}/attach-pallet', [OrderController::class, 'attachPallet']);
-        Route::get('/orders/{order}/activity-logs', [OrderController::class, 'activityLogs']);
-        Route::get('/orders/{order}/can-finalize', [OrderController::class, 'canFinalize']);
-        Route::post('/orders/{order}/finalize', [OrderController::class, 'finalize']);
-        Route::delete('/orders/{order}/detach-pallet/{pallet}', [OrderController::class, 'detachPallet']);
+            // Customers
+            Route::get('/customers', [CustomerController::class, 'index']);
+            Route::get('/customers/{customer}', [CustomerController::class, 'show']);
+            Route::post('/customers', [CustomerController::class, 'store']);
 
-        // Order Tickets
-        Route::get('/orders/{order}/tickets', [OrderTicketController::class, 'index']);
-        Route::post('/orders/{order}/tickets', [OrderTicketController::class, 'store']);
-        Route::delete('/orders/{order}/tickets/{ticket}', [OrderTicketController::class, 'destroy']);
-        Route::post('/orders/{order}/tickets/{ticket}/photos', [OrderTicketController::class, 'storePhoto']);
-        Route::delete('/orders/{order}/tickets/{ticket}/photos/{photo}', [OrderTicketController::class, 'destroyPhoto']);
+            // Orders - IMPORTANTE: las rutas específicas deben ir antes de las dinámicas
+            Route::get('/orders', [OrderController::class, 'index']);
+            Route::post('/orders', [OrderController::class, 'store']);
+            Route::get('/orders/last-open', [OrderController::class, 'lastOpen']);
+            Route::post('/orders/can-finalize-batch', [OrderController::class, 'canFinalizeBatch']);
+            Route::get('/orders/{order}', [OrderController::class, 'show']);
+            Route::patch('/orders/{order}', [OrderController::class, 'updateStatus']);
+            Route::post('/orders/{order}/attach-pallet', [OrderController::class, 'attachPallet']);
+            Route::get('/orders/{order}/activity-logs', [OrderController::class, 'activityLogs']);
+            Route::get('/orders/{order}/can-finalize', [OrderController::class, 'canFinalize']);
+            Route::post('/orders/{order}/finalize', [OrderController::class, 'finalize']);
+            Route::delete('/orders/{order}/detach-pallet/{pallet}', [OrderController::class, 'detachPallet']);
 
-        // Pallets
-        Route::get('/pallets', [PalletController::class, 'index']);
-        Route::post('/pallets', [PalletController::class, 'store']);
-        Route::get('/pallets/{pallet}', [PalletController::class, 'show']);
-        Route::patch('/pallets/{pallet}', [PalletController::class, 'updateStatus']);
-        Route::delete('/pallets/{pallet}', [PalletController::class, 'destroy']);
-        Route::get('/pallets/last-open', [PalletController::class, 'lastOpen']);
-        Route::get('/pallets/{pallet}/activity-logs', [PalletController::class, 'activityLogs']);
-        Route::get('/pallets/{pallet}/can-finalize', [PalletController::class, 'canFinalize']);
-        Route::post('/pallets/{pallet}/finalize', [PalletController::class, 'finalize']);
-        Route::post('/pallets/{pallet}/reopen', [PalletController::class, 'reopen']);
+            // Order Tickets
+            Route::get('/orders/{order}/tickets', [OrderTicketController::class, 'index']);
+            Route::post('/orders/{order}/tickets', [OrderTicketController::class, 'store']);
+            Route::delete('/orders/{order}/tickets/{ticket}', [OrderTicketController::class, 'destroy']);
+            Route::post('/orders/{order}/tickets/{ticket}/photos', [OrderTicketController::class, 'storePhoto']);
+            Route::delete('/orders/{order}/tickets/{ticket}/photos/{photo}', [OrderTicketController::class, 'destroyPhoto']);
 
-        // Link order <-> pallet
-        Route::post('/pallets/{pallet}/attach-order', [PalletController::class, 'attachOrder']);
+            // Pallets
+            Route::get('/pallets', [PalletController::class, 'index']);
+            Route::post('/pallets', [PalletController::class, 'store']);
+            Route::get('/pallets/{pallet}', [PalletController::class, 'show']);
+            Route::patch('/pallets/{pallet}', [PalletController::class, 'updateStatus']);
+            Route::delete('/pallets/{pallet}', [PalletController::class, 'destroy']);
+            Route::get('/pallets/last-open', [PalletController::class, 'lastOpen']);
+            Route::get('/pallets/{pallet}/activity-logs', [PalletController::class, 'activityLogs']);
+            Route::get('/pallets/{pallet}/can-finalize', [PalletController::class, 'canFinalize']);
+            Route::post('/pallets/{pallet}/finalize', [PalletController::class, 'finalize']);
+            Route::post('/pallets/{pallet}/reopen', [PalletController::class, 'reopen']);
 
-        // Products
-        Route::post('/products', [ProductController::class, 'store']);
-        Route::get('/products/by-ean/{ean}', [ProductController::class, 'showByEan']);
+            // Link order <-> pallet
+            Route::post('/pallets/{pallet}/attach-order', [PalletController::class, 'attachOrder']);
 
-        // Movements
-        Route::get('/pallets/{pallet}/movements', [MovementController::class, 'index']);
-        Route::post('/pallets/{pallet}/movements', [MovementController::class, 'store']);
+            // Products
+            Route::post('/products', [ProductController::class, 'store']);
+            Route::get('/products/by-ean/{ean}', [ProductController::class, 'showByEan']);
 
-        // routes/api.php
-        Route::post('/orders/{order}/import', [OrderImportController::class, 'import']);
+            // Movements
+            Route::get('/pallets/{pallet}/movements', [MovementController::class, 'index']);
+            Route::post('/pallets/{pallet}/movements', [MovementController::class, 'store']);
 
-        Route::post('/orders/{order}/items', [OrderItemController::class, 'store']);
-        Route::patch('/order-items/{item}', [OrderItemController::class, 'update']);
+            Route::post('/orders/{order}/import', [OrderImportController::class, 'import']);
 
-        Route::get('/pallets/{pallet}/photos', [PalletPhotoController::class, 'index']);
-        Route::post('/pallets/{pallet}/photos', [PalletPhotoController::class, 'store']);
-        Route::delete('/pallets/{pallet}/photos/{photo}', [PalletPhotoController::class, 'destroy']);
+            Route::post('/orders/{order}/items', [OrderItemController::class, 'store']);
+            Route::patch('/order-items/{item}', [OrderItemController::class, 'update']);
 
-        // Bases
-        Route::get('/pallets/{pallet}/bases', [PalletBaseController::class, 'index']);
-        Route::post('/pallets/{pallet}/bases', [PalletBaseController::class, 'store']);
-        Route::patch('/pallets/{pallet}/bases/{base}', [PalletBaseController::class, 'update']);
-        Route::delete('/pallets/{pallet}/bases/{base}', [PalletBaseController::class, 'destroy']);
+            Route::get('/pallets/{pallet}/photos', [PalletPhotoController::class, 'index']);
+            Route::post('/pallets/{pallet}/photos', [PalletPhotoController::class, 'store']);
+            Route::delete('/pallets/{pallet}/photos/{photo}', [PalletPhotoController::class, 'destroy']);
 
-        // Fotos de bases
-        Route::post('/pallets/{pallet}/bases/{base}/photos', [PalletBasePhotoController::class, 'store']);
-        Route::delete('/pallets/{pallet}/bases/{base}/photos/{photo}', [PalletBasePhotoController::class, 'destroy']);
+            // Bases
+            Route::get('/pallets/{pallet}/bases', [PalletBaseController::class, 'index']);
+            Route::post('/pallets/{pallet}/bases', [PalletBaseController::class, 'store']);
+            Route::patch('/pallets/{pallet}/bases/{base}', [PalletBaseController::class, 'update']);
+            Route::delete('/pallets/{pallet}/bases/{base}', [PalletBaseController::class, 'destroy']);
 
-        // Anotaciones de fotos
-        Route::get('/pallets/{pallet}/bases/{base}/photos/{photo}/annotations', [PhotoAnnotationController::class, 'index']);
-        Route::post('/pallets/{pallet}/bases/{base}/photos/{photo}/annotations', [PhotoAnnotationController::class, 'store']);
+            // Fotos de bases
+            Route::post('/pallets/{pallet}/bases/{base}/photos', [PalletBasePhotoController::class, 'store']);
+            Route::delete('/pallets/{pallet}/bases/{base}/photos/{photo}', [PalletBasePhotoController::class, 'destroy']);
 
-        // Activity Logs
-        Route::get('/activity-logs', [ActivityLogController::class, 'index']);
+            // Anotaciones de fotos
+            Route::get('/pallets/{pallet}/bases/{base}/photos/{photo}/annotations', [PhotoAnnotationController::class, 'index']);
+            Route::post('/pallets/{pallet}/bases/{base}/photos/{photo}/annotations', [PhotoAnnotationController::class, 'store']);
+
+            // Activity Logs
+            Route::get('/activity-logs', [ActivityLogController::class, 'index']);
+
+        }); // end has.role
 
         // Admin — gestión de usuarios (requiere rol admin o superadmin)
         Route::middleware('admin')->prefix('admin')->group(function () {

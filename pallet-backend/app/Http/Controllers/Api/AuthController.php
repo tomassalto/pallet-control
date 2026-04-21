@@ -27,7 +27,7 @@ class AuthController extends Controller
             'name'              => $data['name'],
             'email'             => $data['email'],
             'password'          => Hash::make($data['password']),
-            'role'              => $isFirst ? 'superadmin' : 'user',
+            'role'              => $isFirst ? 'superadmin' : null,
             'email_verified_at' => $isFirst ? now() : null,
         ]);
 

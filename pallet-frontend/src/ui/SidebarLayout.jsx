@@ -14,20 +14,25 @@ export default function SidebarLayout({ title = "Pallet Control", children }) {
   const { user } = useAuth() || {};
   const { dark, toggle } = useTheme();
 
+  const isPending = user && user.role === null;
+
   const items = useMemo(
     () => [
       { to: "/", label: "Inicio" },
-      { to: "/orders/new", label: "Empezar pedido" },
+      // Ocultar acciones de escritura a usuarios sin rol
+      ...(!isPending ? [
+        { to: "/orders/new", label: "Empezar pedido" },
+      ] : []),
       { to: "/pallets", label: "Mis pallets" },
       { to: "/orders", label: "Mis pedidos" },
       { to: "/clients", label: "Mis clientes" },
       { to: "/productos", label: "Buscar producto" },
       { to: "/logs", label: "Logs" },
-      ...(user?.isAdmin?.() || ['admin','superadmin'].includes(user?.role)
+      ...(['admin','superadmin'].includes(user?.role)
         ? [{ to: "/admin/users", label: "👥 Usuarios" }]
         : []),
     ],
-    [user]
+    [user, isPending]
   );
 
   return (
@@ -135,6 +140,15 @@ export default function SidebarLayout({ title = "Pallet Control", children }) {
 
       {/* Page content */}
       <main className="max-w-md mx-auto px-4 flex-1 w-full overflow-y-auto min-h-0 pt-20 pb-10">
+        {/* Banner: cuenta sin rol asignado */}
+        {isPending && (
+          <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <p className="font-semibold">Cuenta pendiente de activación</p>
+            <p className="mt-0.5 text-xs opacity-80">
+              Podés ver la información, pero necesitás que un administrador te asigne un rol para crear o modificar datos.
+            </p>
+          </div>
+        )}
         {children}
       </main>
     </div>

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiGet } from "../api/client";
-
+import { useAuth } from "../auth/AuthContext";
 import Title from "../ui/Title";
 
 export default function Home() {
+  const { user } = useAuth();
+  const canWrite = user?.role !== null && user?.role !== undefined;
   const [loading, setLoading] = useState(true);
 
   const [lastOpenOrder, setLastOpenOrder] = useState(null);
@@ -87,18 +89,20 @@ export default function Home() {
       )}
 
       {/* Quick actions */}
-      <div className="grid gap-3 shadow-2xl">
-        <Link
-          to="/orders/new"
-          className="bg-black text-white rounded-2xl p-4 active:scale-[0.99]"
-        >
-          <Title size="1xl">Empezar pedido</Title>
-          <div className="text-xs opacity-80">
-            Apreta aca para crear un nuevo pedido y asociálo a un pallet
-            existente o creá uno nuevo.
-          </div>
-        </Link>
-      </div>
+      {canWrite && (
+        <div className="grid gap-3 shadow-2xl">
+          <Link
+            to="/orders/new"
+            className="bg-black text-white rounded-2xl p-4 active:scale-[0.99]"
+          >
+            <Title size="1xl">Empezar pedido</Title>
+            <div className="text-xs opacity-80">
+              Apreta aca para crear un nuevo pedido y asociálo a un pallet
+              existente o creá uno nuevo.
+            </div>
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

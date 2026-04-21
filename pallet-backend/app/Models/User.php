@@ -37,11 +37,17 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function isAdmin(): bool
     {
-        return in_array($this->role, ['admin', 'superadmin']);
+        return in_array($this->role, ['admin', 'superadmin'], true);
     }
 
     public function isSuperAdmin(): bool
     {
         return $this->role === 'superadmin';
+    }
+
+    /** Tiene algún rol asignado (puede escribir en la app) */
+    public function hasRole(): bool
+    {
+        return !is_null($this->role);
     }
 }

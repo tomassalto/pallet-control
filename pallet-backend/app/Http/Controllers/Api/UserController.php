@@ -11,7 +11,9 @@ class UserController extends Controller
     /** GET /api/v1/admin/users */
     public function index()
     {
-        $users = User::orderByDesc('id')
+        // Pendientes (sin rol) primero, luego por id desc
+        $users = User::orderByRaw('CASE WHEN role IS NULL THEN 0 ELSE 1 END')
+            ->orderByDesc('id')
             ->get(['id', 'name', 'email', 'role', 'is_active', 'whatsapp_jid', 'email_verified_at', 'created_at']);
 
         return response()->json($users);
@@ -21,11 +23,14 @@ class UserController extends Controller
     public function updateRole(Request $request, User $user)
     {
         $data = $request->validate([
-            'role' => ['required', 'in:superadmin,admin,user'],
+            // null = quitar rol (vuelve a modo lectura), '' ignorado
+            'role' => ['nullable', 'in:superadmin,admin,user'],
         ]);
 
+        $newRole = $data['role'] ?? null;
+
         // Solo superadmin puede dar rol superadmin
-        if ($data['role'] === 'superadmin' && !$request->user()->isSuperAdmin()) {
+        if ($newRole === 'superadmin' && !$request->user()->isSuperAdmin()) {
             return response()->json(['error' => 'Solo el superadmin puede asignar ese rol'], 403);
         }
 
@@ -34,7 +39,7 @@ class UserController extends Controller
             return response()->json(['error' => 'No podés cambiar tu propio rol'], 422);
         }
 
-        $user->update(['role' => $data['role']]);
+        $user->update(['role' => $newRole]);
 
         return response()->json(['ok' => true, 'user' => $user->fresh(['id', 'name', 'email', 'role', 'is_active'])]);
     }
