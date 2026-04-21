@@ -33,6 +33,11 @@ export function AuthProvider({ children }) {
     return data.user;
   }
 
+  /**
+   * register() returns:
+   *   { needsVerification: true }   → user must check email
+   *   { token, user }               → first user (superadmin), auto-logged in
+   */
   async function register(name, email, password, password_confirmation) {
     const data = await apiPost("/auth/register", {
       name,
@@ -40,16 +45,22 @@ export function AuthProvider({ children }) {
       password,
       password_confirmation,
     });
-    localStorage.setItem("token", data.token);
-    setUser(data.user);
-    return data.user;
+
+    if (data.token) {
+      // Primer usuario (superadmin) — loguear directo
+      localStorage.setItem("token", data.token);
+      setUser(data.user);
+      return { autoLogin: true, user: data.user };
+    }
+
+    // Usuarios siguientes — necesitan verificar email
+    return { autoLogin: false };
   }
 
   async function logout() {
     try {
       await apiPost("/auth/logout", {});
     } catch (e) {
-      // si falla igual limpiamos local
       toastError(e?.message || "Error en logout");
     } finally {
       localStorage.removeItem("token");

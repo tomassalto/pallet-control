@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\VerifyEmailMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use App\Models\User;
 
@@ -13,113 +16,138 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'name'                  => ['required', 'string', 'max:255'],
+            'email'                 => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password'              => ['required', 'string', 'min:6', 'confirmed'],
         ]);
+
+        $isFirst = User::count() === 0;
 
         $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
+            'name'              => $data['name'],
+            'email'             => $data['email'],
+            'password'          => Hash::make($data['password']),
+            'role'              => $isFirst ? 'superadmin' : 'user',
+            'email_verified_at' => $isFirst ? now() : null,
         ]);
 
-        $verificationUrl = $this->makeVerificationUrl($user);
+        if ($isFirst) {
+            // Primer usuario → superadmin, ya verificado, puede entrar directo
+            $token = $user->createToken('pallet-pwa')->plainTextToken;
+
+            return response()->json([
+                'user'    => $user,
+                'token'   => $token,
+                'message' => 'Cuenta de superadmin creada. Sesión iniciada.',
+            ], 201);
+        }
+
+        // Usuarios siguientes: mandar email de verificación
+        $this->sendVerificationEmail($user);
 
         return response()->json([
-            'user' => $user,
-            'verification_url' => $verificationUrl,
-            'message' => 'Cuenta creada. Revisá tu correo para verificarla.',
+            'message' => 'Cuenta creada. Revisá tu correo para verificarla antes de iniciar sesión.',
         ], 201);
     }
 
     public function login(Request $request)
     {
         $data = $request->validate([
-            'email' => ['required', 'email'],
+            'email'    => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
 
         $user = User::where('email', $data['email'])->first();
 
-        if (! $user || ! Hash::check($data['password'], $user->password)) {
+        if (!$user || !Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Credenciales inválidas.'],
             ]);
         }
 
-        if (! $user->hasVerifiedEmail()) {
+        if (!$user->hasVerifiedEmail()) {
             throw ValidationException::withMessages([
-                'email' => ['Debes verificar tu correo antes de iniciar sesión.'],
+                'email' => ['Debés verificar tu correo antes de iniciar sesión.'],
             ]);
         }
 
-        // opcional: borrar tokens viejos (1 sesión por usuario)
-        // $user->tokens()->delete();
+        if (!$user->is_active) {
+            throw ValidationException::withMessages([
+                'email' => ['Tu cuenta está desactivada. Contactá al administrador.'],
+            ]);
+        }
 
         $token = $user->createToken('pallet-pwa')->plainTextToken;
 
         return response()->json([
-            'user' => $user,
+            'user'  => $user,
             'token' => $token,
         ]);
     }
 
     public function me(Request $request)
     {
-        return response()->json([
-            'user' => $request->user(),
-        ]);
+        return response()->json(['user' => $request->user()]);
     }
 
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
 
-        return response()->json([
-            'message' => 'Sesión cerrada.',
-        ]);
+        return response()->json(['message' => 'Sesión cerrada.']);
     }
 
     public function verifyEmail(Request $request, string $id)
     {
-        $user = User::findOrFail($id);
-
-        if ($user->hasVerifiedEmail()) {
-            return response()->json([
-                'message' => 'El correo ya estaba verificado.',
-            ]);
+        // Validar URL firmada
+        if (!$request->hasValidSignature()) {
+            return redirect(config('app.url') . '/login?error=link-expirado');
         }
 
-        $user->forceFill(['email_verified_at' => now()])->save();
+        $user = User::findOrFail($id);
 
-        return response()->json([
-            'message' => 'Correo verificado correctamente.',
-        ]);
+        if (!hash_equals(sha1($user->email), (string) $request->get('hash'))) {
+            return redirect(config('app.url') . '/login?error=link-invalido');
+        }
+
+        if (!$user->hasVerifiedEmail()) {
+            $user->forceFill(['email_verified_at' => now()])->save();
+        }
+
+        return redirect(config('app.url') . '/login?verified=1');
     }
 
     public function resendVerification(Request $request)
     {
-        $user = $request->user();
+        $data = $request->validate([
+            'email' => ['required', 'email'],
+        ]);
 
-        if ($user->hasVerifiedEmail()) {
-            return response()->json([
-                'message' => 'Tu correo ya está verificado.',
-            ]);
+        $user = User::where('email', $data['email'])->first();
+
+        if (!$user) {
+            // No revelar si el email existe
+            return response()->json(['message' => 'Si el correo existe, recibirás el enlace.']);
         }
 
-        $verificationUrl = $this->makeVerificationUrl($user);
+        if ($user->hasVerifiedEmail()) {
+            return response()->json(['message' => 'Tu correo ya está verificado.']);
+        }
 
-        return response()->json([
-            'message' => 'Nuevo enlace de verificación generado.',
-            'verification_url' => $verificationUrl,
-        ]);
+        $this->sendVerificationEmail($user);
+
+        return response()->json(['message' => 'Nuevo enlace de verificación enviado.']);
     }
 
-    protected function makeVerificationUrl(User $user): string
+    protected function sendVerificationEmail(User $user): void
     {
-        $base = config('app.url') ?? 'http://localhost';
+        $url = URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addHours(48),
+            ['id' => $user->getKey(), 'hash' => sha1($user->email)]
+        );
 
-        return rtrim($base, '/') . '/api/v1/auth/verify/' . $user->getKey();
+        Mail::to($user->email, $user->name)
+            ->send(new VerifyEmailMail($user->name, $url));
     }
 }

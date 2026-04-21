@@ -21,6 +21,7 @@ import MyClients from "./pages/MyClients";
 import OrderDetail from "./pages/OrderDetail";
 import OrderHistory from "./pages/OrderHistory";
 import AllLogs from "./pages/AllLogs";
+import AdminUsers from "./pages/AdminUsers";
 
 export default function App() {
   return (
@@ -162,6 +163,15 @@ export default function App() {
             element={
               <RequireAuth>
                 <AllLogs />
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/admin/users"
+            element={
+              <RequireAuth>
+                <AdminUsers />
               </RequireAuth>
             }
           />

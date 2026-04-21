@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { apiPost } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
 import Button from "../ui/Button";
@@ -7,10 +7,27 @@ import Title from "../ui/Title";
 
 export default function Login() {
   const nav = useNavigate();
+  const { search } = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Mostrar toast si viene de verificación de email
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    if (params.get("verified") === "1") {
+      toastSuccess("✅ Cuenta verificada. Ya podés iniciar sesión.");
+    } else if (params.get("error") === "link-expirado") {
+      toastError("El link de verificación expiró. Solicitá uno nuevo.");
+    } else if (params.get("error") === "link-invalido") {
+      toastError("El link de verificación es inválido.");
+    }
+    // Limpiar query params de la URL sin recargar
+    if (params.has("verified") || params.has("error")) {
+      window.history.replaceState({}, "", "/login");
+    }
+  }, [search]);
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -54,44 +71,16 @@ export default function Login() {
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-800 focus:outline-none"
-            aria-label={
-              showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
-            }
+            aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
           >
             {showPassword ? (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-5 h-5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228L3.98 8.223m0 0A10.5 10.5 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.5 10.5 0 01-4.293 5.774m-7.007 3.55L15.75 15.75M4.031 9.865a10.5 10.5 0 0115.865 15.865m-1.546-1.546a10.5 10.5 0 00-1.546-1.546m0 0L9.75 9.75"
-                />
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228L3.98 8.223m0 0A10.5 10.5 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.5 10.5 0 01-4.293 5.774m-7.007 3.55L15.75 15.75M4.031 9.865a10.5 10.5 0 0115.865 15.865m-1.546-1.546a10.5 10.5 0 00-1.546-1.546m0 0L9.75 9.75" />
               </svg>
             ) : (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-5 h-5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.012 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.012-9.963-7.178z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.012 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.012-9.963-7.178z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             )}
           </button>

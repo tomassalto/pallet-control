@@ -21,8 +21,11 @@ export default function SidebarLayout({ title = "Pallet Control", children }) {
       { to: "/clients", label: "Mis clientes" },
       { to: "/productos", label: "Buscar producto" },
       { to: "/logs", label: "Logs" },
+      ...(user?.isAdmin?.() || ['admin','superadmin'].includes(user?.role)
+        ? [{ to: "/admin/users", label: "👥 Usuarios" }]
+        : []),
     ],
-    []
+    [user]
   );
 
   return (

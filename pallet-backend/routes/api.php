@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\OrderTicketController;
 use App\Http\Controllers\Api\BotController;
+use App\Http\Controllers\Api\UserController;
 
 Route::prefix('v1')->group(function () {
     // Ruta del bot de WhatsApp (sin auth Sanctum, usa X-Bot-Secret)
@@ -27,10 +28,12 @@ Route::prefix('v1')->group(function () {
     Route::get('/auth/verify/{id}', [AuthController::class, 'verifyEmail'])
         ->name('verification.verify');
 
+    // Reenvío de verificación: no requiere auth (el usuario no puede estar logueado aún)
+    Route::post('/auth/email/resend', [AuthController::class, 'resendVerification']);
+
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
-        Route::post('/auth/email/resend', [AuthController::class, 'resendVerification']);
 
         // Customers
         Route::get('/customers', [CustomerController::class, 'index']);
@@ -82,8 +85,6 @@ Route::prefix('v1')->group(function () {
         // routes/api.php
         Route::post('/orders/{order}/import', [OrderImportController::class, 'import']);
 
-        Route::get('/orders/{order}', [OrderController::class, 'show']);
-        Route::post('/orders/{order}/import', [OrderImportController::class, 'import']);
         Route::post('/orders/{order}/items', [OrderItemController::class, 'store']);
         Route::patch('/order-items/{item}', [OrderItemController::class, 'update']);
 
@@ -107,5 +108,12 @@ Route::prefix('v1')->group(function () {
 
         // Activity Logs
         Route::get('/activity-logs', [ActivityLogController::class, 'index']);
+
+        // Admin — gestión de usuarios (requiere rol admin o superadmin)
+        Route::middleware('admin')->prefix('admin')->group(function () {
+            Route::get('/users', [UserController::class, 'index']);
+            Route::patch('/users/{user}/role', [UserController::class, 'updateRole']);
+            Route::post('/users/{user}/toggle-active', [UserController::class, 'toggleActive']);
+        });
     });
 });
