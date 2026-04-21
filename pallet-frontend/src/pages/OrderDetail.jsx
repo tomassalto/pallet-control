@@ -6,6 +6,7 @@ import BackButton from "../ui/BackButton";
 import Title from "../ui/Title";
 import Accordion from "../ui/Accordion";
 import PhotoViewer from "../ui/PhotoViewer";
+import QRModal from "../ui/QRModal";
 
 function onlyDigits(v) {
   return (v || "").replace(/\D/g, "");
@@ -126,6 +127,9 @@ export default function OrderDetail() {
   // desvincular pallet
   const [detachingPallet, setDetachingPallet] = useState(null);
   const [confirmDetachPallet, setConfirmDetachPallet] = useState(null);
+
+  // QR modal
+  const [showQR, setShowQR] = useState(false);
 
   // finalizar pedido
   const [canFinalize, setCanFinalize] = useState(false);
@@ -423,7 +427,21 @@ export default function OrderDetail() {
       )}
 
       <div className="bg-white border border-border rounded-2xl p-4 flex flex-col gap-2">
-        <Title size="3xl">Pedido #{order?.code}</Title>
+        <div className="flex items-center justify-between gap-2">
+          <Title size="3xl">Pedido #{order?.code}</Title>
+          <button
+            onClick={() => setShowQR(true)}
+            title="Ver QR del pedido"
+            className="shrink-0 p-2 rounded-xl border border-gray-200 hover:bg-gray-50 active:scale-95 transition-transform"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <path d="M14 14h2v2h-2zM18 14h3v2h-3zM14 18h3v3h-3zM19 18h2v3h-2z" />
+            </svg>
+          </button>
+        </div>
 
         {pallets.length > 0 && (
           <div className="flex flex-col gap-2">
@@ -944,6 +962,11 @@ export default function OrderDetail() {
           }}
         />
       )}
+
+      {/* QR Modal */}
+      {showQR && order && (
+        <QRModal order={order} onClose={() => setShowQR(false)} />
+      )}
     </div>
   );
 }
@@ -1187,6 +1210,7 @@ function TicketCard({ ticket, orderId, onUpdate }) {
           </div>
         </>
       )}
+
     </div>
   );
 }

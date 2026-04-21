@@ -163,7 +163,7 @@ class PalletBasePhotoController extends Controller
 
             return response()->json([
                 'photo' => $photo,
-                'url' => Storage::disk('public')->url($path),
+                'url' => '/storage/' . $path,
             ], 201);
         } catch (\Exception $e) {
             Log::error('Error general al subir foto:', [

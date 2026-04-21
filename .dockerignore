@@ -3,5 +3,7 @@ pallet-backend/vendor
 pallet-backend/storage/app/public
 pallet-backend/public/app
 pallet-frontend/node_modules
+whatsapp-bot/.env
+whatsapp-bot/node_modules
 .git
 .claude

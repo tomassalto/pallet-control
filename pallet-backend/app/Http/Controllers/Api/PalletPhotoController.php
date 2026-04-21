@@ -17,7 +17,7 @@ class PalletPhotoController extends Controller
 
         // Agregar URLs a las fotos
         $photos->each(function ($photo) {
-            $photo->url = Storage::disk('public')->url($photo->path);
+            $photo->url = '/storage/' . $photo->path;
         });
 
         return response()->json($photos);
@@ -61,7 +61,7 @@ class PalletPhotoController extends Controller
 
         return response()->json([
             'photo' => $photo,
-            'url' => Storage::disk('public')->url($path),
+            'url' => '/storage/' . $path,
         ], 201);
     }
 

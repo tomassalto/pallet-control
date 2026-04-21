@@ -22,7 +22,7 @@ class OrderTicketController extends Controller
         // Agregar URLs a las fotos
         $tickets->each(function ($ticket) {
             $ticket->photos->each(function ($photo) {
-                $photo->url = Storage::disk('public')->url($photo->path);
+                $photo->url = '/storage/' . $photo->path;
             });
         });
 
@@ -116,7 +116,7 @@ class OrderTicketController extends Controller
 
         return response()->json([
             'photo' => $photo,
-            'url' => Storage::disk('public')->url($path),
+            'url' => '/storage/' . $path,
         ], 201);
     }
 

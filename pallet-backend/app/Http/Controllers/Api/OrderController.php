@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Helpers\WhatsAppNotifier;
 use App\Models\Customer;
 use App\Models\Order;
 use Illuminate\Http\Request;
@@ -60,6 +61,8 @@ class OrderController extends Controller
             $order->id
         );
 
+        WhatsAppNotifier::send("🆕 *Nuevo pedido* `#{$order->code}` creado");
+
         return response()->json($order->load('customer'), 201);
     }
 
@@ -74,7 +77,7 @@ class OrderController extends Controller
         // Agregar URLs a las fotos de los tickets
         $order->tickets->each(function ($ticket) {
             $ticket->photos->each(function ($photo) {
-                $photo->url = \Illuminate\Support\Facades\Storage::disk('public')->url($photo->path);
+                $photo->url = '/storage/' . $photo->path;
             });
         });
 
@@ -173,6 +176,8 @@ class OrderController extends Controller
             ['order_code' => $order->code],
             $order->id
         );
+
+        WhatsAppNotifier::send("🔗 Pedido `#{$order->code}` asociado al pallet `{$pallet->code}`");
 
         return response()->json([
             'message' => 'Pedido asociado al pallet.',
@@ -317,6 +322,8 @@ class OrderController extends Controller
             $order->id
         );
 
+        WhatsAppNotifier::send("✅ Pedido `#{$order->code}` *finalizado*");
+
         return response()->json([
             'message' => 'Pedido finalizado correctamente',
             'order' => $order->load('customer'),
@@ -360,6 +367,8 @@ class OrderController extends Controller
             null,
             $order->id
         );
+
+        WhatsAppNotifier::send("⛓️ Pallet `{$pallet->code}` desvinculado del pedido `#{$order->code}`");
 
         return response()->json([
             'message' => 'Pallet desvinculado correctamente. Se eliminaron las asignaciones de productos a las bases de este pallet.',

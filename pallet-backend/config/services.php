@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'whatsapp_bot' => [
+        'url'    => env('WHATSAPP_BOT_URL'),
+        'secret' => env('WHATSAPP_BOT_SECRET', 'changeme'),
+    ],
+
 ];

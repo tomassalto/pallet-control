@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\ActivityLogger;
+use App\Helpers\WhatsAppNotifier;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Pallet;
@@ -52,6 +53,8 @@ class PalletController extends Controller
             ['code' => $pallet->code, 'status' => 'open']
         );
 
+        WhatsAppNotifier::send("📦 *Nuevo pallet* `{$pallet->code}` creado");
+
         return response()->json($pallet, 201);
     }
 
@@ -62,14 +65,14 @@ class PalletController extends Controller
 
         // Agregar URLs a las fotos generales
         $photos = $pallet->photos->map(function ($photo) {
-            $photo->url = Storage::disk('public')->url($photo->path);
+            $photo->url = '/storage/' . $photo->path;
             return $photo;
         });
 
         // Agregar URLs a las fotos de bases y asegurar que orderItems se incluyan
         $bases = $pallet->bases->map(function ($base) {
             $base->photos->each(function ($photo) {
-                $photo->url = Storage::disk('public')->url($photo->path);
+                $photo->url = '/storage/' . $photo->path;
             });
             // Asegurar que orderItems esté cargado
             if (!$base->relationLoaded('orderItems')) {
@@ -185,6 +188,12 @@ class PalletController extends Controller
             $order->id
         );
 
+        if ($wasNewOrder) {
+            WhatsAppNotifier::send("🆕 *Nuevo pedido* `#{$order->code}` creado y asignado al pallet `{$pallet->code}`");
+        } else {
+            WhatsAppNotifier::send("🔗 Pedido `#{$order->code}` asignado al pallet `{$pallet->code}`");
+        }
+
         return response()->json([
             'message' => 'Pedido asignado al pallet.',
             'order' => $order,
@@ -279,6 +288,8 @@ class PalletController extends Controller
             ['status' => 'done']
         );
 
+        WhatsAppNotifier::send("🎉 Pallet `{$pallet->code}` *cerrado* ✓");
+
         return response()->json([
             'message' => 'Pallet finalizado correctamente',
             'pallet' => $pallet->load(['orders', 'bases.photos']),
@@ -306,6 +317,8 @@ class PalletController extends Controller
             ['status' => $oldStatus],
             ['status' => 'open']
         );
+
+        WhatsAppNotifier::send("🔄 Pallet `{$pallet->code}` *reabierto*");
 
         return response()->json([
             'message' => 'Pallet reabierto correctamente',
@@ -342,6 +355,8 @@ class PalletController extends Controller
             ['code' => $palletCode],
             null
         );
+
+        WhatsAppNotifier::send("🗑️ Pallet `{$palletCode}` eliminado");
 
         return response()->json([
             'message' => 'Pallet eliminado correctamente',

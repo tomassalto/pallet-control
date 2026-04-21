@@ -19,7 +19,7 @@ class PalletBaseController extends Controller
         // Agregar URLs a las fotos de cada base
         $bases->each(function ($base) {
             $base->photos->each(function ($photo) {
-                $photo->url = Storage::disk('public')->url($photo->path);
+                $photo->url = '/storage/' . $photo->path;
             });
         });
 
