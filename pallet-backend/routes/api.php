@@ -17,11 +17,15 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\OrderTicketController;
 use App\Http\Controllers\Api\BotController;
+use App\Http\Controllers\Api\TelegramBotController;
 use App\Http\Controllers\Api\UserController;
 
 Route::prefix('v1')->group(function () {
     // Ruta del bot de WhatsApp (sin auth Sanctum, usa X-Bot-Secret)
     Route::post('/bot/upload', [BotController::class, 'uploadPhoto']);
+
+    // Telegram webhook (sin auth Sanctum, valida X-Telegram-Bot-Api-Secret-Token)
+    Route::post('/telegram/webhook', [TelegramBotController::class, 'webhook']);
 
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/login', [AuthController::class, 'login']);

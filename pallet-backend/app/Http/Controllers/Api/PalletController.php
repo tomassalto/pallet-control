@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\ActivityLogger;
-use App\Helpers\WhatsAppNotifier;
+use App\Helpers\TelegramNotifier;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Pallet;
@@ -53,7 +53,7 @@ class PalletController extends Controller
             ['code' => $pallet->code, 'status' => 'open']
         );
 
-        WhatsAppNotifier::send("📦 *Nuevo pallet* `{$pallet->code}` creado");
+        TelegramNotifier::send("📦 *Nuevo pallet* `{$pallet->code}` creado");
 
         return response()->json($pallet, 201);
     }
@@ -189,9 +189,9 @@ class PalletController extends Controller
         );
 
         if ($wasNewOrder) {
-            WhatsAppNotifier::send("🆕 *Nuevo pedido* `#{$order->code}` creado y asignado al pallet `{$pallet->code}`");
+            TelegramNotifier::send("🆕 *Nuevo pedido* `#{$order->code}` creado y asignado al pallet `{$pallet->code}`");
         } else {
-            WhatsAppNotifier::send("🔗 Pedido `#{$order->code}` asignado al pallet `{$pallet->code}`");
+            TelegramNotifier::send("🔗 Pedido `#{$order->code}` asignado al pallet `{$pallet->code}`");
         }
 
         return response()->json([
@@ -288,7 +288,7 @@ class PalletController extends Controller
             ['status' => 'done']
         );
 
-        WhatsAppNotifier::send("🎉 Pallet `{$pallet->code}` *cerrado* ✓");
+        TelegramNotifier::send("🎉 Pallet `{$pallet->code}` *cerrado* ✓");
 
         return response()->json([
             'message' => 'Pallet finalizado correctamente',
@@ -318,7 +318,7 @@ class PalletController extends Controller
             ['status' => 'open']
         );
 
-        WhatsAppNotifier::send("🔄 Pallet `{$pallet->code}` *reabierto*");
+        TelegramNotifier::send("🔄 Pallet `{$pallet->code}` *reabierto*");
 
         return response()->json([
             'message' => 'Pallet reabierto correctamente',
@@ -356,7 +356,7 @@ class PalletController extends Controller
             null
         );
 
-        WhatsAppNotifier::send("🗑️ Pallet `{$palletCode}` eliminado");
+        TelegramNotifier::send("🗑️ Pallet `{$palletCode}` eliminado");
 
         return response()->json([
             'message' => 'Pallet eliminado correctamente',

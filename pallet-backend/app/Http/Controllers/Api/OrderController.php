@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Helpers\WhatsAppNotifier;
+use App\Helpers\TelegramNotifier;
 use App\Models\Customer;
 use App\Models\Order;
 use Illuminate\Http\Request;
@@ -61,7 +61,7 @@ class OrderController extends Controller
             $order->id
         );
 
-        WhatsAppNotifier::send("🆕 *Nuevo pedido* `#{$order->code}` creado");
+        TelegramNotifier::send("🆕 *Nuevo pedido* `#{$order->code}` creado");
 
         return response()->json($order->load('customer'), 201);
     }
@@ -177,7 +177,7 @@ class OrderController extends Controller
             $order->id
         );
 
-        WhatsAppNotifier::send("🔗 Pedido `#{$order->code}` asociado al pallet `{$pallet->code}`");
+        TelegramNotifier::send("🔗 Pedido `#{$order->code}` asociado al pallet `{$pallet->code}`");
 
         return response()->json([
             'message' => 'Pedido asociado al pallet.',
@@ -322,7 +322,7 @@ class OrderController extends Controller
             $order->id
         );
 
-        WhatsAppNotifier::send("✅ Pedido `#{$order->code}` *finalizado*");
+        TelegramNotifier::send("✅ Pedido `#{$order->code}` *finalizado*");
 
         return response()->json([
             'message' => 'Pedido finalizado correctamente',
@@ -368,7 +368,7 @@ class OrderController extends Controller
             $order->id
         );
 
-        WhatsAppNotifier::send("⛓️ Pallet `{$pallet->code}` desvinculado del pedido `#{$order->code}`");
+        TelegramNotifier::send("⛓️ Pallet `{$pallet->code}` desvinculado del pedido `#{$order->code}`");
 
         return response()->json([
             'message' => 'Pallet desvinculado correctamente. Se eliminaron las asignaciones de productos a las bases de este pallet.',
