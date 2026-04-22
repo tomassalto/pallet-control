@@ -3,11 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Mail\VerifyEmailMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use App\Models\User;
 
@@ -23,30 +20,26 @@ class AuthController extends Controller
 
         $isFirst = User::count() === 0;
 
+        // Todos los usuarios se auto-verifican al registrarse.
+        // El control de acceso real es el sistema de roles (role = null = solo lectura).
         $user = User::create([
             'name'              => $data['name'],
             'email'             => $data['email'],
             'password'          => Hash::make($data['password']),
             'role'              => $isFirst ? 'superadmin' : null,
-            'email_verified_at' => $isFirst ? now() : null,
+            'email_verified_at' => now(),
         ]);
 
-        if ($isFirst) {
-            // Primer usuario → superadmin, ya verificado, puede entrar directo
-            $token = $user->createToken('pallet-pwa')->plainTextToken;
+        $token = $user->createToken('pallet-pwa')->plainTextToken;
 
-            return response()->json([
-                'user'    => $user,
-                'token'   => $token,
-                'message' => 'Cuenta de superadmin creada. Sesión iniciada.',
-            ], 201);
-        }
-
-        // Usuarios siguientes: mandar email de verificación
-        $this->sendVerificationEmail($user);
+        $message = $isFirst
+            ? 'Cuenta de superadmin creada. Sesión iniciada.'
+            : 'Cuenta creada. Un administrador te asignará un rol para comenzar a operar.';
 
         return response()->json([
-            'message' => 'Cuenta creada. Revisá tu correo para verificarla antes de iniciar sesión.',
+            'user'    => $user,
+            'token'   => $token,
+            'message' => $message,
         ], 201);
     }
 
@@ -62,13 +55,6 @@ class AuthController extends Controller
         if (!$user || !Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Credenciales inválidas.'],
-            ]);
-        }
-
-        // Superadmin nunca queda bloqueado por verificación de email
-        if (!$user->isSuperAdmin() && !$user->hasVerifiedEmail()) {
-            throw ValidationException::withMessages([
-                'email' => ['Debés verificar tu correo antes de iniciar sesión.'],
             ]);
         }
 
@@ -98,57 +84,4 @@ class AuthController extends Controller
         return response()->json(['message' => 'Sesión cerrada.']);
     }
 
-    public function verifyEmail(Request $request, string $id)
-    {
-        // Validar URL firmada
-        if (!$request->hasValidSignature()) {
-            return redirect(config('app.url') . '/login?error=link-expirado');
-        }
-
-        $user = User::findOrFail($id);
-
-        if (!hash_equals(sha1($user->email), (string) $request->get('hash'))) {
-            return redirect(config('app.url') . '/login?error=link-invalido');
-        }
-
-        if (!$user->hasVerifiedEmail()) {
-            $user->forceFill(['email_verified_at' => now()])->save();
-        }
-
-        return redirect(config('app.url') . '/login?verified=1');
-    }
-
-    public function resendVerification(Request $request)
-    {
-        $data = $request->validate([
-            'email' => ['required', 'email'],
-        ]);
-
-        $user = User::where('email', $data['email'])->first();
-
-        if (!$user) {
-            // No revelar si el email existe
-            return response()->json(['message' => 'Si el correo existe, recibirás el enlace.']);
-        }
-
-        if ($user->hasVerifiedEmail()) {
-            return response()->json(['message' => 'Tu correo ya está verificado.']);
-        }
-
-        $this->sendVerificationEmail($user);
-
-        return response()->json(['message' => 'Nuevo enlace de verificación enviado.']);
-    }
-
-    protected function sendVerificationEmail(User $user): void
-    {
-        $url = URL::temporarySignedRoute(
-            'verification.verify',
-            now()->addHours(48),
-            ['id' => $user->getKey(), 'hash' => sha1($user->email)]
-        );
-
-        Mail::to($user->email, $user->name)
-            ->send(new VerifyEmailMail($user->name, $url));
-    }
 }
