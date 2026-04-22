@@ -65,7 +65,8 @@ class AuthController extends Controller
             ]);
         }
 
-        if (!$user->hasVerifiedEmail()) {
+        // Superadmin nunca queda bloqueado por verificación de email
+        if (!$user->isSuperAdmin() && !$user->hasVerifiedEmail()) {
             throw ValidationException::withMessages([
                 'email' => ['Debés verificar tu correo antes de iniciar sesión.'],
             ]);
