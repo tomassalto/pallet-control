@@ -14,9 +14,21 @@ class OrderItem extends Model
         'ean_last4',
         'description',
         'qty',
+        'price',
+        'desc_medio_pago',
+        'is_controlled',
         'status',
         'done_qty',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'price'           => 'float',
+            'desc_medio_pago' => 'float',
+            'is_controlled'   => 'boolean',
+        ];
+    }
 
     public function order()
     {

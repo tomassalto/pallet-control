@@ -1,6 +1,5 @@
 <?php
 
-// app/Http/Controllers/OrderImportController.php
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
@@ -10,6 +9,19 @@ use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Columnas fijas del archivo (separadas por TAB):
+ *
+ *  0  EAN
+ *  1  Descripción
+ *  2  Cant Pedida        ← qty
+ *  3  Cant Real          ← ignorar
+ *  4  Precio Unitario    ← price
+ *  5  Precio Base        ← ignorar
+ *  6  Desc. Base         ← ignorar
+ *  7  Desc. Medio Pago   ← desc_medio_pago (10.00 = lunes/viernes, vacío = no)
+ *  8  Controlado         ← is_controlled  (1 = sí, vacío = no)
+ */
 class OrderImportController extends Controller
 {
     public function import(Request $request, Order $order)
@@ -18,7 +30,7 @@ class OrderImportController extends Controller
             'raw' => ['required', 'string'],
         ]);
 
-        $raw = $request->string('raw')->toString();
+        $raw   = $request->string('raw')->toString();
         $lines = preg_split("/\r\n|\n|\r/", trim($raw));
 
         $parsed = [];
@@ -27,44 +39,56 @@ class OrderImportController extends Controller
             $line = trim($line);
             if ($line === '') continue;
 
-            $parts = preg_split("/\t+/", $line);
-            $parts = array_values(array_filter($parts, fn($x) => trim((string)$x) !== ''));
+            // Dividir SOLO por TAB para preservar posiciones de columnas vacías
+            $parts = explode("\t", $line);
 
-            // Si hay una columna adicional al final con valor "1", ignorarla
-            $lastPart = trim((string) end($parts));
-            $hasExternalFlag = ($lastPart === '1' && count($parts) > 4);
-            if ($hasExternalFlag) {
-                array_pop($parts); // Eliminar la última columna
-            }
+            // Necesitamos al menos EAN, Descripción, Cant Pedida (índices 0-2)
+            if (count($parts) < 3) continue;
 
-            // EAN | DESC | precio | algo | qty | [flag externo opcional]
-            // Si hay flag externo: EAN | DESC | precio | algo | qty | 1
-            // Si no hay flag: EAN | DESC | precio | qty
-            if (count($parts) < 4) continue;
+            // ── Columna 0: EAN ─────────────────────────────────────────────
+            $ean = preg_replace('/\D+/', '', trim($parts[0]));
+            if ($ean === '') continue;
 
-            $ean = preg_replace('/\D+/', '', (string) $parts[0]);
-            $desc = trim((string) $parts[1]);
+            // ── Columna 1: Descripción ─────────────────────────────────────
+            $desc = trim($parts[1] ?? '');
+            if ($desc === '') continue;
 
-            // La cantidad está en la última columna (después de eliminar el flag si existe)
-            // o en la columna 3 si no hay flag y solo hay 4 columnas
-            $qtyIndex = count($parts) - 1; // Última columna
-            $qtyRaw = trim((string) $parts[$qtyIndex]);
-            $qtyRaw = str_replace(',', '.', $qtyRaw);
+            // ── Columna 2: Cant Pedida ─────────────────────────────────────
+            $qtyRaw = str_replace(',', '.', trim($parts[2] ?? '0'));
             $qtyRaw = preg_replace('/[^0-9.]/', '', $qtyRaw);
-            $qty = (int) floor((float) $qtyRaw);
+            $qty    = (int) floor((float) $qtyRaw);
+            if ($qty <= 0) continue;
 
-            if ($ean === '' || $desc === '' || $qty <= 0) continue;
+            // ── Columna 4: Precio Unitario ─────────────────────────────────
+            $priceRaw = str_replace(',', '.', trim($parts[4] ?? ''));
+            $priceRaw = preg_replace('/[^0-9.]/', '', $priceRaw);
+            $price    = $priceRaw !== '' ? (float) $priceRaw : null;
+
+            // ── Columna 7: Desc. Medio Pago ────────────────────────────────
+            $dmpRaw = str_replace(',', '.', trim($parts[7] ?? ''));
+            $dmpRaw = preg_replace('/[^0-9.]/', '', $dmpRaw);
+            $descMedioPago = ($dmpRaw !== '' && (float) $dmpRaw > 0)
+                ? (float) $dmpRaw
+                : null;
+
+            // ── Columna 8: Controlado ──────────────────────────────────────
+            $isControlled = trim($parts[8] ?? '') === '1';
 
             $parsed[] = [
-                'ean' => $ean,
-                'ean_last4' => strlen($ean) >= 4 ? substr($ean, -4) : null,
-                'description' => $desc,
-                'qty' => $qty,
+                'ean'            => $ean,
+                'ean_last4'      => strlen($ean) >= 4 ? substr($ean, -4) : null,
+                'description'    => $desc,
+                'qty'            => $qty,
+                'price'          => $price,
+                'desc_medio_pago'=> $descMedioPago,
+                'is_controlled'  => $isControlled,
             ];
         }
 
         if (count($parsed) === 0) {
-            return response()->json(['message' => 'No se pudo interpretar el texto.'], 422);
+            return response()->json([
+                'message' => 'No se pudo interpretar el texto. Verificá que el formato sea el correcto (columnas separadas por TAB).',
+            ], 422);
         }
 
         DB::transaction(function () use ($order, $parsed) {
@@ -77,20 +101,23 @@ class OrderImportController extends Controller
                 );
 
                 OrderItem::create([
-                    'order_id' => $order->id,
-                    'ean' => $row['ean'],
-                    'ean_last4' => $row['ean_last4'],
-                    'description' => $row['description'],
-                    'qty' => $row['qty'],
-                    'status' => 'pending',
-                    'done_qty' => 0,
+                    'order_id'        => $order->id,
+                    'ean'             => $row['ean'],
+                    'ean_last4'       => $row['ean_last4'],
+                    'description'     => $row['description'],
+                    'qty'             => $row['qty'],
+                    'price'           => $row['price'],
+                    'desc_medio_pago' => $row['desc_medio_pago'],
+                    'is_controlled'   => $row['is_controlled'],
+                    'status'          => 'pending',
+                    'done_qty'        => 0,
                 ]);
             }
         });
 
         return response()->json([
-            'message' => 'Pedido importado (reemplazado).',
-            'count' => count($parsed),
+            'message' => 'Pedido importado correctamente.',
+            'count'   => count($parsed),
         ], 201);
     }
 }

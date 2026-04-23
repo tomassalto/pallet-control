@@ -41,6 +41,25 @@ function ItemCard({
             {it.description}
           </div>
 
+          {/* Badges: precio, descuento MP, controlado */}
+          <div className="flex flex-wrap gap-1 mt-0.5">
+            {it.price != null && (
+              <span className="text-[10px] text-gray-500 font-mono">
+                ${Number(it.price).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+              </span>
+            )}
+            {it.desc_medio_pago != null && (
+              <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                💳 -{Number(it.desc_medio_pago).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+              </span>
+            )}
+            {it.is_controlled && (
+              <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
+                Controlado
+              </span>
+            )}
+          </div>
+
           {/* Ubicaciones del producto - solo mostrar si está marcado como "listo" */}
           {it.status === "done" && it.locations && it.locations.length > 0 && (
             <div className="mt-2 space-y-1">
@@ -152,7 +171,7 @@ export default function OrderDetail() {
       if (data.order?.status === "open") {
         try {
           const canFinalizeData = await apiGet(
-            `/orders/${orderId}/can-finalize`
+            `/orders/${orderId}/can-finalize`,
           );
           setCanFinalize(canFinalizeData.can_finalize || false);
         } catch {
@@ -194,7 +213,7 @@ export default function OrderDetail() {
       load(); // Recargar para actualizar la lista de pallets
     } catch (e) {
       toastError(
-        e?.response?.data?.message || e?.message || "Error asociando pallet"
+        e?.response?.data?.message || e?.message || "Error asociando pallet",
       );
     }
   }
@@ -202,7 +221,7 @@ export default function OrderDetail() {
   async function handleFinalize() {
     if (!canFinalize) {
       toastError(
-        "No se puede finalizar. Debe haber 0 productos pendientes y al menos 1 producto marcado como listo."
+        "No se puede finalizar. Debe haber 0 productos pendientes y al menos 1 producto marcado como listo.",
       );
       return;
     }
@@ -218,7 +237,7 @@ export default function OrderDetail() {
       load(); // Recargar para actualizar el estado del pedido
     } catch (e) {
       toastError(
-        e?.response?.data?.message || e?.message || "Error al finalizar pedido"
+        e?.response?.data?.message || e?.message || "Error al finalizar pedido",
       );
     } finally {
       setFinalizing(false);
@@ -232,7 +251,7 @@ export default function OrderDetail() {
 
   const filtered = useMemo(
     () => items.filter((it) => it.status === tab),
-    [items, tab]
+    [items, tab],
   );
 
   // Categorizar productos para pedidos finalizados
@@ -244,12 +263,12 @@ export default function OrderDetail() {
 
     // Productos completados/de más: marcados como "done" y alcanzaron o superaron la cantidad
     const completed = items.filter(
-      (it) => it.status === "done" && doneQty(it) >= qty(it) && doneQty(it) > 0
+      (it) => it.status === "done" && doneQty(it) >= qty(it) && doneQty(it) > 0,
     );
 
     // Productos incompletos: marcados como "done" pero no alcanzaron la cantidad (y tienen alguna cantidad encontrada)
     const incomplete = items.filter(
-      (it) => it.status === "done" && doneQty(it) < qty(it) && doneQty(it) > 0
+      (it) => it.status === "done" && doneQty(it) < qty(it) && doneQty(it) > 0,
     );
 
     // Productos no encontrados:
@@ -260,7 +279,7 @@ export default function OrderDetail() {
       (it) =>
         it.status === "removed" ||
         (it.status === "done" && doneQty(it) === 0) ||
-        (it.status === "pending" && doneQty(it) === 0)
+        (it.status === "pending" && doneQty(it) === 0),
     );
 
     return { completed, incomplete, notFound };
@@ -296,8 +315,8 @@ export default function OrderDetail() {
       const created = await apiPost(`/orders/${orderId}/items`, body);
       setItems((prev) =>
         [created, ...prev].sort((a, b) =>
-          a.description.localeCompare(b.description)
-        )
+          a.description.localeCompare(b.description),
+        ),
       );
       setEanOrLast4("");
       setQty("1");
@@ -367,7 +386,7 @@ export default function OrderDetail() {
                     await onAttachPallet(pallet.id);
                   } catch (e) {
                     toastError(
-                      e?.data?.message || e?.message || "Error creando pallet"
+                      e?.data?.message || e?.message || "Error creando pallet",
                     );
                   }
                 }}
@@ -434,7 +453,14 @@ export default function OrderDetail() {
             title="Ver QR del pedido"
             className="shrink-0 p-2 rounded-xl border border-gray-200 hover:bg-gray-50 active:scale-95 transition-transform"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-6 h-6 text-gray-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.8}
+            >
               <rect x="3" y="3" width="7" height="7" rx="1" />
               <rect x="14" y="3" width="7" height="7" rx="1" />
               <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -732,7 +758,7 @@ export default function OrderDetail() {
                       setActionQty(
                         it.status === "removed"
                           ? "0"
-                          : String(it.done_qty ?? it.qty ?? "")
+                          : String(it.done_qty ?? it.qty ?? ""),
                       );
                     }}
                     borderColor="border-red-500"
@@ -780,7 +806,7 @@ export default function OrderDetail() {
                     setActionItem(it);
                     // Si está removido, inicializar con 0, sino con la cantidad actual
                     setActionQty(
-                      it.status === "removed" ? "0" : String(it.qty ?? "")
+                      it.status === "removed" ? "0" : String(it.qty ?? ""),
                     );
                   }}
                   borderColor={rowClass(it.status)}
@@ -858,7 +884,7 @@ export default function OrderDetail() {
                         qty: q,
                       });
                       toastSuccess(
-                        `Producto marcado como listo: ${q} unidades`
+                        `Producto marcado como listo: ${q} unidades`,
                       );
                     }
                     setActionItem(null);
@@ -919,14 +945,14 @@ export default function OrderDetail() {
                     setDetachingPallet(palletToDetach.id);
                     try {
                       await apiDelete(
-                        `/orders/${orderId}/detach-pallet/${palletToDetach.id}`
+                        `/orders/${orderId}/detach-pallet/${palletToDetach.id}`,
                       );
                       toastSuccess("Pallet desvinculado correctamente");
                       load(); // Recargar para actualizar la lista
                     } catch (e) {
                       toastError(
                         e?.response?.data?.message ||
-                          "Error al desvincular pallet"
+                          "Error al desvincular pallet",
                       );
                     } finally {
                       setDetachingPallet(null);
@@ -1009,7 +1035,7 @@ function TicketCard({ ticket, orderId, onUpdate }) {
       onUpdate();
     } catch (e) {
       toastError(
-        e.response?.data?.message || e.message || "Error subiendo foto"
+        e.response?.data?.message || e.message || "Error subiendo foto",
       );
     } finally {
       setUploading(false);
@@ -1022,13 +1048,13 @@ function TicketCard({ ticket, orderId, onUpdate }) {
 
     try {
       await apiDelete(
-        `/orders/${orderId}/tickets/${ticket.id}/photos/${photoId}`
+        `/orders/${orderId}/tickets/${ticket.id}/photos/${photoId}`,
       );
       toastSuccess("Foto eliminada");
       onUpdate();
     } catch (e) {
       toastError(
-        e.response?.data?.message || e.message || "Error eliminando foto"
+        e.response?.data?.message || e.message || "Error eliminando foto",
       );
     }
   }
@@ -1042,7 +1068,7 @@ function TicketCard({ ticket, orderId, onUpdate }) {
       onUpdate();
     } catch (e) {
       toastError(
-        e.response?.data?.message || e.message || "Error eliminando ticket"
+        e.response?.data?.message || e.message || "Error eliminando ticket",
       );
     } finally {
       setDeleting(false);
@@ -1056,7 +1082,9 @@ function TicketCard({ ticket, orderId, onUpdate }) {
           {ticket.code || "Sin código"}
         </div>
         {ticket.note && (
-          <div className="text-xs text-gray-500 text-left flex-1 mx-2">{ticket.note}</div>
+          <div className="text-xs text-gray-500 text-left flex-1 mx-2">
+            {ticket.note}
+          </div>
         )}
         <div className="flex gap-2">
           <button
@@ -1094,7 +1122,8 @@ function TicketCard({ ticket, orderId, onUpdate }) {
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         e.target.style.display = "none";
-                        e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-400 text-xs">Error cargando imagen</div>';
+                        e.target.parentElement.innerHTML =
+                          '<div class="w-full h-full flex items-center justify-center text-gray-400 text-xs">Error cargando imagen</div>';
                       }}
                     />
                   </button>
@@ -1210,7 +1239,6 @@ function TicketCard({ ticket, orderId, onUpdate }) {
           </div>
         </>
       )}
-
     </div>
   );
 }
@@ -1237,7 +1265,7 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
       toastSuccess("Ticket creado. Ahora podés agregar fotos.");
     } catch (e) {
       toastError(
-        e.response?.data?.message || e.message || "Error creando ticket"
+        e.response?.data?.message || e.message || "Error creando ticket",
       );
     } finally {
       setSaving(false);
@@ -1263,7 +1291,7 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
       toastSuccess("Foto agregada");
     } catch (e) {
       toastError(
-        e.response?.data?.message || e.message || "Error subiendo foto"
+        e.response?.data?.message || e.message || "Error subiendo foto",
       );
     } finally {
       setUploading(false);
