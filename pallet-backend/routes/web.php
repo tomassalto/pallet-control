@@ -24,6 +24,11 @@ Route::get('/storage/{path}', function (string $path) {
         ->header('Cache-Control', 'public, max-age=31536000');
 })->where('path', '.*');
 
+// Redirige /app/pallet-view/* → /pallet-view/* para quienes añaden /app/ por error
+Route::get('/app/pallet-view/{code}', function (string $code) {
+    return redirect("/pallet-view/{$code}", 301);
+});
+
 // Catch-all: sirve assets del build de Vite o el index.html de la SPA
 Route::get('/{any?}', function (string $any = '') {
     // Si la URL corresponde a un archivo en public/app/, servirlo directamente

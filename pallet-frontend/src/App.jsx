@@ -30,6 +30,8 @@ export default function App() {
       <Routes>
         {/* ── Rutas públicas (sin sidebar, sin auth) ─────────────────────── */}
         <Route path="/pallet-view/:code" element={<PalletPublicView />} />
+        {/* Alias con prefijo /app/ — por si el usuario llega con esa URL */}
+        <Route path="/app/pallet-view/:code" element={<PalletPublicView />} />
 
         {/* ── Rutas de la app (con sidebar) ──────────────────────────────── */}
         <Route
