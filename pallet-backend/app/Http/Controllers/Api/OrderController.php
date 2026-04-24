@@ -234,13 +234,13 @@ class OrderController extends Controller
     // GET /orders/{order}/can-finalize
     public function canFinalize(Order $order)
     {
-        $order->load('items', 'pallets');
+        $order->load(['items', 'pallets.bases.orderItems']);
 
-        // Verificar si hay items
+        // Debe tener al menos 1 producto
         if ($order->items->isEmpty()) {
             return response()->json([
                 'can_finalize' => false,
-                'reason' => 'El pedido no tiene items',
+                'reason' => 'El pedido no tiene productos',
             ]);
         }
 
@@ -252,31 +252,27 @@ class OrderController extends Controller
             ]);
         }
 
-        // Debe tener 1 o más productos asociados al pedido
-        if ($order->items->count() < 1) {
-            return response()->json([
-                'can_finalize' => false,
-                'reason' => 'El pedido debe tener al menos 1 producto asociado para finalizar',
-            ]);
+        // Calcular unidades asignadas por ítem a través de todas las bases de todos los pallets
+        $assignedQtys = [];
+        foreach ($order->pallets as $pallet) {
+            foreach ($pallet->bases as $base) {
+                foreach ($base->orderItems as $item) {
+                    if ($item->order_id === $order->id) {
+                        $assignedQtys[$item->id] = ($assignedQtys[$item->id] ?? 0) + $item->pivot->qty;
+                    }
+                }
+            }
         }
 
-        // Contar productos por estado
-        $pendingItems = $order->items->where('status', 'pending');
-        $completedItems = $order->items->where('status', 'done');
+        // Todos los productos deben tener sus unidades completamente distribuidas
+        $allDistributed = $order->items->every(
+            fn($item) => ($assignedQtys[$item->id] ?? 0) >= $item->qty
+        );
 
-        // Debe haber 0 productos pendientes
-        if ($pendingItems->count() > 0) {
+        if (!$allDistributed) {
             return response()->json([
                 'can_finalize' => false,
-                'reason' => 'Debe haber 0 productos pendientes para finalizar el pedido',
-            ]);
-        }
-
-        // Debe haber 1 o más productos marcados como listo
-        if ($completedItems->count() < 1) {
-            return response()->json([
-                'can_finalize' => false,
-                'reason' => 'Debe haber al menos 1 producto marcado como listo para finalizar el pedido',
+                'reason' => 'Todos los productos deben tener sus unidades distribuidas en bases de pallets',
             ]);
         }
 
@@ -288,44 +284,40 @@ class OrderController extends Controller
     // POST /orders/{order}/finalize
     public function finalize(Order $order)
     {
-        $order->load('items', 'pallets');
+        $order->load(['items', 'pallets.bases.orderItems']);
 
-        // Verificar si hay items
         if ($order->items->isEmpty()) {
             return response()->json([
-                'message' => 'El pedido no tiene items',
+                'message' => 'El pedido no tiene productos',
             ], 422);
         }
 
-        // Debe tener al menos 1 pallet asociado
         if ($order->pallets->isEmpty()) {
             return response()->json([
                 'message' => 'El pedido debe tener al menos 1 pallet asociado para finalizar',
             ], 422);
         }
 
-        // Debe tener 1 o más productos asociados al pedido
-        if ($order->items->count() < 1) {
-            return response()->json([
-                'message' => 'El pedido debe tener al menos 1 producto asociado para finalizar',
-            ], 422);
+        // Calcular unidades asignadas por ítem a través de todas las bases de todos los pallets
+        $assignedQtys = [];
+        foreach ($order->pallets as $pallet) {
+            foreach ($pallet->bases as $base) {
+                foreach ($base->orderItems as $item) {
+                    if ($item->order_id === $order->id) {
+                        $assignedQtys[$item->id] = ($assignedQtys[$item->id] ?? 0) + $item->pivot->qty;
+                    }
+                }
+            }
         }
 
-        // Contar productos por estado
-        $pendingItems = $order->items->where('status', 'pending');
-        $completedItems = $order->items->where('status', 'done');
+        // Todos los productos deben tener sus unidades completamente distribuidas
+        $allDistributed = $order->items->every(
+            fn($item) => ($assignedQtys[$item->id] ?? 0) >= $item->qty
+        );
 
-        // Debe haber 0 productos pendientes
-        if ($pendingItems->count() > 0) {
+        if (!$allDistributed) {
             return response()->json([
-                'message' => 'Debe haber 0 productos pendientes para finalizar el pedido',
-            ], 422);
-        }
-
-        // Debe haber 1 o más productos marcados como listo
-        if ($completedItems->count() < 1) {
-            return response()->json([
-                'message' => 'Debe haber al menos 1 producto marcado como listo para finalizar el pedido',
+                'message' => 'Todos los productos deben tener sus unidades distribuidas en bases de pallets para finalizar el pedido',
             ], 422);
         }
 

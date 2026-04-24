@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\ActivityLogger;
+use App\Models\OrderItem;
 use App\Models\Pallet;
 use App\Models\PalletBase;
 use Illuminate\Http\Request;
@@ -265,6 +266,142 @@ class PalletBaseController extends Controller
         }
 
         return response()->json($base->load(['photos', 'orderItems']));
+    }
+
+    // POST /pallets/{pallet}/bases/{base}/migrate
+    public function migrate(Request $request, Pallet $pallet, PalletBase $base)
+    {
+        $sourcePallet = $pallet;
+        $sourceBase   = $base;
+
+        if ($sourceBase->pallet_id !== $sourcePallet->id) {
+            return response()->json(['message' => 'Base no encontrada en este pallet'], 404);
+        }
+
+        $data = $request->validate([
+            'items'                  => ['required', 'array', 'min:1'],
+            'items.*.order_item_id'  => ['required', 'integer', 'exists:order_items,id'],
+            'items.*.qty'            => ['required', 'integer', 'min:1'],
+            'destination_pallet_id'  => ['nullable', 'integer', 'exists:pallets,id'],
+            'destination_base_id'    => ['nullable', 'integer', 'exists:pallet_bases,id'],
+        ]);
+
+        $orderItemIds = collect($data['items'])->pluck('order_item_id');
+
+        // Pre-fetch order items y registros origen
+        $orderItemsMap = OrderItem::whereIn('id', $orderItemIds)->get()->keyBy('id');
+
+        $sourceRecords = DB::table('pallet_base_order_items')
+            ->where('base_id', $sourceBase->id)
+            ->whereIn('order_item_id', $orderItemIds)
+            ->get()
+            ->keyBy('order_item_id');
+
+        // Validar disponibilidad antes de tocar la DB
+        foreach ($data['items'] as $itemData) {
+            $record    = $sourceRecords->get($itemData['order_item_id']);
+            $available = $record ? $record->qty : 0;
+            if ($available < $itemData['qty']) {
+                $item = $orderItemsMap->get($itemData['order_item_id']);
+                return response()->json([
+                    'message' => "Cantidad insuficiente de '{$item?->description}'. Disponible: {$available}, solicitado: {$itemData['qty']}.",
+                ], 422);
+            }
+        }
+
+        $result = DB::transaction(function () use ($data, $sourcePallet, $sourceBase, $sourceRecords, $orderItemsMap) {
+            // Resolver pallet destino
+            if (!empty($data['destination_pallet_id'])) {
+                $destPallet = Pallet::findOrFail($data['destination_pallet_id']);
+            } else {
+                // Crear pallet nuevo con el mismo patrón de código
+                $today      = now()->format('Ymd');
+                $countToday = Pallet::whereDate('created_at', now()->toDateString())->count() + 1;
+                $destPallet = Pallet::create([
+                    'code'   => sprintf('PAL-%s-%04d', $today, $countToday),
+                    'status' => 'open',
+                ]);
+            }
+
+            // Resolver base destino
+            if (!empty($data['destination_base_id'])) {
+                $destBase = PalletBase::findOrFail($data['destination_base_id']);
+            } else {
+                $nextNum  = $destPallet->bases()->count() + 1;
+                $destBase = $destPallet->bases()->create(['name' => "Base {$nextNum}"]);
+            }
+
+            $sourceName = ($sourcePallet->code . ' / ' . ($sourceBase->name ?? "Base #{$sourceBase->id}"));
+            $destName   = ($destPallet->code   . ' / ' . ($destBase->name   ?? "Base #{$destBase->id}"));
+
+            foreach ($data['items'] as $itemData) {
+                $orderItemId = $itemData['order_item_id'];
+                $qtyToMove   = $itemData['qty'];
+                $sourceRecord = $sourceRecords->get($orderItemId);
+
+                // Reducir en origen
+                $newSourceQty = $sourceRecord->qty - $qtyToMove;
+                if ($newSourceQty === 0) {
+                    DB::table('pallet_base_order_items')
+                        ->where('base_id', $sourceBase->id)
+                        ->where('order_item_id', $orderItemId)
+                        ->delete();
+                } else {
+                    DB::table('pallet_base_order_items')
+                        ->where('base_id', $sourceBase->id)
+                        ->where('order_item_id', $orderItemId)
+                        ->update(['qty' => $newSourceQty, 'updated_at' => now()]);
+                }
+
+                // Sumar en destino
+                $destRecord = DB::table('pallet_base_order_items')
+                    ->where('base_id', $destBase->id)
+                    ->where('order_item_id', $orderItemId)
+                    ->first();
+
+                if ($destRecord) {
+                    DB::table('pallet_base_order_items')
+                        ->where('base_id', $destBase->id)
+                        ->where('order_item_id', $orderItemId)
+                        ->update(['qty' => $destRecord->qty + $qtyToMove, 'updated_at' => now()]);
+                } else {
+                    DB::table('pallet_base_order_items')->insert([
+                        'base_id'       => $destBase->id,
+                        'order_item_id' => $orderItemId,
+                        'qty'           => $qtyToMove,
+                        'created_at'    => now(),
+                        'updated_at'    => now(),
+                    ]);
+                }
+
+                // Asociar pedido al pallet destino si no está vinculado
+                $orderItem = $orderItemsMap->get($orderItemId);
+                if ($orderItem && !$destPallet->orders()->where('orders.id', $orderItem->order_id)->exists()) {
+                    $destPallet->orders()->attach($orderItem->order_id);
+                }
+
+                // Log
+                ActivityLogger::log(
+                    'item_migrated',
+                    'order_item',
+                    $orderItemId,
+                    "Migrado '{$orderItem?->description}': {$qtyToMove} u. de [{$sourceName}] → [{$destName}]",
+                    $sourcePallet->id,
+                    ['source' => $sourceName, 'qty' => $qtyToMove],
+                    ['dest'   => $destName,   'qty' => $qtyToMove],
+                );
+            }
+
+            return [
+                'destination_pallet_id'   => $destPallet->id,
+                'destination_pallet_code' => $destPallet->code,
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Productos migrados correctamente',
+            ...$result,
+        ]);
     }
 
     public function destroy(Pallet $pallet, PalletBase $base)

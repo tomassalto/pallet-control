@@ -47,27 +47,65 @@ function ProductRow({ item, c }) {
   );
 }
 
+// ── Lightbox modal ───────────────────────────────────────────────────────────
+function Lightbox({ url, onClose }) {
+  // Cerrar con Escape
+  useEffect(() => {
+    function onKey(e) { if (e.key === "Escape") onClose(); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      {/* Botón cerrar */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-xl leading-none transition-colors"
+        aria-label="Cerrar"
+      >
+        ✕
+      </button>
+
+      {/* Imagen */}
+      <img
+        src={url}
+        alt=""
+        className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
 // ── Galería de fotos horizontal ──────────────────────────────────────────────
 function PhotoStrip({ photos }) {
+  const [selected, setSelected] = useState(null);
+
   if (!photos?.length) return null;
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-      {photos.map((p) => (
-        <a
-          key={p.id}
-          href={p.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex-shrink-0 block"
-        >
-          <img
-            src={p.url}
-            alt=""
-            className="h-28 w-28 object-cover rounded-2xl border border-gray-200 shadow-sm"
-          />
-        </a>
-      ))}
-    </div>
+    <>
+      <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+        {photos.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setSelected(p.url)}
+            className="flex-shrink-0 block active:scale-95 transition-transform"
+          >
+            <img
+              src={p.url}
+              alt=""
+              className="h-28 w-28 object-cover rounded-2xl border border-gray-200 shadow-sm"
+            />
+          </button>
+        ))}
+      </div>
+
+      {selected && <Lightbox url={selected} onClose={() => setSelected(null)} />}
+    </>
   );
 }
 

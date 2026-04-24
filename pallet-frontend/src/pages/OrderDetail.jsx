@@ -225,7 +225,7 @@ export default function OrderDetail() {
   async function handleFinalize() {
     if (!canFinalize) {
       toastError(
-        "No se puede finalizar. Debe haber 0 productos pendientes y al menos 1 producto marcado como listo.",
+        "No se puede finalizar. Todos los productos deben tener sus unidades distribuidas en bases de pallets.",
       );
       return;
     }
@@ -258,9 +258,9 @@ export default function OrderDetail() {
     [items, tab],
   );
 
-  // Items a mostrar en el modal "Organizar en pallet" — solo los importados (done_qty > 0)
+  // Items a mostrar en el modal "Organizar en pallet" — todos los que tienen qty > 0
   const modalItems = useMemo(
-    () => items.filter((it) => (it.done_qty ?? 0) > 0).sort((a, b) => a.description.localeCompare(b.description)),
+    () => items.filter((it) => (it.qty ?? 0) > 0).sort((a, b) => a.description.localeCompare(b.description)),
     [items],
   );
 
@@ -371,7 +371,8 @@ export default function OrderDetail() {
   async function createBaseAndOrganize() {
     setOrganizeModal((prev) => prev ? { ...prev, loading: true } : null);
     try {
-      await apiPost(`/pallets/${organizeModal.palletId}/bases`, { name: null });
+      const nextNum = (organizeModal.bases?.length ?? 0) + 1;
+      await apiPost(`/pallets/${organizeModal.palletId}/bases`, { name: `Base ${nextNum}` });
       const data = await apiGet(`/pallets/${organizeModal.palletId}`);
       const bases = data.bases || [];
       const newBase = bases[bases.length - 1];
@@ -389,7 +390,7 @@ export default function OrderDetail() {
 
   function modalMaxQty(orderItem) {
     if (!organizeModal?.bases || !organizeModal?.selectedBase) return 0;
-    const total = orderItem.done_qty || orderItem.qty || 0;
+    const total = orderItem.qty || 0;
     const elsewhere = organizeModal.bases.reduce((sum, base) => {
       if (base.id === organizeModal.selectedBase.id) return sum;
       const found = base.order_items?.find((i) => i.id === orderItem.id);
@@ -1185,7 +1186,7 @@ export default function OrderDetail() {
                               <span className={max === 0 && !active ? "text-red-500 font-medium" : ""}>
                                 {max}
                               </span>
-                              {" / "}{item.done_qty || item.qty} unid.
+                              {" / "}{item.qty} unid.
                             </p>
                           </div>
 
@@ -1199,11 +1200,12 @@ export default function OrderDetail() {
                               −
                             </button>
                             <input
-                              type="number"
-                              min="0"
-                              max={max}
-                              value={cur}
+                              type="text"
+                              inputMode="numeric"
+                              value={cur === 0 ? "" : cur}
+                              placeholder="0"
                               onChange={(e) => setModalQty(item, e.target.value)}
+                              onFocus={(e) => e.target.select()}
                               className="w-12 text-center text-sm font-bold border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-gray-300"
                             />
                             <button

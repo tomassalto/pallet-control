@@ -259,11 +259,12 @@ export default function BaseProducts() {
 
                             {/* Input numérico */}
                             <input
-                              type="number"
-                              min="0"
-                              max={max}
-                              value={cur}
+                              type="text"
+                              inputMode="numeric"
+                              value={cur === 0 ? "" : cur}
+                              placeholder="0"
                               onChange={(e) => handleInput(item, e.target.value)}
+                              onFocus={(e) => e.target.select()}
                               className="w-12 text-center text-sm font-bold border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-gray-300"
                             />
 

@@ -84,12 +84,14 @@ export default defineConfig({
     allowedHosts: ["decompressive-gluelike-clifton.ngrok-free.dev", "all"],
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        target: "https://pallet-control.onrender.com",
         changeOrigin: true,
+        secure: false,
       },
       "/storage": {
-        target: "http://127.0.0.1:8000",
+        target: "https://pallet-control.onrender.com",
         changeOrigin: true,
+        secure: false,
       },
     },
   },

@@ -33,6 +33,11 @@ export default function PalletDetail() {
   const [baseName, setBaseName] = useState("");
   const [baseNote, setBaseNote] = useState("");
 
+  // modal migración
+  // null | { sourceBase, step:'items'|'dest', quantities:{}, loadingPallets, pallets:[],
+  //          selectedPalletId, selectedPalletBases:[], selectedBaseId, saving }
+  const [migrateModal, setMigrateModal] = useState(null);
+
   // assign
   const [orderCode, setOrderCode] = useState("");
 
@@ -208,6 +213,91 @@ export default function PalletDetail() {
         }
       },
     });
+  }
+
+  // ── Migración ─────────────────────────────────────────────────────────────
+  async function openMigrateModal(base) {
+    // Inicializar con qty = 0 para cada ítem (el usuario elige qué mover)
+    const quantities = {};
+    (base.order_items || []).forEach((item) => { quantities[item.id] = 0; });
+    setMigrateModal({
+      sourceBase: base,
+      step: "items",
+      quantities,
+      loadingPallets: false,
+      pallets: [],
+      selectedPalletId: null,
+      selectedPalletBases: [],
+      selectedBaseId: null,
+      saving: false,
+    });
+  }
+
+  function setMigrateQty(itemId, value, maxQty) {
+    const v = Math.min(Math.max(0, parseInt(value, 10) || 0), maxQty);
+    setMigrateModal((prev) => prev ? { ...prev, quantities: { ...prev.quantities, [itemId]: v } } : null);
+  }
+
+  function selectAllMigrate() {
+    const quantities = {};
+    (migrateModal?.sourceBase?.order_items || []).forEach((item) => {
+      quantities[item.id] = item.pivot?.qty ?? 0;
+    });
+    setMigrateModal((prev) => prev ? { ...prev, quantities } : null);
+  }
+
+  async function goToMigrateDest() {
+    setMigrateModal((prev) => prev ? { ...prev, step: "dest", loadingPallets: true } : null);
+    try {
+      const data = await apiGet("/pallets?page=1");
+      const list = (Array.isArray(data) ? data : (data.data || []))
+        .filter((p) => p.id !== parseInt(palletId, 10));
+      setMigrateModal((prev) => prev ? { ...prev, loadingPallets: false, pallets: list } : null);
+    } catch {
+      toastError("Error cargando pallets");
+      setMigrateModal((prev) => prev ? { ...prev, loadingPallets: false } : null);
+    }
+  }
+
+  async function selectMigratePallet(pId) {
+    if (pId === null) {
+      // Pallet nuevo → no tiene bases aún
+      setMigrateModal((prev) => prev ? { ...prev, selectedPalletId: null, selectedPalletBases: [], selectedBaseId: null } : null);
+      return;
+    }
+    setMigrateModal((prev) => prev ? { ...prev, selectedPalletId: pId, selectedPalletBases: [], selectedBaseId: null } : null);
+    try {
+      const data = await apiGet(`/pallets/${pId}`);
+      setMigrateModal((prev) => prev ? { ...prev, selectedPalletBases: data.bases || [] } : null);
+    } catch {
+      toastError("Error cargando bases del pallet");
+    }
+  }
+
+  async function saveMigrate() {
+    if (!migrateModal) return;
+    const items = Object.entries(migrateModal.quantities)
+      .filter(([, q]) => q > 0)
+      .map(([id, q]) => ({ order_item_id: parseInt(id, 10), qty: q }));
+    if (items.length === 0) { toastError("Seleccioná al menos 1 unidad para migrar"); return; }
+
+    setMigrateModal((prev) => prev ? { ...prev, saving: true } : null);
+    try {
+      const res = await apiPost(
+        `/pallets/${palletId}/bases/${migrateModal.sourceBase.id}/migrate`,
+        {
+          items,
+          destination_pallet_id: migrateModal.selectedPalletId ?? null,
+          destination_base_id: migrateModal.selectedBaseId ?? null,
+        }
+      );
+      toastSuccess(`Migrado correctamente → ${res.destination_pallet_code}`);
+      setMigrateModal(null);
+      load();
+    } catch (e) {
+      toastError(e?.response?.data?.message || "Error al migrar");
+      setMigrateModal((prev) => prev ? { ...prev, saving: false } : null);
+    }
   }
 
   function startEditBase(base) {
@@ -509,6 +599,14 @@ export default function PalletDetail() {
                   >
                     Galería ({base.photos?.length || 0})
                   </Link>
+                  {(base.order_items?.length || 0) > 0 && (
+                    <button
+                      onClick={() => openMigrateModal(base)}
+                      className="col-span-2 rounded-lg py-2.5 border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 active:scale-[0.99] text-sm font-medium"
+                    >
+                      🔀 Migrar productos
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -661,6 +759,215 @@ export default function PalletDetail() {
             >
               {editingBase ? "Actualizar" : "Crear base"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal migración ──────────────────────────────────────────────── */}
+      {migrateModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center">
+          <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl flex flex-col max-h-[90vh]">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 pt-5 pb-3 border-b flex-shrink-0">
+              <div>
+                <p className="font-bold text-base">
+                  🔀 Migrar desde {migrateModal.sourceBase.name || `Base #${migrateModal.sourceBase.id}`}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {migrateModal.step === "items" ? "¿Qué productos y cuántas unidades?" : "¿A dónde los llevás?"}
+                </p>
+              </div>
+              <button onClick={() => setMigrateModal(null)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
+            </div>
+
+            {/* ── Paso 1: seleccionar cantidades ── */}
+            {migrateModal.step === "items" && (
+              <>
+                <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+                  {/* Botón "Mover todo" */}
+                  <div className="px-4 py-2 bg-gray-50 flex items-center justify-between">
+                    <span className="text-xs text-gray-500">
+                      {Object.values(migrateModal.quantities).filter((q) => q > 0).length} producto{Object.values(migrateModal.quantities).filter((q) => q > 0).length !== 1 ? "s" : ""} seleccionado{Object.values(migrateModal.quantities).filter((q) => q > 0).length !== 1 ? "s" : ""}
+                    </span>
+                    <button
+                      onClick={selectAllMigrate}
+                      className="text-xs text-blue-600 font-medium hover:underline"
+                    >
+                      Seleccionar todo
+                    </button>
+                  </div>
+
+                  {(migrateModal.sourceBase.order_items || []).map((item) => {
+                    const maxQty = item.pivot?.qty ?? 0;
+                    const cur = migrateModal.quantities[item.id] ?? 0;
+                    const active = cur > 0;
+                    return (
+                      <div
+                        key={item.id}
+                        className={["flex items-center gap-3 px-4 py-3 transition-colors", active ? "border-l-4 border-l-amber-500" : ""].join(" ")}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium leading-snug">{item.description}</p>
+                          <p className="text-xs font-mono text-gray-400 mt-0.5">{item.ean}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">En base: <span className="font-semibold">{maxQty}</span> u.</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            onClick={() => setMigrateQty(item.id, cur - 1, maxQty)}
+                            disabled={cur === 0}
+                            className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 disabled:opacity-25 text-lg leading-none select-none"
+                          >−</button>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={cur === 0 ? "" : cur}
+                            placeholder="0"
+                            onChange={(e) => setMigrateQty(item.id, e.target.value, maxQty)}
+                            onFocus={(e) => e.target.select()}
+                            className="w-12 text-center text-sm font-bold border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                          />
+                          <button
+                            onClick={() => setMigrateQty(item.id, cur + 1, maxQty)}
+                            disabled={cur >= maxQty}
+                            className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center disabled:opacity-25 text-lg leading-none select-none"
+                          >+</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="p-4 border-t flex-shrink-0">
+                  <button
+                    onClick={goToMigrateDest}
+                    disabled={Object.values(migrateModal.quantities).every((q) => q === 0)}
+                    className="w-full py-3.5 rounded-2xl bg-gray-900 text-white font-bold text-sm disabled:opacity-40"
+                  >
+                    Seleccionar destino →
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── Paso 2: seleccionar destino ── */}
+            {migrateModal.step === "dest" && (
+              <>
+                <div className="px-4 py-2 border-b flex-shrink-0">
+                  <button
+                    onClick={() => setMigrateModal((prev) => prev ? { ...prev, step: "items", selectedPalletId: null, selectedBaseId: null } : null)}
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    ← Volver
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {migrateModal.loadingPallets ? (
+                    <p className="text-center text-gray-400 py-8 text-sm">Cargando pallets…</p>
+                  ) : (
+                    <>
+                      {/* Pallet destino */}
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Pallet destino</p>
+                        <div className="space-y-2">
+                          {/* Opción: pallet nuevo */}
+                          <button
+                            onClick={() => selectMigratePallet(null)}
+                            className={[
+                              "w-full text-left rounded-xl border px-4 py-3 text-sm transition-colors",
+                              migrateModal.selectedPalletId === null
+                                ? "border-amber-400 bg-amber-50 font-semibold"
+                                : "border-gray-200 hover:bg-gray-50",
+                            ].join(" ")}
+                          >
+                            <span className="font-medium">🆕 Crear pallet nuevo</span>
+                            <span className="block text-xs text-gray-400 mt-0.5">Se generará con código automático</span>
+                          </button>
+
+                          {migrateModal.pallets.map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={() => selectMigratePallet(p.id)}
+                              className={[
+                                "w-full text-left rounded-xl border px-4 py-3 text-sm transition-colors",
+                                migrateModal.selectedPalletId === p.id
+                                  ? "border-amber-400 bg-amber-50 font-semibold"
+                                  : "border-gray-200 hover:bg-gray-50",
+                              ].join(" ")}
+                            >
+                              <span className="font-mono font-semibold">{p.code}</span>
+                              <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${p.status === "done" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                                {p.status === "done" ? "Finalizado" : "Abierto"}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Base destino — solo si se eligió un pallet existente */}
+                      {migrateModal.selectedPalletId !== null && (
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Base destino</p>
+                          <div className="space-y-2">
+                            {/* Base nueva */}
+                            <button
+                              onClick={() => setMigrateModal((prev) => prev ? { ...prev, selectedBaseId: null } : null)}
+                              className={[
+                                "w-full text-left rounded-xl border px-4 py-3 text-sm transition-colors",
+                                migrateModal.selectedBaseId === null
+                                  ? "border-amber-400 bg-amber-50 font-semibold"
+                                  : "border-gray-200 hover:bg-gray-50",
+                              ].join(" ")}
+                            >
+                              🆕 Crear base nueva
+                            </button>
+
+                            {migrateModal.selectedPalletBases.map((b) => (
+                              <button
+                                key={b.id}
+                                onClick={() => setMigrateModal((prev) => prev ? { ...prev, selectedBaseId: b.id } : null)}
+                                className={[
+                                  "w-full text-left rounded-xl border px-4 py-3 text-sm transition-colors",
+                                  migrateModal.selectedBaseId === b.id
+                                    ? "border-amber-400 bg-amber-50 font-semibold"
+                                    : "border-gray-200 hover:bg-gray-50",
+                                ].join(" ")}
+                              >
+                                <span className="font-medium">{b.name || `Base #${b.id}`}</span>
+                                <span className="ml-2 text-xs text-gray-400">
+                                  {b.order_items?.length || 0} prod.
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Botón confirmar */}
+                <div className="p-4 border-t flex-shrink-0">
+                  {(() => {
+                    const count = Object.values(migrateModal.quantities).filter((q) => q > 0).length;
+                    const totalUnits = Object.values(migrateModal.quantities).reduce((s, q) => s + q, 0);
+                    const destReady = migrateModal.selectedPalletId === null || migrateModal.selectedPalletId !== null;
+                    return (
+                      <button
+                        onClick={saveMigrate}
+                        disabled={migrateModal.saving || !destReady}
+                        className="w-full py-3.5 rounded-2xl bg-amber-500 text-white font-bold text-sm disabled:opacity-40"
+                      >
+                        {migrateModal.saving
+                          ? "Migrando…"
+                          : `Migrar ${totalUnits} u. (${count} producto${count !== 1 ? "s" : ""})`}
+                      </button>
+                    );
+                  })()}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
