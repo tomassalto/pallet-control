@@ -120,15 +120,20 @@ async function login(page) {
 
   // Paso 2: click "Ingresar" (top right)
   console.log("   → Click 'Ingresar'");
-  await page.locator('text=Ingresar').first().click();
-  await sleep(1000);
+  await page.locator('a:has-text("Ingresar"), button:has-text("Ingresar"), span:has-text("Ingresar")').first().click();
+  await sleep(1500);
 
   // Screenshot para debug
   await page.screenshot({ path: path.join(__dirname, "debug-step1.png") });
 
   // Paso 3: click "Comercio o Emprendimiento"
+  // Es una tarjeta con imagen + texto — :has-text() busca en todo el árbol interno
   console.log("   → Click 'Comercio o Emprendimiento'");
-  await page.locator('text=COMERCIO').first().click();
+  // Esperar que aparezca el modal
+  await page.waitForSelector(':has-text("EMPRENDIMIENTO")', { timeout: 10000 });
+  // Buscar el elemento más chico que contenga el texto (la tarjeta en sí)
+  const comercioCard = page.locator('div:has-text("EMPRENDIMIENTO"), button:has-text("EMPRENDIMIENTO")').last();
+  await comercioCard.click();
   await sleep(1500);
 
   await page.screenshot({ path: path.join(__dirname, "debug-step2.png") });
