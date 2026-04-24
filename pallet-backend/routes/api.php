@@ -95,7 +95,6 @@ Route::prefix('v1')->group(function () {
 
             // Products
             Route::post('/products', [ProductController::class, 'store']);
-            Route::get('/products/by-ean/{ean}', [ProductController::class, 'showByEan']);
 
             // Movements
             Route::get('/pallets/{pallet}/movements', [MovementController::class, 'index']);
