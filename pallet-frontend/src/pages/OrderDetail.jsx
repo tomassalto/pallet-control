@@ -991,7 +991,7 @@ export default function OrderDetail() {
 
       {/* QR Modal */}
       {showQR && order && (
-        <QRModal order={order} onClose={() => setShowQR(false)} />
+        <QRModal order={order} pallet={pallets[0] ?? null} onClose={() => setShowQR(false)} />
       )}
     </div>
   );

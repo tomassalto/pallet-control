@@ -1,8 +1,12 @@
 import { useEffect } from "react";
 import QRCode from "react-qr-code";
 
-export default function QRModal({ order, onClose }) {
-  const url = `${window.location.origin}/order/${order.id}`;
+export default function QRModal({ order, pallet, onClose }) {
+  const url = pallet
+    ? `${window.location.origin}/pallet-view/${pallet.code}`
+    : `${window.location.origin}/order/${order.id}`;
+
+  const label = pallet ? `Pallet ${pallet.code}` : `Pedido #${order.code}`;
 
   // Cerrar con Escape
   useEffect(() => {
@@ -19,7 +23,7 @@ export default function QRModal({ order, onClose }) {
       <html lang="es">
       <head>
         <meta charset="UTF-8" />
-        <title>Pedido #${order.code}</title>
+        <title>${label}</title>
         
         <style>
           @page {
@@ -69,7 +73,7 @@ export default function QRModal({ order, onClose }) {
       <body>
         <div class="label">
           <div class="qr-wrap">${qrMarkup}</div>
-          <div class="order-code">Pedido #${order.code}</div>
+          <div class="order-code">${label}</div>
         </div>
         
         <script>window.onload = () => { window.print(); }</script>
@@ -121,14 +125,16 @@ export default function QRModal({ order, onClose }) {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(
-        `Pedido #${order.code}`,
+        label,
         canvas.width / 2,
         padding + qrSize + textHeight / 2
       );
 
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
-      link.download = `pedido-${order.code}-qr.png`;
+      link.download = pallet
+        ? `pallet-${pallet.code}-qr.png`
+        : `pedido-${order.code}-qr.png`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -172,7 +178,7 @@ export default function QRModal({ order, onClose }) {
           />
         </div>
 
-        <h2 className="text-lg font-bold">Pedido #{order.code}</h2>
+        <h2 className="text-lg font-bold">{label}</h2>
 
         <button
           onClick={handlePrint}
