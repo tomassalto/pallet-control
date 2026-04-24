@@ -220,9 +220,9 @@ async function login(page) {
 
   await page.screenshot({ path: path.join(__dirname, "debug-step5.png") });
 
-  // Paso 7: click "Ingresar" (el botón del formulario)
+  // Paso 7: click "Ingresar" (botón submit del formulario)
   console.log("   → Click 'Ingresar' (submit)");
-  await page.locator('button:has-text("Ingresar"), input[type="submit"]').last().click();
+  await page.locator('#btn_step2').click();
   await page.waitForLoadState("networkidle", { timeout: 20000 });
 
   await page.screenshot({ path: path.join(__dirname, "debug-step6-after-login.png") });
