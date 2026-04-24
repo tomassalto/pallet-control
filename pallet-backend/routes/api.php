@@ -117,6 +117,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/pallets/{pallet}/bases', [PalletBaseController::class, 'index']);
             Route::post('/pallets/{pallet}/bases', [PalletBaseController::class, 'store']);
             Route::patch('/pallets/{pallet}/bases/{base}', [PalletBaseController::class, 'update']);
+            Route::patch('/pallets/{pallet}/bases/{base}/adjust-item', [PalletBaseController::class, 'adjustItem']);
             Route::delete('/pallets/{pallet}/bases/{base}', [PalletBaseController::class, 'destroy']);
             Route::post('/pallets/{pallet}/bases/{base}/migrate', [PalletBaseController::class, 'migrate']);
 

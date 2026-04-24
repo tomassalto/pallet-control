@@ -180,6 +180,10 @@ export default function OrderDetail() {
   // modal agregar producto
   const [openAddProduct, setOpenAddProduct] = useState(false);
 
+  // modal conflicto de cantidad vs. unidades organizadas
+  // null | { item, newStatus, newQty, totalOrganized, deficit, keepQtys:{[base_id]:qty}, saving }
+  const [qtyConflict, setQtyConflict] = useState(null);
+
   // desvincular pallet
   const [detachingPallet, setDetachingPallet] = useState(null);
   const [confirmDetachPallet, setConfirmDetachPallet] = useState(null);
@@ -335,9 +339,80 @@ export default function OrderDetail() {
   async function updateItem(itemId, patch) {
     try {
       const updated = await apiPatch(`/order-items/${itemId}`, patch);
-      setItems((prev) => prev.map((it) => (it.id === itemId ? updated : it)));
+      // Preservar campos enriquecidos (locations, image_url) que el PATCH no devuelve
+      setItems((prev) =>
+        prev.map((it) => (it.id === itemId ? { ...it, ...updated } : it))
+      );
     } catch (e) {
       toastError(e.message || "No se pudo actualizar");
+    }
+  }
+
+  // ── Lógica de conflicto qty vs. organizadas ────────────────────────────────
+
+  /** Intenta guardar la acción. Si hay conflicto, abre el modal de resolución. */
+  function tryApplyAction(item, newQty) {
+    const totalOrganized = (item.locations ?? []).reduce((s, l) => s + (l.qty ?? 0), 0);
+    const newStatus = newQty === 0 ? "removed" : "done";
+
+    if (totalOrganized > newQty) {
+      const deficit = totalOrganized - newQty;
+      // keepQtys: cuántas unidades mantener en cada base (arranca en el valor actual)
+      const keepQtys = Object.fromEntries(
+        (item.locations ?? []).map((l) => [l.base_id, l.qty])
+      );
+      setQtyConflict({ item, newStatus, newQty, totalOrganized, deficit, keepQtys, saving: false });
+      setActionItem(null); // cierra el modal de acción
+      return;
+    }
+
+    // Sin conflicto → guardar normalmente
+    void doApplyAction(item, newStatus, newQty);
+  }
+
+  async function doApplyAction(item, newStatus, newQty) {
+    if (newStatus === "removed") {
+      await updateItem(item.id, { status: "removed" });
+      toastSuccess("Producto quitado");
+    } else {
+      await updateItem(item.id, { status: "done", qty: newQty });
+      toastSuccess(`Cantidad actualizada: ${newQty} unidades`);
+    }
+    setActionItem(null);
+  }
+
+  /** Ajusta keepQty de una ubicación en el modal de conflicto */
+  function setConflictKeep(baseId, rawVal, maxQty) {
+    const v = Math.max(0, Math.min(maxQty, parseInt(rawVal, 10) || 0));
+    setQtyConflict((prev) =>
+      prev ? { ...prev, keepQtys: { ...prev.keepQtys, [baseId]: v } } : null
+    );
+  }
+
+  /** Confirma el conflicto: ajusta cada base afectada y luego guarda el item */
+  async function resolveConflictAndSave() {
+    if (!qtyConflict) return;
+    const { item, newStatus, newQty, keepQtys } = qtyConflict;
+    setQtyConflict((prev) => prev && { ...prev, saving: true });
+
+    try {
+      // Ajustar cantidades en cada base donde el usuario eligió liberar unidades
+      for (const loc of item.locations ?? []) {
+        const keepQty = keepQtys[loc.base_id] ?? loc.qty;
+        if (keepQty !== loc.qty) {
+          await apiPatch(
+            `/pallets/${loc.pallet_id}/bases/${loc.base_id}/adjust-item`,
+            { order_item_id: item.id, qty: keepQty }
+          );
+        }
+      }
+      // Actualizar el item
+      await doApplyAction(item, newStatus, newQty);
+      setQtyConflict(null);
+      load(); // refrescar locations actualizadas
+    } catch (e) {
+      toastError(e?.response?.data?.message || e.message || "Error al guardar");
+      setQtyConflict((prev) => prev && { ...prev, saving: false });
     }
   }
 
@@ -426,14 +501,20 @@ export default function OrderDetail() {
   }
 
   function modalMaxQty(orderItem) {
-    if (!organizeModal?.bases || !organizeModal?.selectedBase) return 0;
+    if (!organizeModal?.selectedBase) return 0;
     const total = orderItem.qty || 0;
-    const elsewhere = organizeModal.bases.reduce((sum, base) => {
-      if (base.id === organizeModal.selectedBase.id) return sum;
-      const found = base.order_items?.find((i) => i.id === orderItem.id);
-      return sum + (found?.pivot?.qty ?? 0);
-    }, 0);
-    return Math.max(0, total - elsewhere);
+
+    // Usar locations del estado de items: cubre TODOS los pallets y bases
+    const fullItem = items.find((i) => i.id === orderItem.id);
+    const allLocations = fullItem?.locations ?? [];
+
+    // Sumar todo lo asignado EXCEPTO lo que ya hay en la base actual
+    // (así el usuario puede reasignar esa cantidad sin que cuente doble)
+    const assignedElsewhere = allLocations
+      .filter((l) => l.base_id !== organizeModal.selectedBase.id)
+      .reduce((sum, l) => sum + (l.qty ?? 0), 0);
+
+    return Math.max(0, total - assignedElsewhere);
   }
 
   function incModalQty(orderItem) {
@@ -985,28 +1066,13 @@ export default function OrderDetail() {
                   />
                 </div>
                 <button
-                  onClick={async () => {
+                  onClick={() => {
                     const q = parseInt(onlyDigits(actionQty), 10);
                     if (isNaN(q) || q < 0) {
                       toastError("La cantidad debe ser 0 o mayor.");
                       return;
                     }
-
-                    if (q === 0) {
-                      // Quitar producto
-                      await updateItem(actionItem.id, { status: "removed" });
-                      toastSuccess("Producto quitado");
-                    } else {
-                      // Marcar como listo con la cantidad especificada
-                      await updateItem(actionItem.id, {
-                        status: "done",
-                        qty: q,
-                      });
-                      toastSuccess(
-                        `Producto marcado como listo: ${q} unidades`,
-                      );
-                    }
-                    setActionItem(null);
+                    tryApplyAction(actionItem, q);
                   }}
                   className="w-3/4 rounded-lg py-3 bg-black text-white text-sm font-semibold"
                 >
@@ -1017,6 +1083,152 @@ export default function OrderDetail() {
           </div>
         </div>
       )}
+
+      {/* ── Modal conflicto cantidad vs. organizadas ──────────────────────────── */}
+      {qtyConflict && (() => {
+        const { item, newQty, totalOrganized, deficit, keepQtys, saving } = qtyConflict;
+        const totalFreed = (item.locations ?? []).reduce(
+          (s, l) => s + ((l.qty ?? 0) - (keepQtys[l.base_id] ?? l.qty)),
+          0
+        );
+        const canConfirm = totalFreed >= deficit && !saving;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center">
+            <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl flex flex-col max-h-[90vh]">
+
+              {/* Header */}
+              <div className="px-4 pt-5 pb-3 border-b flex-shrink-0">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-base">⚠️ Hay unidades organizadas</p>
+                    <p className="text-sm text-gray-500 mt-0.5 leading-snug">
+                      Querés cambiar{" "}
+                      <span className="font-medium text-gray-800">{item.description}</span>{" "}
+                      a{" "}
+                      <span className="font-semibold">{newQty} u.</span>, pero tenés{" "}
+                      <span className="font-semibold text-orange-600">{totalOrganized} organizadas</span>.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setQtyConflict(null)}
+                    className="text-gray-400 hover:text-gray-700 text-xl leading-none flex-shrink-0 mt-0.5"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Barra de progreso */}
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-gray-500">
+                      Liberando <span className={totalFreed >= deficit ? "text-green-600 font-semibold" : "text-orange-600 font-semibold"}>{totalFreed}</span> de{" "}
+                      <span className="font-semibold">{deficit}</span> necesarias
+                    </span>
+                    {totalFreed >= deficit && (
+                      <span className="text-green-600 text-xs font-medium">✓ Listo</span>
+                    )}
+                  </div>
+                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${totalFreed >= deficit ? "bg-green-500" : "bg-orange-400"}`}
+                      style={{ width: `${Math.min(100, (totalFreed / deficit) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Lista de ubicaciones */}
+              <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+                {(item.locations ?? []).map((loc) => {
+                  const keepQty = keepQtys[loc.base_id] ?? loc.qty;
+                  const freed = loc.qty - keepQty;
+                  return (
+                    <div key={loc.base_id} className="px-4 py-3 flex items-center gap-3">
+                      {/* Info de ubicación */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate">
+                          {loc.pallet_code}
+                        </p>
+                        <p className="text-xs text-gray-500">{loc.base_name ?? `Base #${loc.base_id}`}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {loc.qty} asignadas actualmente
+                        </p>
+                      </div>
+
+                      {/* Badge "liberar" */}
+                      <div className="text-center w-14 flex-shrink-0">
+                        {freed > 0 ? (
+                          <span className="inline-block bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                            −{freed}
+                          </span>
+                        ) : (
+                          <span className="inline-block bg-gray-100 text-gray-400 text-xs px-2 py-0.5 rounded-full">
+                            sin cambio
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Stepper para "mantener" */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => setConflictKeep(loc.base_id, keepQty - 1, loc.qty)}
+                          disabled={keepQty === 0}
+                          className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 disabled:opacity-25 hover:bg-gray-50 text-lg leading-none select-none"
+                        >
+                          −
+                        </button>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={keepQty === 0 ? "" : keepQty}
+                          placeholder="0"
+                          onChange={(e) => setConflictKeep(loc.base_id, e.target.value, loc.qty)}
+                          onFocus={(e) => e.target.select()}
+                          className="w-12 text-center text-sm font-bold border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                        />
+                        <button
+                          onClick={() => setConflictKeep(loc.base_id, keepQty + 1, loc.qty)}
+                          disabled={keepQty >= loc.qty}
+                          className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 disabled:opacity-25 hover:bg-gray-50 text-lg leading-none select-none"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer con label y botones */}
+              <div className="px-4 py-4 border-t flex-shrink-0 space-y-2">
+                {!canConfirm && (
+                  <p className="text-xs text-center text-orange-600">
+                    Todavía necesitás liberar{" "}
+                    <span className="font-semibold">{deficit - totalFreed}</span>{" "}
+                    unidad{deficit - totalFreed !== 1 ? "es" : ""} más
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setQtyConflict(null)}
+                    className="flex-1 rounded-2xl py-3 border text-sm text-gray-600"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={resolveConflictAndSave}
+                    disabled={!canConfirm}
+                    className="flex-1 rounded-2xl py-3 bg-gray-900 text-white text-sm font-bold disabled:opacity-40"
+                  >
+                    {saving ? "Guardando…" : "Confirmar y guardar"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal confirmar desvincular pallet */}
       {confirmDetachPallet && (

@@ -404,6 +404,53 @@ class PalletBaseController extends Controller
         ]);
     }
 
+    // PATCH /pallets/{pallet}/bases/{base}/adjust-item
+    // Ajusta la qty de UN item en UNA base (usado para resolver conflictos de cantidad)
+    public function adjustItem(Request $request, Pallet $pallet, PalletBase $base)
+    {
+        if ($base->pallet_id !== $pallet->id) {
+            return response()->json(['message' => 'Base no encontrada en este pallet'], 404);
+        }
+
+        $data = $request->validate([
+            'order_item_id' => ['required', 'integer', 'exists:order_items,id'],
+            'qty'           => ['required', 'integer', 'min:0'],
+        ]);
+
+        $orderItem = OrderItem::findOrFail($data['order_item_id']);
+
+        $oldRecord = DB::table('pallet_base_order_items')
+            ->where('base_id', $base->id)
+            ->where('order_item_id', $data['order_item_id'])
+            ->first();
+
+        $oldQty = $oldRecord?->qty ?? 0;
+
+        if ($data['qty'] === 0) {
+            DB::table('pallet_base_order_items')
+                ->where('base_id', $base->id)
+                ->where('order_item_id', $data['order_item_id'])
+                ->delete();
+        } else {
+            DB::table('pallet_base_order_items')->updateOrInsert(
+                ['base_id' => $base->id, 'order_item_id' => $data['order_item_id']],
+                ['qty' => $data['qty'], 'updated_at' => now()]
+            );
+        }
+
+        ActivityLogger::log(
+            'item_base_qty_adjusted',
+            'order_item',
+            $orderItem->id,
+            "Cantidad de '{$orderItem->description}' en base '" . ($base->name ?? 'Sin nombre') . "' ajustada de {$oldQty} a {$data['qty']}",
+            $pallet->id,
+            ['base_id' => $base->id, 'qty' => $oldQty],
+            ['base_id' => $base->id, 'qty' => $data['qty']]
+        );
+
+        return response()->json(['ok' => true, 'old_qty' => $oldQty, 'new_qty' => $data['qty']]);
+    }
+
     public function destroy(Pallet $pallet, PalletBase $base)
     {
         // Verificar que la base pertenece al pallet
