@@ -10,17 +10,18 @@ class PublicPalletController extends Controller
 {
     /**
      * Vista pública de un pallet — accesible sin auth, usada por el QR.
-     * Devuelve el pallet completo: pedidos, fotos del pallet y bases con sus
-     * fotos y productos agrupados por pedido.
+     *
+     * La sección "orders" muestra únicamente los productos que están
+     * asignados a alguna base de este pallet (no todos los ítems del pedido).
+     * Las cantidades son la suma de todas las bases donde aparece ese ítem.
      */
     public function show(string $code)
     {
         $pallet = Pallet::with([
-            'orders.items',
             'orders.customer',
             'photos',
-            'bases'                 => fn ($q) => $q->orderBy('created_at'),
-            'bases.photos'          => fn ($q) => $q->orderBy('created_at'),
+            'bases'                => fn ($q) => $q->orderBy('created_at'),
+            'bases.photos'         => fn ($q) => $q->orderBy('created_at'),
             'bases.orderItems.order.customer',
         ])
         ->where('code', $code)
@@ -30,11 +31,8 @@ class PublicPalletController extends Controller
             return response()->json(['message' => 'Pallet no encontrado'], 404);
         }
 
-        // ── Recolectar todos los EANs (pedidos + bases) para 1 sola query de imágenes
+        // ── Pre-cargar imágenes (1 sola query) ────────────────────────────
         $eans = collect();
-        foreach ($pallet->orders as $o) {
-            $eans = $eans->merge($o->items->pluck('ean'));
-        }
         foreach ($pallet->bases as $b) {
             $eans = $eans->merge($b->orderItems->pluck('ean'));
         }
@@ -42,41 +40,65 @@ class PublicPalletController extends Controller
             ->whereNotNull('image_url')
             ->pluck('image_url', 'ean');
 
-        // ── Fotos del pallet
+        // ── Fotos del pallet ──────────────────────────────────────────────
         $photos = $pallet->photos->map(fn ($p) => [
             'id'  => $p->id,
             'url' => $p->url,
         ])->values();
 
-        // ── Resumen de pedidos
-        $orders = $pallet->orders->map(function ($order) use ($images) {
-            $items = $order->items
-                ->where('done_qty', '>', 0)
-                ->sortBy('description')
-                ->map(fn ($item) => [
-                    'ean'         => $item->ean,
-                    'description' => $item->description,
-                    'qty'         => $item->done_qty,
-                    'image_url'   => $images[$item->ean] ?? null,
-                ])
-                ->values();
+        // ── Resumen de pedidos: SOLO los ítems asignados a bases ──────────
+        //    Agrupamos por order_item_id acumulando qty de todas las bases.
+        $palletItemsMap = [];
+        foreach ($pallet->bases as $base) {
+            foreach ($base->orderItems as $item) {
+                if (isset($palletItemsMap[$item->id])) {
+                    $palletItemsMap[$item->id]['qty'] += $item->pivot->qty;
+                } else {
+                    $palletItemsMap[$item->id] = [
+                        'item' => $item,
+                        'qty'  => $item->pivot->qty,
+                    ];
+                }
+            }
+        }
 
-            return [
-                'id'       => $order->id,
-                'code'     => $order->code,
-                'customer' => $order->customer?->name,
-                'items'    => $items,
+        // Agrupar por pedido
+        $orderMap = [];
+        foreach ($palletItemsMap as $data) {
+            $orderItem = $data['item'];
+            $orderId   = $orderItem->order_id;
+
+            if (!isset($orderMap[$orderId])) {
+                $order = $pallet->orders->firstWhere('id', $orderId);
+                $orderMap[$orderId] = [
+                    'id'       => $orderId,
+                    'code'     => $order?->code ?? "#{$orderId}",
+                    'customer' => $order?->customer?->name,
+                    'items'    => [],
+                ];
+            }
+
+            $orderMap[$orderId]['items'][] = [
+                'ean'         => $orderItem->ean,
+                'description' => $orderItem->description,
+                'qty'         => $data['qty'],
+                'image_url'   => $images[$orderItem->ean] ?? null,
             ];
-        })->values();
+        }
 
-        // ── Bases: fotos + productos agrupados por pedido
+        // Ordenar ítems por descripción dentro de cada pedido
+        foreach ($orderMap as &$o) {
+            usort($o['items'], fn ($a, $b) => strcmp($a['description'], $b['description']));
+        }
+        $orders = array_values($orderMap);
+
+        // ── Bases: fotos + ítems agrupados por pedido ─────────────────────
         $bases = $pallet->bases->map(function ($base) use ($images) {
             $basePhotos = $base->photos->map(fn ($p) => [
                 'id'  => $p->id,
                 'url' => $p->url,
             ])->values();
 
-            // Agrupar orderItems por pedido
             $orderGroups = $base->orderItems
                 ->groupBy('order_id')
                 ->map(function ($items, $orderId) use ($images) {

@@ -1,50 +1,56 @@
-import { useEffect, useState, useMemo } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { apiGet, apiPatch } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
 import BackButton from "../ui/BackButton";
-import Accordion from "../ui/Accordion";
 import Title from "../ui/Title";
+
+// ── Paleta consistente con la vista pública ──────────────────────────────────
+const ORDER_COLORS = [
+  { bg: "bg-blue-50",    badge: "bg-blue-600",    border: "border-l-blue-500"    },
+  { bg: "bg-emerald-50", badge: "bg-emerald-600",  border: "border-l-emerald-500" },
+  { bg: "bg-violet-50",  badge: "bg-violet-600",   border: "border-l-violet-500"  },
+  { bg: "bg-amber-50",   badge: "bg-amber-500",    border: "border-l-amber-400"   },
+  { bg: "bg-rose-50",    badge: "bg-rose-600",     border: "border-l-rose-500"    },
+  { bg: "bg-cyan-50",    badge: "bg-cyan-600",     border: "border-l-cyan-500"    },
+];
 
 export default function BaseProducts() {
   const { palletId, baseId } = useParams();
 
-  const [loading, setLoading] = useState(true);
-  const [pallet, setPallet] = useState(null);
-  const [base, setBase] = useState(null);
-  const [orders, setOrders] = useState([]);
-  const [error, setError] = useState("");
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [pallet, setPallet]     = useState(null);
+  const [base, setBase]         = useState(null);
+  const [orders, setOrders]     = useState([]);
+  const [error, setError]       = useState("");
 
-  // Selección de items
-  const [selectingItems, setSelectingItems] = useState(false);
-  const [selectedItemIds, setSelectedItemIds] = useState(new Set());
-  const [confirmedItems, setConfirmedItems] = useState([]);
+  // Mapa: order_item_id → qty en esta base (0 = no está, >0 = está)
+  const [quantities, setQuantities] = useState({});
 
+  // ── Carga ──────────────────────────────────────────────────────────────────
   async function load() {
     setError("");
     setLoading(true);
     try {
       const data = await apiGet(`/pallets/${palletId}`);
-      setPallet(data.pallet || null);
-      setOrders(data.orders || []);
+      const palletData = data.pallet ?? null;
+      const ordersData = data.orders ?? [];
+
+      setPallet(palletData);
+      setOrders(ordersData);
 
       const foundBase = data.bases?.find((b) => b.id === parseInt(baseId, 10));
-      setBase(foundBase || null);
+      setBase(foundBase ?? null);
 
-      if (foundBase?.order_items) {
-        setConfirmedItems(
-          foundBase.order_items.map((item) => ({
-            order_item_id: item.id,
-            qty: item.pivot?.qty || item.qty || 1,
-            description: item.description,
-            ean: item.ean,
-          }))
-        );
-        setSelectingItems(false);
-      }
+      // Inicializar quantidades desde los ítems ya asignados a esta base
+      const init = {};
+      foundBase?.order_items?.forEach((item) => {
+        init[item.id] = item.pivot?.qty ?? 0;
+      });
+      setQuantities(init);
     } catch (e) {
       setError(e.message || "Error cargando datos");
-      toastError(e.message || "Error cargando datos");
     } finally {
       setLoading(false);
     }
@@ -55,208 +61,65 @@ export default function BaseProducts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [palletId, baseId]);
 
-  // Obtener todos los items de los pedidos del pallet
-  function getAllOrderItems() {
-    const allItems = [];
-    orders.forEach((order) => {
-      if (order.items && Array.isArray(order.items)) {
-        order.items.forEach((item) => {
-          allItems.push({
-            ...item,
-            order_code: order.code,
-            order_id: order.id,
-            order_status: order.status, // Incluir el status del pedido
-          });
-        });
-      }
-    });
-    return allItems;
-  }
+  // ── Helpers de disponibilidad ──────────────────────────────────────────────
 
-  // Verificar si un item pertenece a un pedido finalizado
-  function isItemFromFinalizedOrder(orderItemId) {
-    const orderItem = getAllOrderItems().find((i) => i.id === orderItemId);
-    return orderItem && orderItem.order_status === "done";
-  }
-
-  // Agrupar items por pedido, filtrando los que ya están completamente asignados
-  // y excluyendo items de pedidos finalizados
-  const itemsByOrder = useMemo(() => {
-    const grouped = {};
-    orders.forEach((order) => {
-      // Excluir pedidos finalizados
-      if (order.status === "done") {
-        return;
-      }
-
-      if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-        // Filtrar items que tienen disponibilidad > 0
-        const availableItems = order.items.filter((item) => {
-          // Calcular disponibilidad directamente aquí
-          const totalQty = item.qty || 0;
-          let assigned = 0;
-          if (pallet?.bases) {
-            pallet.bases.forEach((b) => {
-              if (b.id === parseInt(baseId, 10)) return;
-              if (b.order_items && Array.isArray(b.order_items)) {
-                const baseItem = b.order_items.find((oi) => oi.id === item.id);
-                if (baseItem) {
-                  assigned += baseItem.pivot?.qty || baseItem.qty || 0;
-                }
-              }
-            });
-          }
-          const available = Math.max(0, totalQty - assigned);
-          return available > 0;
-        });
-
-        if (availableItems.length > 0) {
-          grouped[order.id] = {
-            order: order,
-            items: availableItems,
-          };
-        }
-      }
-    });
-    return grouped;
-  }, [orders, pallet?.bases, baseId]);
-
-  // Calcular cuánto ya está asignado de un item en todas las bases (excepto la base actual)
-  function getAssignedQty(orderItemId) {
+  /** Cuántas unidades de este ítem están asignadas en OTRAS bases del pallet */
+  function assignedElsewhere(orderItemId) {
     if (!pallet?.bases) return 0;
-    let total = 0;
-    pallet.bases.forEach((b) => {
-      if (b.id === parseInt(baseId, 10)) return;
-      if (b.order_items && Array.isArray(b.order_items)) {
-        const baseItem = b.order_items.find((item) => item.id === orderItemId);
-        if (baseItem) {
-          total += baseItem.pivot?.qty || baseItem.qty || 0;
-        }
-      }
-    });
-    return total;
+    return pallet.bases.reduce((total, b) => {
+      if (b.id === parseInt(baseId, 10)) return total;
+      const found = b.order_items?.find((i) => i.id === orderItemId);
+      return total + (found?.pivot?.qty ?? 0);
+    }, 0);
   }
 
-  // Obtener cantidad disponible de un item
-  function getAvailableQty(orderItem) {
-    const totalQty = orderItem.qty || 0;
-    const assigned = getAssignedQty(orderItem.id);
-    return Math.max(0, totalQty - assigned);
+  /** Qty máxima que se puede asignar a ESTA base */
+  function maxQty(orderItem) {
+    return Math.max(0, (orderItem.qty ?? 0) - assignedElsewhere(orderItem.id));
   }
 
-  function handleItemToggle(itemId) {
-    setSelectedItemIds((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId);
-      } else {
-        newSet.add(itemId);
-      }
-      return newSet;
-    });
+  // ── Stepper ────────────────────────────────────────────────────────────────
+  function setQty(itemId, value) {
+    setQuantities((prev) => ({ ...prev, [itemId]: value }));
   }
 
-  function confirmItemSelection() {
-    const allItems = getAllOrderItems();
-    const selected = allItems
-      .filter((item) => selectedItemIds.has(item.id))
-      .map((item) => ({
-        order_item_id: item.id,
-        qty: 1,
-        description: item.description,
-        ean: item.ean,
-      }));
-
-    // Agregar los nuevos items a los existentes (evitar duplicados)
-    setConfirmedItems((prev) => {
-      const existingIds = new Set(prev.map((item) => item.order_item_id));
-      const newItems = selected.filter(
-        (item) => !existingIds.has(item.order_item_id)
-      );
-      return [...prev, ...newItems];
-    });
-
-    setSelectingItems(false);
-    setSelectedItemIds(new Set());
+  function inc(orderItem) {
+    const cur = quantities[orderItem.id] ?? 0;
+    const max = maxQty(orderItem);
+    if (cur < max) setQty(orderItem.id, cur + 1);
   }
 
-  function updateItemQty(orderItemId, qty) {
-    setConfirmedItems((prev) =>
-      prev.map((item) => {
-        if (item.order_item_id === orderItemId) {
-          const numValue = qty === "" ? "" : parseInt(qty, 10);
-          const orderItem = getAllOrderItems().find(
-            (i) => i.id === orderItemId
-          );
-          if (orderItem && numValue !== "") {
-            const available = getAvailableQty(orderItem);
-            const currentInConfirmed = prev.find(
-              (i) => i.order_item_id === orderItemId
-            );
-            const currentQty = currentInConfirmed?.qty || 0;
-            const availableWithCurrent = available + currentQty;
-            if (numValue > availableWithCurrent) {
-              return item;
-            }
-          }
-          return { ...item, qty: numValue === "" ? "" : numValue || 1 };
-        }
-        return item;
-      })
-    );
+  function dec(itemId) {
+    const cur = quantities[itemId] ?? 0;
+    if (cur > 0) setQty(itemId, cur - 1);
   }
 
-  function removeConfirmedItem(orderItemId) {
-    setConfirmedItems((prev) =>
-      prev.filter((item) => item.order_item_id !== orderItemId)
-    );
+  function handleInput(orderItem, raw) {
+    const v = parseInt(raw, 10);
+    if (isNaN(v) || v < 0) { setQty(orderItem.id, 0); return; }
+    setQty(orderItem.id, Math.min(v, maxQty(orderItem)));
   }
 
+  // ── Guardar ────────────────────────────────────────────────────────────────
   async function onSave() {
-    // Validar cantidades
-    for (const item of confirmedItems) {
-      if (!item.qty || item.qty < 1) {
-        toastError("Todas las cantidades deben ser mayor a 0");
-        return;
-      }
-      const orderItem = getAllOrderItems().find(
-        (i) => i.id === item.order_item_id
-      );
-      if (orderItem) {
-        const available = getAvailableQty(orderItem);
-        if (item.qty > available) {
-          toastError(
-            `No se puede asignar ${item.qty} unidades de "${orderItem.description}". Solo quedan ${available} disponibles.`
-          );
-          return;
-        }
-      }
-    }
+    const items = Object.entries(quantities)
+      .filter(([, qty]) => qty > 0)
+      .map(([id, qty]) => ({ order_item_id: parseInt(id, 10), qty }));
 
+    setSaving(true);
     try {
-      const payload = {};
-      if (confirmedItems.length > 0) {
-        payload.items = confirmedItems
-          .filter((item) => item.qty && item.qty >= 1)
-          .map((item) => ({
-            order_item_id: item.order_item_id,
-            qty: Math.max(1, parseInt(item.qty, 10) || 1),
-          }));
-      } else {
-        payload.items = [];
-      }
-
-      await apiPatch(`/pallets/${palletId}/bases/${baseId}`, payload);
-      toastSuccess("Productos actualizados");
+      await apiPatch(`/pallets/${palletId}/bases/${baseId}`, { items });
+      toastSuccess("Base actualizada");
       await load();
     } catch (e) {
-      toastError(
-        e.response?.data?.message || e.message || "No se pudo actualizar"
-      );
+      toastError(e.response?.data?.message ?? e.message ?? "Error al guardar");
+    } finally {
+      setSaving(false);
     }
   }
 
-  if (loading) return <div className="text-sm text-gray-600">Cargando…</div>;
+  // ── Estados de carga ───────────────────────────────────────────────────────
+  if (loading) return <p className="text-sm text-gray-500 p-4">Cargando…</p>;
 
   if (error || !base) {
     return (
@@ -269,231 +132,175 @@ export default function BaseProducts() {
     );
   }
 
+  const palletDone    = pallet?.status === "done";
+  const selectedCount = Object.values(quantities).filter((q) => q > 0).length;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-2">
-      <div className="flex justify-start">
-        <BackButton to={`/pallet/${palletId}`} />
-      </div>
+    <div className="space-y-4 pb-28">
+      <BackButton to={`/pallet/${palletId}`} />
 
       {/* Header */}
-      <div className="bg-white border border-border rounded-2xl p-4 space-y-2">
-        <Title size="3xl">{pallet?.code}</Title>
-
-        <Title size="2xl">{base.name || `Base #${base.id}`}</Title>
+      <div className="bg-white border rounded-2xl p-4 space-y-0.5">
+        <Title size="2xl">{pallet?.code}</Title>
+        <p className="text-gray-600 font-semibold text-lg">
+          {base.name || `Base #${base.id}`}
+        </p>
       </div>
 
-      {/* Selección de items */}
-      {pallet?.status === "done" && (
+      {palletDone && (
         <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-xl p-3 text-sm">
-          Este pallet está finalizado. No se pueden agregar más productos.
+          Este pallet está finalizado. Solo lectura.
         </div>
       )}
-      {selectingItems && pallet?.status !== "done" ? (
-        <div className="bg-white border rounded-2xl p-4 space-y-3">
-          <div className="font-semibold text-sm">
-            Seleccionar items del pedido
-          </div>
-          {Object.keys(itemsByOrder).length === 0 ? (
-            <div className="text-sm text-gray-500 text-center py-4">
-              No hay items en los pedidos asociados a este pallet.
-            </div>
-          ) : (
-            <>
-              <div className=" space-y-2">
-                {Object.values(itemsByOrder).map(({ order, items }) => (
-                  <Accordion
-                    key={order.id}
-                    title={`Pedido #${order.code} (${items.length} producto${
-                      items.length !== 1 ? "s" : ""
-                    })`}
-                    defaultOpen={Object.keys(itemsByOrder).length === 1}
-                  >
-                    <div className="space-y-2">
-                      {items.map((item) => (
-                        <label
-                          key={item.id}
-                          className="flex items-start gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedItemIds.has(item.id)}
-                            onChange={() => handleItemToggle(item.id)}
-                            className="mt-1"
-                          />
-                          <div className="flex-1 text-xs">
-                            <div className="font-medium">
-                              {item.description}
-                            </div>
-                            <div className="text-gray-500">
-                              EAN: {item.ean} | Qty total: {item.qty}
-                            </div>
-                            {(() => {
-                              const available = getAvailableQty(item);
-                              return (
-                                <div
-                                  className={
-                                    available === 0
-                                      ? "text-red-600 font-medium"
-                                      : "text-green-600"
-                                  }
-                                >
-                                  Disponible: {available}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  </Accordion>
-                ))}
-              </div>
-              <button
-                onClick={confirmItemSelection}
-                disabled={selectedItemIds.size === 0}
-                className="w-full rounded-lg py-2 bg-black text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Confirmar selección ({selectedItemIds.size})
-              </button>
-            </>
-          )}
+
+      {/* ── Una tarjeta por pedido ─────────────────────────────────────── */}
+      {orders.length === 0 ? (
+        <div className="text-center text-sm text-gray-400 py-12">
+          No hay pedidos asociados a este pallet.
         </div>
       ) : (
-        <div className="bg-white border-[#14213d] rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="font-semibold text-sm">Items en esta base</div>
-            {pallet?.status !== "done" && (
-              <button
-                onClick={() => {
-                  setSelectingItems(true);
-                  setSelectedItemIds(new Set());
-                }}
-                className="text-xs px-2 py-1 border rounded"
+        <div className="space-y-3">
+          {orders.map((order, orderIdx) => {
+            const c         = ORDER_COLORS[orderIdx % ORDER_COLORS.length];
+            const orderDone = order.status === "done";
+
+            // Items del pedido que se pueden mostrar:
+            // - pedido abierto: todos
+            // - pedido cerrado: solo los que ya están en esta base (read-only)
+            const visibleItems = orderDone
+              ? (order.items ?? []).filter((item) => (quantities[item.id] ?? 0) > 0)
+              : (order.items ?? []);
+
+            if (visibleItems.length === 0) return null;
+
+            return (
+              <div
+                key={order.id}
+                className="bg-white rounded-2xl border border-gray-200 overflow-hidden"
               >
-                {confirmedItems.length > 0
-                  ? "Agregar más"
-                  : "Seleccionar items"}
-              </button>
-            )}
-          </div>
-          {confirmedItems.length === 0 ? (
-            <div className="text-sm text-gray-500 text-center py-4">
-              No hay items seleccionados. Toca "Seleccionar items" para agregar.
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {confirmedItems.map((item) => (
-                <div key={item.order_item_id} className="border rounded-lg p-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 text-xs">
-                      <div className="font-medium">{item.description}</div>
-                      <div className="text-gray-500">EAN: {item.ean}</div>
-                    </div>
-                    {pallet?.status !== "done" &&
-                      !isItemFromFinalizedOrder(item.order_item_id) && (
-                        <button
-                          onClick={() =>
-                            removeConfirmedItem(item.order_item_id)
-                          }
-                          className="text-red-600 text-xs px-2"
-                        >
-                          ✕
-                        </button>
-                      )}
-                  </div>
-                  <div className="">
-                    <div className="flex items-center justify-center gap-2">
-                      <label className="text-xs text-gray-600">
-                        Unidades en esta base:
-                      </label>
-                      {pallet?.status === "done" ||
-                      isItemFromFinalizedOrder(item.order_item_id) ? (
-                        <span className="text-xs font-semibold text-gray-900">
-                          {item.qty || 0}
-                        </span>
-                      ) : (
-                        <input
-                          type="number"
-                          min="1"
-                          max={(() => {
-                            const orderItem = getAllOrderItems().find(
-                              (i) => i.id === item.order_item_id
-                            );
-                            if (orderItem) {
-                              const available = getAvailableQty(orderItem);
-                              const currentQty = item.qty || 0;
-                              return available + currentQty;
-                            }
-                            return item.qty || 1;
-                          })()}
-                          value={item.qty === "" ? "" : item.qty}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (
-                              val === "" ||
-                              (!isNaN(val) && parseInt(val, 10) >= 1)
-                            ) {
-                              updateItemQty(item.order_item_id, val);
-                            }
-                          }}
-                          onBlur={(e) => {
-                            if (
-                              e.target.value === "" ||
-                              parseInt(e.target.value, 10) < 1
-                            ) {
-                              updateItemQty(item.order_item_id, "1");
-                            }
-                          }}
-                          className="w-20 border rounded px-2 py-1 text-xs"
-                        />
-                      )}
-                    </div>
-                    {isItemFromFinalizedOrder(item.order_item_id) && (
-                      <div className="text-[10px] text-orange-600">
-                        ⚠️ Este producto pertenece a un pedido finalizado
-                      </div>
-                    )}
-                    {(() => {
-                      const orderItem = getAllOrderItems().find(
-                        (i) => i.id === item.order_item_id
-                      );
-                      if (orderItem) {
-                        const available = getAvailableQty(orderItem);
-                        const currentQty = item.qty || 0;
-                        const remaining = available - currentQty;
-                        return (
-                          <div
-                            className={`text-[10px] ${
-                              remaining < 0
-                                ? "text-red-600 font-medium"
-                                : remaining === 0
-                                ? "text-orange-600"
-                                : "text-gray-500"
-                            }`}
-                          >
-                            {remaining < 0
-                              ? `⚠️ Excede por ${Math.abs(remaining)}`
-                              : remaining === 0
-                              ? "Sin disponibilidad restante"
-                              : `Quedan ${remaining} disponibles`}
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </div>
+                {/* Cabecera del pedido */}
+                <div className={`px-4 py-3 flex items-center gap-2 ${c.bg}`}>
+                  <span
+                    className={`text-xs font-bold text-white px-2.5 py-0.5 rounded-full ${c.badge}`}
+                  >
+                    #{order.code}
+                  </span>
+                  {orderDone && (
+                    <span className="text-xs text-gray-500 italic ml-1">
+                      pedido finalizado · solo lectura
+                    </span>
+                  )}
+                  <span className="ml-auto text-xs text-gray-400">
+                    {visibleItems.length} producto{visibleItems.length !== 1 ? "s" : ""}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
-          {pallet?.status !== "done" && (
+
+                {/* Filas de ítems */}
+                <div className="divide-y divide-gray-100">
+                  {visibleItems.map((item) => {
+                    const cur       = quantities[item.id] ?? 0;
+                    const max       = maxQty(item);
+                    const active    = cur > 0;
+                    const readOnly  = palletDone || orderDone;
+                    // Sin stock disponible para añadir (y no está en esta base)
+                    const exhausted = max === 0 && !active;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={[
+                          "flex items-center gap-3 px-4 py-3 transition-colors",
+                          active  ? `border-l-4 ${c.border}` : "",
+                          exhausted ? "opacity-40" : "",
+                        ].join(" ")}
+                      >
+                        {/* Descripción */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium leading-snug">
+                            {item.description}
+                          </p>
+                          <p className="text-xs font-mono text-gray-400 mt-0.5">
+                            {item.ean}
+                          </p>
+                          {!readOnly && (
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Disp.:{" "}
+                              <span
+                                className={
+                                  max === 0 ? "text-red-500 font-medium" : ""
+                                }
+                              >
+                                {max}
+                              </span>{" "}
+                              / {item.qty} unid. totales
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Stepper o valor fijo */}
+                        {readOnly ? (
+                          <div className="flex-shrink-0 text-center min-w-[52px]">
+                            <p className="text-xl font-bold text-gray-800 leading-none">
+                              {cur}
+                            </p>
+                            <p className="text-[10px] text-gray-400">unid.</p>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {/* − */}
+                            <button
+                              onClick={() => dec(item.id)}
+                              disabled={cur === 0}
+                              className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 disabled:opacity-25 hover:bg-gray-50 text-lg leading-none select-none"
+                            >
+                              −
+                            </button>
+
+                            {/* Input numérico */}
+                            <input
+                              type="number"
+                              min="0"
+                              max={max}
+                              value={cur}
+                              onChange={(e) => handleInput(item, e.target.value)}
+                              className="w-12 text-center text-sm font-bold border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                            />
+
+                            {/* + */}
+                            <button
+                              onClick={() => inc(item)}
+                              disabled={cur >= max || exhausted}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center text-white disabled:opacity-25 text-lg leading-none select-none ${c.badge}`}
+                            >
+                              +
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Botón guardar sticky ─────────────────────────────────────────── */}
+      {!palletDone && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-xl z-20 px-4 py-3">
+          <div className="max-w-lg mx-auto">
             <button
               onClick={onSave}
-              className="w-full rounded-lg py-2 bg-black text-white text-sm"
+              disabled={saving}
+              className="w-full py-3.5 rounded-2xl bg-gray-900 text-white font-bold text-sm disabled:opacity-60 transition-opacity"
             >
-              Guardar cambios
+              {saving
+                ? "Guardando…"
+                : `Guardar — ${selectedCount} producto${selectedCount !== 1 ? "s" : ""} en esta base`}
             </button>
-          )}
+          </div>
         </div>
       )}
     </div>
