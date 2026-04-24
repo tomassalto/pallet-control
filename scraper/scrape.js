@@ -368,7 +368,6 @@ async function extractImageUrl(page, ean) {
 
       if (imageUrl) {
         batch.push({ ean, image_url: imageUrl });
-        localDone.add(ean);
         scraped++;
         if (TEST_N) console.log(`  ✅ [${i + 1}/${total}] EAN ${ean} → ${imageUrl.slice(0, 80)}...`);
       } else {
@@ -382,15 +381,17 @@ async function extractImageUrl(page, ean) {
       if (TEST_N) console.log(`  ❌ [${i + 1}/${total}] EAN ${ean} — error: ${err.message}`);
     }
 
-    // Enviar batch
+    // Enviar batch — solo marcar como done los que llegan exitosamente a la API
     if (batch.length >= BATCH) {
       try {
         const result = await pushBatchToApi(batch);
         console.log(`  📤 Batch enviado: ${result.updated}/${result.sent} actualizados en DB`);
+        batch.forEach((b) => localDone.add(b.ean));
         batch = [];
       } catch (err) {
         console.error("  ❌ Error enviando batch a la API:", err.message);
         apiErrors++;
+        // No limpiar el batch — reintentar en el siguiente ciclo
       }
     }
 
@@ -419,6 +420,7 @@ async function extractImageUrl(page, ean) {
     try {
       const result = await pushBatchToApi(batch);
       console.log(`  📤 Batch final: ${result.updated}/${result.sent} actualizados`);
+      batch.forEach((b) => localDone.add(b.ean));
     } catch (err) {
       console.error("  ❌ Error batch final:", err.message);
     }
