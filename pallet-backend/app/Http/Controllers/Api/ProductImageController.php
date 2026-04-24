@@ -25,16 +25,21 @@ class ProductImageController extends Controller
             'products.*.image_url'  => ['required', 'url'],
         ]);
 
-        $updated = 0;
+        $upserted = 0;
 
         foreach ($data['products'] as $row) {
-            $rows = Product::where('ean', $row['ean'])
-                ->update(['image_url' => $row['image_url']]);
-            $updated += $rows;
+            $ean   = preg_replace('/\D+/', '', $row['ean']);
+            $last4 = strlen($ean) >= 4 ? substr($ean, -4) : null;
+
+            Product::updateOrCreate(
+                ['ean' => $ean],
+                ['ean_last4' => $last4, 'image_url' => $row['image_url']]
+            );
+            $upserted++;
         }
 
         return response()->json([
-            'updated' => $updated,
+            'updated' => $upserted,
             'sent'    => count($data['products']),
         ]);
     }
