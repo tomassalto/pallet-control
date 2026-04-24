@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Helpers\TelegramNotifier;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -77,8 +78,14 @@ class OrderController extends Controller
             'tickets.photos',
         ]);
 
+        // Lookup de imágenes (1 query extra)
+        $eans = $order->items->pluck('ean')->filter()->unique()->values()->all();
+        $productImages = Product::whereIn('ean', $eans)
+            ->whereNotNull('image_url')
+            ->pluck('image_url', 'ean');
+
         // Mapear usando relaciones ya cargadas (0 queries adicionales)
-        $itemsWithLocations = $order->items->map(function ($item) {
+        $itemsWithLocations = $order->items->map(function ($item) use ($productImages) {
             $bases = $item->bases; // ya cargado
 
             $locations = $bases->map(fn($base) => [
@@ -104,6 +111,7 @@ class OrderController extends Controller
                 'status'      => $item->status,
                 'done_qty'    => $calculatedDoneQty,
                 'locations'   => $locations,
+                'image_url'   => $productImages[$item->ean] ?? null,
             ];
         });
 

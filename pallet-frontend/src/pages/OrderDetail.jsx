@@ -25,6 +25,7 @@ function ItemCard({
   bgColor,
   showDoneQty = false,
 }) {
+  const [imgErr, setImgErr] = useState(false);
   const shortEan = (it.ean && String(it.ean).slice(-4).padStart(4, "0")) || "—";
 
   return (
@@ -33,6 +34,20 @@ function ItemCard({
       className={`w-full text-left rounded-xl border ${borderColor} ${bgColor} text-black px-3 py-3 text-sm active:scale-[0.99]`}
     >
       <div className="flex items-center justify-between gap-3">
+        {/* Imagen del producto */}
+        <div className="w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200">
+          {it.image_url && !imgErr ? (
+            <img
+              src={it.image_url}
+              alt={it.description}
+              className="w-full h-full object-contain"
+              onError={() => setImgErr(true)}
+            />
+          ) : (
+            <span className="text-2xl select-none">📦</span>
+          )}
+        </div>
+
         <div className="flex flex-col gap-1 flex-1 min-w-0">
           <div className="text-[10px] text-gray-500">EAN</div>
           <div className="font-mono font-semibold text-lg">{shortEan}</div>
@@ -113,6 +128,28 @@ function ItemCard({
         </div>
       </div>
     </button>
+  );
+}
+
+// Miniatura con fallback 📦 (sin hooks externos, cada instancia tiene su estado)
+function ModalProductImage({ src, alt }) {
+  const [err, setErr] = useState(false);
+  if (!src || err) {
+    return (
+      <div className="w-11 h-11 flex-shrink-0 rounded-xl bg-gray-100 flex items-center justify-center border border-gray-200 text-xl select-none">
+        📦
+      </div>
+    );
+  }
+  return (
+    <div className="w-11 h-11 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
+      <img
+        src={src}
+        alt={alt}
+        className="w-full h-full object-contain"
+        onError={() => setErr(true)}
+      />
+    </div>
   );
 }
 
@@ -1178,6 +1215,9 @@ export default function OrderDetail() {
                             active ? "border-l-4 border-l-gray-800" : "opacity-70",
                           ].join(" ")}
                         >
+                          {/* Imagen del producto */}
+                          <ModalProductImage src={item.image_url} alt={item.description} />
+
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium leading-snug">{item.description}</p>
                             <p className="text-xs font-mono text-gray-400 mt-0.5">{item.ean}</p>

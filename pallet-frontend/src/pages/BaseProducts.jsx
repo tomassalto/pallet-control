@@ -5,6 +5,20 @@ import { toastSuccess, toastError } from "../ui/toast";
 import BackButton from "../ui/BackButton";
 import Title from "../ui/Title";
 
+// Thumbnail con fallback al emoji 📦
+function ProductImage({ src, alt }) {
+  const [err, setErr] = useState(false);
+  if (!src || err) return <span className="text-2xl select-none">📦</span>;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="w-full h-full object-contain"
+      onError={() => setErr(true)}
+    />
+  );
+}
+
 // ── Paleta consistente con la vista pública ──────────────────────────────────
 const ORDER_COLORS = [
   { bg: "bg-blue-50",    badge: "bg-blue-600",    border: "border-l-blue-500"    },
@@ -165,12 +179,9 @@ export default function BaseProducts() {
             const c         = ORDER_COLORS[orderIdx % ORDER_COLORS.length];
             const orderDone = order.status === "done";
 
-            // Items del pedido que se pueden mostrar:
-            // - pedido abierto: todos
-            // - pedido cerrado: solo los que ya están en esta base (read-only)
-            const visibleItems = orderDone
-              ? (order.items ?? []).filter((item) => (quantities[item.id] ?? 0) > 0)
-              : (order.items ?? []);
+            // Solo mostrar los ítems que ya están asignados a esta base
+            const baseItemIds = new Set((base?.order_items ?? []).map((i) => i.id));
+            const visibleItems = (order.items ?? []).filter((item) => baseItemIds.has(item.id));
 
             if (visibleItems.length === 0) return null;
 
@@ -199,22 +210,24 @@ export default function BaseProducts() {
                 {/* Filas de ítems */}
                 <div className="divide-y divide-gray-100">
                   {visibleItems.map((item) => {
-                    const cur       = quantities[item.id] ?? 0;
-                    const max       = maxQty(item);
-                    const active    = cur > 0;
-                    const readOnly  = palletDone || orderDone;
-                    // Sin stock disponible para añadir (y no está en esta base)
-                    const exhausted = max === 0 && !active;
+                    const cur      = quantities[item.id] ?? 0;
+                    const max      = maxQty(item);
+                    const active   = cur > 0;
+                    const readOnly = palletDone || orderDone;
 
                     return (
                       <div
                         key={item.id}
                         className={[
                           "flex items-center gap-3 px-4 py-3 transition-colors",
-                          active  ? `border-l-4 ${c.border}` : "",
-                          exhausted ? "opacity-40" : "",
+                          active ? `border-l-4 ${c.border}` : "",
                         ].join(" ")}
                       >
+                        {/* Imagen del producto */}
+                        <div className="w-12 h-12 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200">
+                          <ProductImage src={item.image_url} alt={item.description} />
+                        </div>
+
                         {/* Descripción */}
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium leading-snug">
@@ -223,19 +236,6 @@ export default function BaseProducts() {
                           <p className="text-xs font-mono text-gray-400 mt-0.5">
                             {item.ean}
                           </p>
-                          {!readOnly && (
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              Disp.:{" "}
-                              <span
-                                className={
-                                  max === 0 ? "text-red-500 font-medium" : ""
-                                }
-                              >
-                                {max}
-                              </span>{" "}
-                              / {item.qty} unid. totales
-                            </p>
-                          )}
                         </div>
 
                         {/* Stepper o valor fijo */}
@@ -271,7 +271,7 @@ export default function BaseProducts() {
                             {/* + */}
                             <button
                               onClick={() => inc(item)}
-                              disabled={cur >= max || exhausted}
+                              disabled={cur >= max}
                               className={`w-8 h-8 rounded-full flex items-center justify-center text-white disabled:opacity-25 text-lg leading-none select-none ${c.badge}`}
                             >
                               +

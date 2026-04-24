@@ -217,9 +217,9 @@ export default function PalletDetail() {
 
   // ── Migración ─────────────────────────────────────────────────────────────
   async function openMigrateModal(base) {
-    // Inicializar con qty = 0 para cada ítem (el usuario elige qué mover)
+    // Pre-cargar con las cantidades actuales de la base (mover todo por defecto)
     const quantities = {};
-    (base.order_items || []).forEach((item) => { quantities[item.id] = 0; });
+    (base.order_items || []).forEach((item) => { quantities[item.id] = item.pivot?.qty ?? 0; });
     setMigrateModal({
       sourceBase: base,
       step: "items",

@@ -8,6 +8,7 @@ use App\Helpers\TelegramNotifier;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Pallet;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -65,6 +66,33 @@ class PalletController extends Controller
     {
         $pallet->load(['orders.items', 'photos', 'bases.photos', 'bases.orderItems']);
 
+        // Lookup de imágenes de productos (1 query extra, cubre orders.items + bases.orderItems)
+        $allEans = collect();
+        foreach ($pallet->orders as $order) {
+            $allEans = $allEans->merge($order->items->pluck('ean'));
+        }
+        foreach ($pallet->bases as $base) {
+            $allEans = $allEans->merge($base->orderItems->pluck('ean'));
+        }
+        $allEans = $allEans->filter()->unique()->values()->all();
+
+        if (!empty($allEans)) {
+            $productImages = Product::whereIn('ean', $allEans)
+                ->whereNotNull('image_url')
+                ->pluck('image_url', 'ean');
+
+            foreach ($pallet->orders as $order) {
+                foreach ($order->items as $item) {
+                    $item->setAttribute('image_url', $productImages[$item->ean] ?? null);
+                }
+            }
+            foreach ($pallet->bases as $base) {
+                foreach ($base->orderItems as $item) {
+                    $item->setAttribute('image_url', $productImages[$item->ean] ?? null);
+                }
+            }
+        }
+
         // Los logs están en el endpoint dedicado /activity-logs, no se duplican aquí
 
         return response()->json([
@@ -91,9 +119,7 @@ class PalletController extends Controller
     // GET /pallets/{pallet}/activity-logs
     public function activityLogs(Pallet $pallet)
     {
-        // Obtener logs de actividad del pallet - solo cambios en bases
         $logs = \App\Models\ActivityLog::where('pallet_id', $pallet->id)
-            ->where('entity_type', 'pallet_base')
             ->with('user:id,name')
             ->orderByDesc('created_at')
             ->limit(200)
