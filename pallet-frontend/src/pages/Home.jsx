@@ -51,40 +51,36 @@ export default function Home() {
   return (
     <div className="space-y-6 pt-4">
       {/* Header */}
-      <div className="flex flex-col gap-2">
-        <Title size="3xl">Pallet Control</Title>
-        <p className="text-sm text-gray-600">
+      <div className="flex flex-col gap-3 text-center items-center">
+        <Title size="5xl">Pallet Control</Title>
+        <p className="text-md text-gray-600 w-[250px]">
           Control rápido de pallets, pedidos, importación y movimientos.
         </p>
       </div>
 
       {/* Último pedido abierto */}
       {lastOpenOrder && (
-        <div className="bg-white border-border rounded-2xl p-2">
-          <div className="flex items-center justify-center">
-            <div>
-              <Title size="1xl">Continuar último pedido abierto</Title>
-            </div>
+        <div className="flex flex-col gap-2 items-center">
+          <Title size="1xl">Continuar último pedido abierto..</Title>
+          <div className="flex flex-col gap-2 bg-white border-border rounded-2xl p-2 w-[280px]">
+            <Link
+              to={`/order/${lastOpenOrder.id}`}
+              className="block rounded-xl p-2 active:scale-[0.99]"
+            >
+              <div className="text-md">Pedido #{lastOpenOrder.code}</div>
+
+              {lastOpenOrder.pallets && lastOpenOrder.pallets.length > 0 && (
+                <>
+                  <div className="mt-2 text-xs text-gray-500">Pallets</div>
+                  <div className="text-sm font-medium">
+                    {lastOpenOrder.pallets.map((p) => p.code).join(", ")}
+                  </div>
+                </>
+              )}
+
+              <div className="text-sm underline">Abrir pedido</div>
+            </Link>
           </div>
-
-          <Link
-            to={`/order/${lastOpenOrder.id}`}
-            className="block rounded-xl p-2 bg-gray-50 active:scale-[0.99]"
-          >
-            <div className="text-sm text-gray-500">Código</div>
-            <div className="font-mono font-semibold">{lastOpenOrder.code}</div>
-
-            {lastOpenOrder.pallets && lastOpenOrder.pallets.length > 0 && (
-              <>
-                <div className="mt-2 text-xs text-gray-500">Pallets</div>
-                <div className="text-sm font-medium">
-                  {lastOpenOrder.pallets.map((p) => p.code).join(", ")}
-                </div>
-              </>
-            )}
-
-            <div className="text-sm underline">Abrir pedido</div>
-          </Link>
         </div>
       )}
 

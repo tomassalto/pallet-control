@@ -10,7 +10,7 @@ import BackButton from "../ui/BackButton";
  *  0  EAN
  *  1  Descripción
  *  2  Cant Pedida        → qty
- *  3  Cant Real          → ignorar
+ *  3  Cant Real          → cantReal (> 0 = done, = 0 = pending)
  *  4  Precio Unitario    → price
  *  5  Precio Base        → ignorar
  *  6  Desc. Base         → ignorar
@@ -40,9 +40,20 @@ function parseLines(raw) {
     if (!description) continue;
 
     // Col 2: Cant Pedida
-    const qtyStr = (parts[2] || "0").replace(",", ".").replace(/[^0-9.]/g, "");
-    const qty = Math.floor(parseFloat(qtyStr) || 0);
-    if (qty <= 0) continue;
+    const cantPedidaStr = (parts[2] || "0").replace(",", ".").replace(/[^0-9.]/g, "");
+    const cantPedida = Math.floor(parseFloat(cantPedidaStr) || 0);
+
+    // Col 3: Cant Real (lo que realmente se encontró/entregó)
+    const cantRealStr = (parts[3] || "0").replace(",", ".").replace(/[^0-9.]/g, "");
+    const cantReal = Math.floor(parseFloat(cantRealStr) || 0);
+
+    // Saltar si no hay ninguna cantidad
+    if (cantPedida <= 0 && cantReal <= 0) continue;
+
+    // Si Cant Pedida = 0 pero Cant Real > 0 (producto extra no pedido),
+    // usamos Cant Real como qty para que el conteo tenga sentido
+    const qty = cantPedida > 0 ? cantPedida : cantReal;
+    const isDone = cantReal > 0;
 
     // Col 4: Precio Unitario
     const priceStr = (parts[4] || "").replace(",", ".").replace(/[^0-9.]/g, "");
@@ -55,7 +66,7 @@ function parseLines(raw) {
     // Col 8: Controlado (1 = sí)
     const isControlled = (parts[8] || "").trim() === "1";
 
-    items.push({ ean, description, qty, price, descMedioPago, isControlled });
+    items.push({ ean, description, qty, cantReal, isDone, price, descMedioPago, isControlled });
   }
 
   return items;
@@ -74,6 +85,8 @@ export default function ImportOrder() {
   const nav = useNavigate();
 
   const preview = useMemo(() => parseLines(raw), [raw]);
+  const doneCount    = preview.filter((it) => it.isDone).length;
+  const pendingCount = preview.filter((it) => !it.isDone).length;
 
   async function onImport() {
     setError("");
@@ -86,7 +99,7 @@ export default function ImportOrder() {
     setLoading(true);
     try {
       const res = await apiPost(`/orders/${orderId}/import`, { raw });
-      toastSuccess(`Importado: ${res.count} ítems`);
+      toastSuccess(`Importado: ${res.done} encontrados, ${res.pending} pendientes`);
       nav(`/order/${orderId}`);
     } catch (e) {
       const msg = e?.response?.data?.message || e.message || "Error importando";
@@ -121,14 +134,20 @@ export default function ImportOrder() {
         <Button
           onClick={onImport}
           disabled={loading || preview.length === 0}
-          text={loading ? "Importando..." : `Importar${preview.length > 0 ? ` (${preview.length} ítems)` : ""}`}
+          text={
+            loading
+              ? "Importando..."
+              : preview.length > 0
+                ? `Importar · ${doneCount} encontrados, ${pendingCount} pendientes`
+                : "Importar"
+          }
           size="md"
           color="black"
           className="w-full rounded-lg"
         />
 
         <p className="text-xs text-gray-500">
-          Columnas usadas: <b>EAN · Descripción · Cant Pedida · Precio Unitario · Desc. Medio Pago · Controlado</b>
+          Columnas usadas: <b>EAN · Descripción · Cant Pedida · Cant Real · Precio Unitario · Desc. Medio Pago · Controlado</b>
         </p>
       </div>
 
@@ -145,9 +164,22 @@ export default function ImportOrder() {
           <div className="text-xs text-gray-500">
             {preview.length === 0
               ? "Pegá la tabla arriba para ver los ítems detectados"
-              : `${preview.length} ítem${preview.length !== 1 ? "s" : ""} detectado${preview.length !== 1 ? "s" : ""}`}
+              : `${preview.length} ítem${preview.length !== 1 ? "s" : ""} · ${doneCount} encontrados · ${pendingCount} pendientes`}
           </div>
         </div>
+
+        {preview.length > 0 && (
+          <div className="px-4 py-2 border-b bg-gray-50 flex gap-4 text-[11px] text-gray-500">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-sm bg-green-100 border border-green-300"/>
+              Encontrado (C.Real &gt; 0)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-3 rounded-sm bg-gray-100 border border-gray-300"/>
+              Pendiente (C.Real = 0)
+            </span>
+          </div>
+        )}
 
         {preview.length === 0 ? (
           <div className="p-4 text-sm text-gray-500 text-center">
@@ -160,7 +192,8 @@ export default function ImportOrder() {
                 <tr>
                   <th className="px-3 py-2">EAN</th>
                   <th className="px-3 py-2">Descripción</th>
-                  <th className="px-3 py-2 text-right">Cant.</th>
+                  <th className="px-3 py-2 text-right">C.Ped.</th>
+                  <th className="px-3 py-2 text-right">C.Real</th>
                   <th className="px-3 py-2 text-right">Precio</th>
                   <th className="px-3 py-2 text-center">Desc.MP</th>
                   <th className="px-3 py-2 text-center">Ctrl.</th>
@@ -168,12 +201,18 @@ export default function ImportOrder() {
               </thead>
               <tbody>
                 {preview.map((it, idx) => (
-                  <tr key={`${it.ean}-${idx}`} className="border-t">
+                  <tr
+                    key={`${it.ean}-${idx}`}
+                    className={`border-t ${it.isDone ? "bg-green-50" : "bg-gray-50/40"}`}
+                  >
                     <td className="px-3 py-2 font-mono text-gray-600">{it.ean}</td>
                     <td className="px-3 py-2 max-w-[160px]">
                       <div className="truncate" title={it.description}>{it.description}</div>
                     </td>
                     <td className="px-3 py-2 text-right font-semibold">{it.qty}</td>
+                    <td className={`px-3 py-2 text-right font-semibold ${it.isDone ? "text-green-700" : "text-gray-400"}`}>
+                      {it.cantReal > 0 ? it.cantReal : <span className="text-gray-300">—</span>}
+                    </td>
                     <td className="px-3 py-2 text-right text-gray-600">{fmt(it.price)}</td>
                     <td className="px-3 py-2 text-center">
                       {it.descMedioPago

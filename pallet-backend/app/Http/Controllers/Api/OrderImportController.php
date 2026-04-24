@@ -14,13 +14,19 @@ use Illuminate\Support\Facades\DB;
  *
  *  0  EAN
  *  1  Descripción
- *  2  Cant Pedida        ← qty
- *  3  Cant Real          ← ignorar
+ *  2  Cant Pedida        ← qty (lo que el cliente pidió)
+ *  3  Cant Real          ← done_qty (lo que realmente se encontró/entregó)
  *  4  Precio Unitario    ← price
  *  5  Precio Base        ← ignorar
  *  6  Desc. Base         ← ignorar
  *  7  Desc. Medio Pago   ← desc_medio_pago (10.00 = lunes/viernes, vacío = no)
  *  8  Controlado         ← is_controlled  (1 = sí, vacío = no)
+ *
+ * Lógica de estado al importar:
+ *   - Cant Real > 0  →  status = 'done',    done_qty = Cant Real
+ *   - Cant Real = 0  →  status = 'pending',  done_qty = 0
+ *   - Cant Pedida = 0 y Cant Real > 0 (producto extra no pedido originalmente)
+ *                    →  qty = Cant Real  (para que el conteo tenga sentido)
  */
 class OrderImportController extends Controller
 {
@@ -54,10 +60,25 @@ class OrderImportController extends Controller
             if ($desc === '') continue;
 
             // ── Columna 2: Cant Pedida ─────────────────────────────────────
-            $qtyRaw = str_replace(',', '.', trim($parts[2] ?? '0'));
-            $qtyRaw = preg_replace('/[^0-9.]/', '', $qtyRaw);
-            $qty    = (int) floor((float) $qtyRaw);
-            if ($qty <= 0) continue;
+            $cantPedidaRaw = str_replace(',', '.', trim($parts[2] ?? '0'));
+            $cantPedidaRaw = preg_replace('/[^0-9.]/', '', $cantPedidaRaw);
+            $cantPedida    = (int) floor((float) $cantPedidaRaw);
+
+            // ── Columna 3: Cant Real (lo que realmente se encontró) ────────
+            $cantRealRaw = str_replace(',', '.', trim($parts[3] ?? '0'));
+            $cantRealRaw = preg_replace('/[^0-9.]/', '', $cantRealRaw);
+            $cantReal    = (int) floor((float) $cantRealRaw);
+
+            // Saltar si no hay ninguna cantidad
+            if ($cantPedida <= 0 && $cantReal <= 0) continue;
+
+            // Si Cant Pedida = 0 pero Cant Real > 0 (producto extra no pedido),
+            // usamos Cant Real como qty para que el conteo tenga sentido
+            $qty = $cantPedida > 0 ? $cantPedida : $cantReal;
+
+            // Estado basado en Cant Real
+            $doneQty = $cantReal;
+            $status  = $cantReal > 0 ? 'done' : 'pending';
 
             // ── Columna 4: Precio Unitario ─────────────────────────────────
             $priceRaw = str_replace(',', '.', trim($parts[4] ?? ''));
@@ -75,13 +96,15 @@ class OrderImportController extends Controller
             $isControlled = trim($parts[8] ?? '') === '1';
 
             $parsed[] = [
-                'ean'            => $ean,
-                'ean_last4'      => strlen($ean) >= 4 ? substr($ean, -4) : null,
-                'description'    => $desc,
-                'qty'            => $qty,
-                'price'          => $price,
-                'desc_medio_pago'=> $descMedioPago,
-                'is_controlled'  => $isControlled,
+                'ean'             => $ean,
+                'ean_last4'       => strlen($ean) >= 4 ? substr($ean, -4) : null,
+                'description'     => $desc,
+                'qty'             => $qty,
+                'done_qty'        => $doneQty,
+                'status'          => $status,
+                'price'           => $price,
+                'desc_medio_pago' => $descMedioPago,
+                'is_controlled'   => $isControlled,
             ];
         }
 
@@ -106,18 +129,23 @@ class OrderImportController extends Controller
                     'ean_last4'       => $row['ean_last4'],
                     'description'     => $row['description'],
                     'qty'             => $row['qty'],
+                    'done_qty'        => $row['done_qty'],
+                    'status'          => $row['status'],
                     'price'           => $row['price'],
                     'desc_medio_pago' => $row['desc_medio_pago'],
                     'is_controlled'   => $row['is_controlled'],
-                    'status'          => 'pending',
-                    'done_qty'        => 0,
                 ]);
             }
         });
 
+        $done    = collect($parsed)->where('status', 'done')->count();
+        $pending = collect($parsed)->where('status', 'pending')->count();
+
         return response()->json([
-            'message' => 'Pedido importado correctamente.',
+            'message' => "Pedido importado: {$done} encontrados, {$pending} pendientes.",
             'count'   => count($parsed),
+            'done'    => $done,
+            'pending' => $pending,
         ], 201);
     }
 }

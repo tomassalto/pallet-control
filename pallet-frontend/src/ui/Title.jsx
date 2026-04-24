@@ -27,9 +27,9 @@ export default function Title({
   return (
     <Component
       className={clsx(
-        " font-['Montserrat'] font-semibold",
+        " font-['Montserrat'] font-semibold text-center",
         sizeClass,
-        className
+        className,
       )}
     >
       {children}
