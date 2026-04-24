@@ -41,7 +41,7 @@ class UserController extends Controller
 
         $user->update(['role' => $newRole]);
 
-        return response()->json(['ok' => true, 'user' => $user->fresh(['id', 'name', 'email', 'role', 'is_active'])]);
+        return response()->json(['ok' => true, 'user' => $user->refresh()->only(['id', 'name', 'email', 'role', 'is_active'])]);
     }
 
     /** POST /api/v1/admin/users/{user}/toggle-active */
