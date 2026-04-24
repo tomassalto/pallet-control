@@ -44,6 +44,7 @@ const {
   BATCH_SIZE = "20",
   TEST_LIMIT = "",          // Si está seteado, solo procesa esa cantidad de EANs
   HEADLESS   = "true",      // Poner "false" para ver el browser
+  FAST_MODE  = "true",      // Solo usa URL directa (sin browser). "false" para forzar scraping
 } = process.env;
 
 const DELAY         = parseInt(DELAY_MS, 10);
@@ -231,58 +232,45 @@ async function login(page) {
   console.log(`✅ Login completado — URL: ${currentUrl}`);
 }
 
+// ── Verificar si una URL de imagen existe (HEAD request) ─────────────────────
+const NO_IMAGE_MARKERS = ["noimage", "no-image", "placeholder"];
+
+async function checkImageUrl(url) {
+  try {
+    const res = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return false;
+    const ct = res.headers.get("content-type") || "";
+    return ct.startsWith("image/") && !NO_IMAGE_MARKERS.some((m) => url.includes(m));
+  } catch (_) {
+    return false;
+  }
+}
+
 // ── Extraer imagen de una página de producto ──────────────────────────────────
 async function extractImageUrl(page, ean) {
-  const productUrl = `${BASE_URL}/p/${ean}`;
+  // Estrategia 1: URL directa por EAN (sin navegar, rapidísimo)
+  // El sitio expone las imágenes en: tupedido.carrefour.com.ar/imagenesPDA/{EAN}.jpg
+  const directUrl = `https://tupedido.carrefour.com.ar/imagenesPDA/${ean}.jpg`;
+  if (await checkImageUrl(directUrl)) {
+    return directUrl;
+  }
 
+  // Estrategia 2: navegar a la página del producto y leer img.p_principal_img
+  const productUrl = `${BASE_URL}/p/${ean}`;
   try {
     await page.goto(productUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
-  } catch (_) {
-    // timeout parcial — intentar igual
-  }
+  } catch (_) {}
 
-  await sleep(800); // Dar tiempo a que carguen las imágenes lazy
+  await sleep(500);
 
-  // Selectores comunes en VTex (plataforma que usa Carrefour)
-  const selectors = [
-    'img[src*="vtexassets.com"]',
-    'img[src*="carrefourassets"]',
-    '.vtex-store-components-3-x-productImageTag--main',
-    '.vtex-store-components-3-x-productImageTag',
-    '[class*="productImageTag"] img',
-    '[class*="productImage"] img',
-    'figure img[src^="https"]',
-  ];
-
-  for (const sel of selectors) {
-    try {
-      const el = page.locator(sel).first();
-      if (await el.count() > 0) {
-        // Esperar que tenga src cargado
-        await el.waitFor({ state: "attached", timeout: 3000 }).catch(() => {});
-        const src = await el.getAttribute("src");
-        if (src && src.startsWith("http") && !src.includes("placeholder")) {
-          // Obtener la imagen en máxima calidad eliminando parámetros de resize
-          return src.replace(/\?.*$/, "") + "?width=400&height=400&aspect=true";
-        }
-      }
-    } catch (_) {}
-  }
-
-  // Fallback: JSON-LD structured data
   try {
-    const jsonLd = await page.evaluate(() => {
-      const scripts = document.querySelectorAll('script[type="application/ld+json"]');
-      for (const s of scripts) {
-        try {
-          const d = JSON.parse(s.textContent);
-          const img = d?.image?.[0] || d?.image;
-          if (typeof img === "string" && img.startsWith("http")) return img;
-        } catch (_) {}
+    const el = page.locator("img.p_principal_img").first();
+    if (await el.count() > 0) {
+      const src = await el.getAttribute("src");
+      if (src && src.startsWith("http") && !NO_IMAGE_MARKERS.some((m) => src.includes(m))) {
+        return src;
       }
-      return null;
-    });
-    if (jsonLd) return jsonLd;
+    }
   } catch (_) {}
 
   return null;
@@ -290,9 +278,13 @@ async function extractImageUrl(page, ean) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 (async () => {
-  // Validar config mínima
-  const required = ["CARREFOUR_EMAIL", "CARREFOUR_DNI", "CARREFOUR_PHONE", "CARREFOUR_NAME", "API_BASE_URL", "BOT_SECRET"];
-  const missing  = required.filter((k) => !process.env[k]);
+  const isFast = FAST_MODE !== "false";
+
+  // En fast mode solo necesitamos API_BASE_URL y BOT_SECRET
+  const required = isFast
+    ? ["API_BASE_URL", "BOT_SECRET"]
+    : ["CARREFOUR_EMAIL", "CARREFOUR_DNI", "CARREFOUR_PHONE", "CARREFOUR_NAME", "API_BASE_URL", "BOT_SECRET"];
+  const missing = required.filter((k) => !process.env[k]);
   if (missing.length) {
     console.error("❌ Faltan variables en .env:", missing.join(", "));
     process.exit(1);
@@ -323,31 +315,35 @@ async function extractImageUrl(page, ean) {
 
   // Pendientes
   const pending = allEans.filter((e) => !localDone.has(e));
-  console.log(`   ${pending.length} EANs a procesar\n`);
+  console.log(`   ${pending.length} EANs a procesar`);
 
   if (pending.length === 0) {
     console.log("✅ No hay nada que scrapear.");
     return;
   }
 
-  // Lanzar browser
-  const browser = await chromium.launch({
-    headless: HEADLESS !== "false",
-  });
-  const context = await browser.newContext({
-    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    viewport: { width: 1280, height: 800 },
-  });
-  const page = await context.newPage();
+  // Modo rápido: solo HTTP, sin browser (usa URL directa por EAN)
+  // Modo completo: Playwright con login para páginas que no tienen URL directa
+  let browser = null;
+  let page    = null;
 
-  // Login
-  try {
-    await login(page);
-  } catch (err) {
-    console.error("❌ Login falló:", err.message);
-    console.log("   Revisá los screenshots debug-step*.png para ver qué pasó");
-    await browser.close();
-    process.exit(1);
+  if (isFast) {
+    console.log("⚡ FAST MODE: usando URL directa (sin browser)\n");
+  } else {
+    console.log("🌐 Modo completo: iniciando browser con login\n");
+    browser = await chromium.launch({ headless: HEADLESS !== "false" });
+    const context = await browser.newContext({
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      viewport: { width: 1280, height: 800 },
+    });
+    page = await context.newPage();
+    try {
+      await login(page);
+    } catch (err) {
+      console.error("❌ Login falló:", err.message);
+      await browser.close();
+      process.exit(1);
+    }
   }
 
   let batch     = [];
@@ -363,7 +359,12 @@ async function extractImageUrl(page, ean) {
     const ean = pending[i];
 
     try {
-      const imageUrl = await extractImageUrl(page, ean);
+      // En fast mode usamos solo la URL directa (sin browser)
+      const imageUrl = isFast
+        ? (await checkImageUrl(`https://tupedido.carrefour.com.ar/imagenesPDA/${ean}.jpg`)
+            ? `https://tupedido.carrefour.com.ar/imagenesPDA/${ean}.jpg`
+            : null)
+        : await extractImageUrl(page, ean);
 
       if (imageUrl) {
         batch.push({ ean, image_url: imageUrl });
@@ -409,7 +410,8 @@ async function extractImageUrl(page, ean) {
       }
     }
 
-    await sleep(DELAY);
+    // Fast mode: delay corto (solo HEAD requests), modo completo: delay más largo
+    await sleep(isFast ? 200 : DELAY);
   }
 
   // Batch final
@@ -426,7 +428,7 @@ async function extractImageUrl(page, ean) {
   progress.failed = [...localFailed];
   saveProgress(progress);
 
-  await browser.close();
+  if (browser) await browser.close();
 
   const totalMin = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
   console.log("\n════════════════════════════════");
