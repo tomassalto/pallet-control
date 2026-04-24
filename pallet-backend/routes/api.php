@@ -31,6 +31,9 @@ Route::prefix('v1')->group(function () {
         Route::post('/scraper/images/check-existing', [ProductImageController::class, 'checkExisting']);
     });
 
+    // Producto por EAN — lectura pública (no requiere auth)
+    Route::get('/products/by-ean/{ean}', [ProductController::class, 'showByEan']);
+
     // Telegram webhook (sin auth Sanctum, valida X-Telegram-Bot-Api-Secret-Token)
     Route::post('/telegram/webhook', [TelegramBotController::class, 'webhook']);
 
