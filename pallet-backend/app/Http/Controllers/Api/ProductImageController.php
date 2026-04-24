@@ -23,6 +23,7 @@ class ProductImageController extends Controller
             'products'              => ['required', 'array', 'min:1', 'max:100'],
             'products.*.ean'        => ['required', 'string'],
             'products.*.image_url'  => ['required', 'url'],
+            'products.*.name'       => ['nullable', 'string', 'max:255'],
         ]);
 
         $upserted = 0;
@@ -30,10 +31,11 @@ class ProductImageController extends Controller
         foreach ($data['products'] as $row) {
             $ean   = preg_replace('/\D+/', '', $row['ean']);
             $last4 = strlen($ean) >= 4 ? substr($ean, -4) : null;
+            $name  = trim($row['name'] ?? '') ?: $ean; // fallback al EAN si no hay nombre
 
             Product::updateOrCreate(
                 ['ean' => $ean],
-                ['ean_last4' => $last4, 'image_url' => $row['image_url']]
+                ['name' => $name, 'ean_last4' => $last4, 'image_url' => $row['image_url']]
             );
             $upserted++;
         }

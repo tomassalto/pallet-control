@@ -67,13 +67,17 @@ function saveProgress(progress) {
   fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progress, null, 2));
 }
 
-function readEans() {
+function readProducts() {
   const csvPath = path.resolve(__dirname, CSV_PATH);
   const content = fs.readFileSync(csvPath, "utf8");
   const rows    = parse(content, { skip_empty_lines: true, relax_quotes: true });
-  return rows
-    .map((r) => String(r[0] || "").replace(/\D/g, "").trim())
-    .filter((e) => e.length >= 7);
+  const result  = {};
+  for (const r of rows) {
+    const ean  = String(r[0] || "").replace(/\D/g, "").trim();
+    const name = String(r[1] || "").trim();
+    if (ean.length >= 7) result[ean] = name;
+  }
+  return result; // { ean: name }
 }
 
 async function pushBatchToApi(batch) {
@@ -292,11 +296,12 @@ async function extractImageUrl(page, ean) {
 
   // Leer CSV
   console.log("📂 Leyendo CSV de EANs...");
-  let allEans = readEans();
+  let productsMap = readProducts(); // { ean: name }
+  let allEans     = Object.keys(productsMap);
   console.log(`   ${allEans.length} EANs en el CSV`);
 
   if (TEST_N) {
-    allEans = allEans.slice(0, TEST_N);
+    allEans     = allEans.slice(0, TEST_N);
     console.log(`   ⚠️  MODO TEST: procesando solo los primeros ${TEST_N} EANs`);
   }
 
@@ -367,7 +372,7 @@ async function extractImageUrl(page, ean) {
         : await extractImageUrl(page, ean);
 
       if (imageUrl) {
-        batch.push({ ean, image_url: imageUrl });
+        batch.push({ ean, name: productsMap[ean] || ean, image_url: imageUrl });
         scraped++;
         if (TEST_N) console.log(`  ✅ [${i + 1}/${total}] EAN ${ean} → ${imageUrl.slice(0, 80)}...`);
       } else {
