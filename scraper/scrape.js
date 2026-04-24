@@ -156,37 +156,10 @@ async function login(page) {
   console.log("   📸 debug-step1.png guardado");
 
   // Paso 3: click "Comercio o Emprendimiento"
-  console.log("   → Buscando tarjeta 'Comercio o Emprendimiento'...");
-
-  // Intentar múltiples selectores para la tarjeta
-  const comercioSelectors = [
-    'text=/COMERCIO/i',
-    'text=/EMPRENDIMIENTO/i',
-    ':has-text("EMPRENDIMIENTO")',
-    ':has-text("Comercio")',
-    ':has-text("CUIT")',   // "Ingresá con CUIT o DNI" es texto único de esa tarjeta
-  ];
-  let clickedComercio = false;
-  for (const sel of comercioSelectors) {
-    try {
-      // waitForSelector con timeout corto para ver si existe
-      await page.waitForSelector(sel, { timeout: 3000 });
-      const els = page.locator(sel);
-      const count = await els.count();
-      console.log(`   → Selector "${sel}" encontró ${count} elemento(s)`);
-      if (count > 0) {
-        // Usar el último (normalmente el contenedor más específico)
-        await els.last().click({ timeout: 5000 });
-        console.log(`   ✅ Click en tarjeta Comercio con: ${sel}`);
-        clickedComercio = true;
-        break;
-      }
-    } catch (_) {}
-  }
-  if (!clickedComercio) {
-    console.log("   ❌ No se encontró la tarjeta Comercio. Revisá debug-step1.png y debug-page1.html");
-    throw new Error("No se encontró el botón 'Comercio o Emprendimiento'");
-  }
+  // El botón es una imagen: <img src="...comerciante.png" alt="Icon">
+  console.log("   → Click 'Comercio o Emprendimiento'");
+  await page.waitForSelector('img[src*="comerciante.png"]', { timeout: 10000 });
+  await page.locator('img[src*="comerciante.png"]').first().click();
   await sleep(1500);
 
   await page.screenshot({ path: path.join(__dirname, "debug-step2.png") });
