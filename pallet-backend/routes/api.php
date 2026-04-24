@@ -17,12 +17,19 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\OrderTicketController;
 use App\Http\Controllers\Api\BotController;
+use App\Http\Controllers\Api\ProductImageController;
 use App\Http\Controllers\Api\TelegramBotController;
 use App\Http\Controllers\Api\UserController;
 
 Route::prefix('v1')->group(function () {
     // Ruta del bot de WhatsApp (sin auth Sanctum, usa X-Bot-Secret)
     Route::post('/bot/upload', [BotController::class, 'uploadPhoto']);
+
+    // Rutas del scraper de imágenes (sin auth Sanctum, usa X-Bot-Secret)
+    Route::middleware('bot.secret')->group(function () {
+        Route::post('/scraper/images/bulk-update',  [ProductImageController::class, 'bulkUpdate']);
+        Route::post('/scraper/images/check-existing', [ProductImageController::class, 'checkExisting']);
+    });
 
     // Telegram webhook (sin auth Sanctum, valida X-Telegram-Bot-Api-Secret-Token)
     Route::post('/telegram/webhook', [TelegramBotController::class, 'webhook']);
