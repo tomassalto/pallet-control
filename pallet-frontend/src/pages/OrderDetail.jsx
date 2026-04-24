@@ -150,6 +150,10 @@ export default function OrderDetail() {
   // QR modal
   const [showQR, setShowQR] = useState(false);
 
+  // Modal "Organizar en pallet"
+  const [organizeModal, setOrganizeModal] = useState(null);
+  // null | { palletId, palletCode, step:'base'|'products', bases:[], selectedBase:null, quantities:{}, loading:bool, saving:bool }
+
   // finalizar pedido
   const [canFinalize, setCanFinalize] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
@@ -254,6 +258,12 @@ export default function OrderDetail() {
     [items, tab],
   );
 
+  // Items a mostrar en el modal "Organizar en pallet" — solo los importados (done_qty > 0)
+  const modalItems = useMemo(
+    () => items.filter((it) => (it.done_qty ?? 0) > 0).sort((a, b) => a.description.localeCompare(b.description)),
+    [items],
+  );
+
   // Categorizar productos para pedidos finalizados
   const categorizedItems = useMemo(() => {
     if (order?.status !== "done") return null;
@@ -334,6 +344,91 @@ export default function OrderDetail() {
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  // ── Organizar en pallet ───────────────────────────────────────────────────
+  async function openOrganizeModal(pallet) {
+    setOrganizeModal({ palletId: pallet.id, palletCode: pallet.code, step: "base", bases: [], selectedBase: null, quantities: {}, loading: true, saving: false });
+    try {
+      const data = await apiGet(`/pallets/${pallet.id}`);
+      setOrganizeModal((prev) => prev ? { ...prev, bases: data.bases || [], loading: false } : null);
+    } catch {
+      toastError("Error cargando bases del pallet");
+      setOrganizeModal(null);
+    }
+  }
+
+  function selectBaseForOrganize(base) {
+    const orderItemIds = new Set(items.map((i) => i.id));
+    const init = {};
+    base.order_items?.forEach((item) => {
+      if (orderItemIds.has(item.id)) init[item.id] = item.pivot?.qty ?? 0;
+    });
+    setOrganizeModal((prev) => prev ? { ...prev, step: "products", selectedBase: base, quantities: init } : null);
+  }
+
+  async function createBaseAndOrganize() {
+    setOrganizeModal((prev) => prev ? { ...prev, loading: true } : null);
+    try {
+      await apiPost(`/pallets/${organizeModal.palletId}/bases`, { name: null });
+      const data = await apiGet(`/pallets/${organizeModal.palletId}`);
+      const bases = data.bases || [];
+      const newBase = bases[bases.length - 1];
+      setOrganizeModal((prev) => prev ? { ...prev, bases, loading: false, step: "products", selectedBase: newBase, quantities: {} } : null);
+    } catch (e) {
+      toastError(e?.response?.data?.message || "Error creando base");
+      setOrganizeModal((prev) => prev ? { ...prev, loading: false } : null);
+    }
+  }
+
+  function countFromThisOrderInBase(base) {
+    const ids = new Set(items.map((i) => i.id));
+    return base.order_items?.filter((i) => ids.has(i.id)).length ?? 0;
+  }
+
+  function modalMaxQty(orderItem) {
+    if (!organizeModal?.bases || !organizeModal?.selectedBase) return 0;
+    const total = orderItem.done_qty || orderItem.qty || 0;
+    const elsewhere = organizeModal.bases.reduce((sum, base) => {
+      if (base.id === organizeModal.selectedBase.id) return sum;
+      const found = base.order_items?.find((i) => i.id === orderItem.id);
+      return sum + (found?.pivot?.qty ?? 0);
+    }, 0);
+    return Math.max(0, total - elsewhere);
+  }
+
+  function incModalQty(orderItem) {
+    const cur = organizeModal?.quantities[orderItem.id] ?? 0;
+    const max = modalMaxQty(orderItem);
+    if (cur < max) setOrganizeModal((prev) => prev ? { ...prev, quantities: { ...prev.quantities, [orderItem.id]: cur + 1 } } : null);
+  }
+
+  function decModalQty(itemId) {
+    const cur = organizeModal?.quantities[itemId] ?? 0;
+    if (cur > 0) setOrganizeModal((prev) => prev ? { ...prev, quantities: { ...prev.quantities, [itemId]: cur - 1 } } : null);
+  }
+
+  function setModalQty(orderItem, rawValue) {
+    const max = modalMaxQty(orderItem);
+    const v = Math.min(Math.max(0, parseInt(rawValue, 10) || 0), max);
+    setOrganizeModal((prev) => prev ? { ...prev, quantities: { ...prev.quantities, [orderItem.id]: v } } : null);
+  }
+
+  async function saveOrganize() {
+    if (!organizeModal) return;
+    const payload = Object.entries(organizeModal.quantities)
+      .filter(([, q]) => q > 0)
+      .map(([id, q]) => ({ order_item_id: parseInt(id, 10), qty: q }));
+    setOrganizeModal((prev) => prev ? { ...prev, saving: true } : null);
+    try {
+      await apiPatch(`/pallets/${organizeModal.palletId}/bases/${organizeModal.selectedBase.id}`, { items: payload });
+      toastSuccess("Productos asignados al pallet");
+      setOrganizeModal(null);
+      load();
+    } catch (e) {
+      toastError(e?.response?.data?.message || "Error al guardar");
+      setOrganizeModal((prev) => prev ? { ...prev, saving: false } : null);
     }
   }
 
@@ -475,7 +570,7 @@ export default function OrderDetail() {
             {pallets.map((p) => (
               <div
                 key={p.id}
-                className="flex items-center justify-between bg-light-gray rounded-lg p-2"
+                className="flex items-center gap-2 bg-light-gray rounded-xl p-2"
               >
                 <Link
                   to={`/pallet/${p.id}`}
@@ -483,11 +578,19 @@ export default function OrderDetail() {
                 >
                   {p.code}
                 </Link>
+                {order?.status !== "done" && modalItems.length > 0 && (
+                  <button
+                    onClick={() => openOrganizeModal(p)}
+                    className="px-2 py-1 text-xs bg-gray-900 text-white rounded-lg font-medium active:scale-[0.98]"
+                  >
+                    📦 Organizar
+                  </button>
+                )}
                 {order?.status !== "done" && (
                   <button
                     onClick={() => setConfirmDetachPallet(p)}
                     disabled={detachingPallet === p.id}
-                    className=" px-2 py-1 text-xs  bg-red-600 text-white border border-red-300 rounded hover:bg-red-50 disabled:opacity-50"
+                    className="px-2 py-1 text-xs bg-red-600 text-white border border-red-300 rounded hover:bg-red-50 disabled:opacity-50"
                   >
                     Desvincular
                   </button>
@@ -580,41 +683,6 @@ export default function OrderDetail() {
         </div>
       )}
 
-      {/* tabs - solo mostrar si el pedido no está finalizado y hay productos */}
-      {order?.status !== "done" && items.length > 0 && (
-        <div className="bg-white border-border rounded-2xl p-2 grid grid-cols-3 gap-2 text-sm">
-          <button
-            onClick={() => setTab("pending")}
-            className={`rounded-xl py-2 border text-sm ${
-              tab === "pending"
-                ? "bg-black text-white border-black font-semibold"
-                : "bg-white text-gray-500 border-gray-200"
-            }`}
-          >
-            Pend.
-          </button>
-          <button
-            onClick={() => setTab("done")}
-            className={`rounded-xl py-2 border text-sm ${
-              tab === "done"
-                ? "bg-black text-white border-black font-semibold"
-                : "bg-white text-gray-500 border-gray-200"
-            }`}
-          >
-            Listos
-          </button>
-          <button
-            onClick={() => setTab("removed")}
-            className={`rounded-xl py-2 border text-sm ${
-              tab === "removed"
-                ? "bg-black text-white border-black font-semibold"
-                : "bg-white text-gray-500 border-gray-200"
-            }`}
-          >
-            Quit.
-          </button>
-        </div>
-      )}
 
       {/* Modal agregar producto */}
       {openAddProduct && (
@@ -783,36 +851,49 @@ export default function OrderDetail() {
           </div>
         </div>
       ) : (
-        // Vista normal con tabs para pedidos no finalizados
+        // Vista de todos los ítems para pedidos no finalizados
         <div className="bg-white border border-border rounded-2xl overflow-hidden">
-          <div className="px-4 py-3">
-            <div className="font-semibold">Ítems</div>
-            <div className="text-xs text-gray-500">
-              Pendiente / Listo / Quitado
+          <div className="px-4 py-3 flex items-center justify-between">
+            <div className="font-semibold">Productos del pedido</div>
+            <div className="text-xs text-gray-500 space-x-2">
+              {items.filter((i) => i.status === "pending").length > 0 && (
+                <span className="text-amber-600 font-medium">
+                  {items.filter((i) => i.status === "pending").length} pend.
+                </span>
+              )}
+              {items.filter((i) => i.status === "done").length > 0 && (
+                <span className="text-green-600 font-medium">
+                  {items.filter((i) => i.status === "done").length} listos
+                </span>
+              )}
+              {items.filter((i) => i.status === "removed").length > 0 && (
+                <span className="text-red-500 font-medium">
+                  {items.filter((i) => i.status === "removed").length} quit.
+                </span>
+              )}
             </div>
           </div>
 
-          {filtered.length === 0 ? (
-            <div className="p-4 text-sm text-gray-600">
-              No hay ítems en este filtro.
-            </div>
+          {items.length === 0 ? (
+            <div className="p-4 text-sm text-gray-600">Sin productos.</div>
           ) : (
             <div className="p-2 flex flex-col gap-3">
-              {filtered.map((it) => (
-                <ItemCard
-                  key={it.id}
-                  item={it}
-                  onSelect={() => {
-                    setActionItem(it);
-                    // Si está removido, inicializar con 0, sino con la cantidad actual
-                    setActionQty(
-                      it.status === "removed" ? "0" : String(it.qty ?? ""),
-                    );
-                  }}
-                  borderColor={rowClass(it.status)}
-                  bgColor="bg-gray-50"
-                />
-              ))}
+              {[...items]
+                .sort((a, b) => a.description.localeCompare(b.description))
+                .map((it) => (
+                  <ItemCard
+                    key={it.id}
+                    item={it}
+                    onSelect={() => {
+                      setActionItem(it);
+                      setActionQty(
+                        it.status === "removed" ? "0" : String(it.qty ?? ""),
+                      );
+                    }}
+                    borderColor={rowClass(it.status)}
+                    bgColor="bg-gray-50"
+                  />
+                ))}
             </div>
           )}
 
@@ -987,6 +1068,179 @@ export default function OrderDetail() {
             load();
           }}
         />
+      )}
+
+      {/* ── Modal Organizar en pallet ──────────────────────────────────── */}
+      {organizeModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center">
+          <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl flex flex-col max-h-[90vh]">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 pt-5 pb-3 border-b flex-shrink-0">
+              <div>
+                <p className="font-bold text-base">📦 {organizeModal.palletCode}</p>
+                {organizeModal.step === "products" && (
+                  <p className="text-sm text-gray-500">
+                    {organizeModal.selectedBase?.name ||
+                      `Base ${(organizeModal.bases.findIndex((b) => b.id === organizeModal.selectedBase?.id) ?? 0) + 1}`}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setOrganizeModal(null)}
+                className="text-gray-400 hover:text-gray-700 text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* ── Paso 1: selección de base ─────────────────────────── */}
+            {organizeModal.step === "base" && (
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <p className="text-sm text-gray-500">
+                  ¿En qué base querés poner los productos de este pedido?
+                </p>
+
+                {organizeModal.loading ? (
+                  <p className="text-center text-gray-400 py-8 text-sm">Cargando…</p>
+                ) : (
+                  <>
+                    {organizeModal.bases.length === 0 && (
+                      <p className="text-sm text-gray-400 text-center py-4">
+                        Este pallet no tiene bases todavía.
+                      </p>
+                    )}
+
+                    {organizeModal.bases.map((base, i) => {
+                      const count = countFromThisOrderInBase(base);
+                      return (
+                        <button
+                          key={base.id}
+                          onClick={() => selectBaseForOrganize(base)}
+                          className="w-full text-left rounded-2xl border border-gray-200 p-4 hover:bg-gray-50 active:scale-[0.99] transition-colors"
+                        >
+                          <p className="font-semibold text-sm">
+                            {base.name || `Base ${i + 1}`}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {count > 0
+                              ? `${count} producto${count !== 1 ? "s" : ""} de este pedido ya asignados`
+                              : "Sin productos de este pedido aún"}
+                          </p>
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      onClick={createBaseAndOrganize}
+                      disabled={organizeModal.loading}
+                      className="w-full border-2 border-dashed border-gray-300 rounded-2xl p-4 text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-50 active:scale-[0.99]"
+                    >
+                      + Crear nueva base
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── Paso 2: asignar cantidades ────────────────────────── */}
+            {organizeModal.step === "products" && (
+              <>
+                <div className="px-4 py-2 border-b flex-shrink-0">
+                  <button
+                    onClick={() =>
+                      setOrganizeModal((prev) =>
+                        prev ? { ...prev, step: "base", selectedBase: null, quantities: {} } : null
+                      )
+                    }
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    ← Cambiar base
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+                  {modalItems.length === 0 ? (
+                    <p className="text-center text-sm text-gray-400 py-10">
+                      No hay productos importados en este pedido.
+                    </p>
+                  ) : (
+                    modalItems.map((item) => {
+                      const cur = organizeModal.quantities[item.id] ?? 0;
+                      const max = modalMaxQty(item);
+                      const active = cur > 0;
+                      return (
+                        <div
+                          key={item.id}
+                          className={[
+                            "flex items-center gap-3 px-4 py-3",
+                            active ? "border-l-4 border-l-gray-800" : "opacity-70",
+                          ].join(" ")}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium leading-snug">{item.description}</p>
+                            <p className="text-xs font-mono text-gray-400 mt-0.5">{item.ean}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Disp:{" "}
+                              <span className={max === 0 && !active ? "text-red-500 font-medium" : ""}>
+                                {max}
+                              </span>
+                              {" / "}{item.done_qty || item.qty} unid.
+                            </p>
+                          </div>
+
+                          {/* Stepper */}
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              onClick={() => decModalQty(item.id)}
+                              disabled={cur === 0}
+                              className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 disabled:opacity-25 hover:bg-gray-50 text-lg leading-none select-none"
+                            >
+                              −
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              max={max}
+                              value={cur}
+                              onChange={(e) => setModalQty(item, e.target.value)}
+                              className="w-12 text-center text-sm font-bold border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                            />
+                            <button
+                              onClick={() => incModalQty(item)}
+                              disabled={cur >= max || max === 0}
+                              className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center disabled:opacity-25 text-lg leading-none select-none"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Botón guardar */}
+                <div className="p-4 border-t flex-shrink-0">
+                  {(() => {
+                    const count = Object.values(organizeModal.quantities).filter((q) => q > 0).length;
+                    return (
+                      <button
+                        onClick={saveOrganize}
+                        disabled={organizeModal.saving}
+                        className="w-full py-3.5 rounded-2xl bg-gray-900 text-white font-bold text-sm disabled:opacity-60"
+                      >
+                        {organizeModal.saving
+                          ? "Guardando…"
+                          : `Guardar — ${count} producto${count !== 1 ? "s" : ""} en esta base`}
+                      </button>
+                    );
+                  })()}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       {/* QR Modal */}
