@@ -23,8 +23,8 @@ use Illuminate\Support\Facades\DB;
  *  8  Controlado         ← is_controlled  (1 = sí, vacío = no)
  *
  * Lógica de estado al importar:
- *   - Cant Real > 0  →  status = 'done',    done_qty = Cant Real
- *   - Cant Real = 0  →  status = 'pending',  done_qty = 0
+ *   - Cant Real > 0  →  status = 'done',    done_qty = Cant Real  ✓ se importa
+ *   - Cant Real = 0  →  se OMITE (el pedido ya está cerrado, sin stock = no viene)
  *   - Cant Pedida = 0 y Cant Real > 0 (producto extra no pedido originalmente)
  *                    →  qty = Cant Real  (para que el conteo tenga sentido)
  */
@@ -69,16 +69,17 @@ class OrderImportController extends Controller
             $cantRealRaw = preg_replace('/[^0-9.]/', '', $cantRealRaw);
             $cantReal    = (int) floor((float) $cantRealRaw);
 
-            // Saltar si no hay ninguna cantidad
-            if ($cantPedida <= 0 && $cantReal <= 0) continue;
+            // Solo importar productos que realmente se entregaron (Cant Real > 0)
+            // El pedido ya está cerrado: si no vino, no se importa
+            if ($cantReal <= 0) continue;
 
             // Si Cant Pedida = 0 pero Cant Real > 0 (producto extra no pedido),
             // usamos Cant Real como qty para que el conteo tenga sentido
             $qty = $cantPedida > 0 ? $cantPedida : $cantReal;
 
-            // Estado basado en Cant Real
+            // Todos los ítems importados son done (Cant Real > 0 garantizado)
             $doneQty = $cantReal;
-            $status  = $cantReal > 0 ? 'done' : 'pending';
+            $status  = 'done';
 
             // ── Columna 4: Precio Unitario ─────────────────────────────────
             $priceRaw = str_replace(',', '.', trim($parts[4] ?? ''));
@@ -138,14 +139,11 @@ class OrderImportController extends Controller
             }
         });
 
-        $done    = collect($parsed)->where('status', 'done')->count();
-        $pending = collect($parsed)->where('status', 'pending')->count();
-
         return response()->json([
-            'message' => "Pedido importado: {$done} encontrados, {$pending} pendientes.",
+            'message' => 'Pedido importado: ' . count($parsed) . ' productos encontrados.',
             'count'   => count($parsed),
-            'done'    => $done,
-            'pending' => $pending,
+            'done'    => count($parsed),
+            'pending' => 0,
         ], 201);
     }
 }

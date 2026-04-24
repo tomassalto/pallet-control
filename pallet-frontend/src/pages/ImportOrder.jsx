@@ -10,12 +10,15 @@ import BackButton from "../ui/BackButton";
  *  0  EAN
  *  1  Descripción
  *  2  Cant Pedida        → qty
- *  3  Cant Real          → cantReal (> 0 = done, = 0 = pending)
+ *  3  Cant Real          → cantReal (solo se importa si > 0, pedido cerrado)
  *  4  Precio Unitario    → price
  *  5  Precio Base        → ignorar
  *  6  Desc. Base         → ignorar
  *  7  Desc. Medio Pago   → desc_medio_pago  (10.00 = lunes/viernes)
  *  8  Controlado         → is_controlled    (1 = sí)
+ *
+ * Solo se importan filas con Cant Real > 0.
+ * Si Cant Real = 0 el producto no vino y se omite.
  */
 function parseLines(raw) {
   const lines = String(raw || "").trim().split(/\r\n|\n|\r/);
@@ -43,17 +46,16 @@ function parseLines(raw) {
     const cantPedidaStr = (parts[2] || "0").replace(",", ".").replace(/[^0-9.]/g, "");
     const cantPedida = Math.floor(parseFloat(cantPedidaStr) || 0);
 
-    // Col 3: Cant Real (lo que realmente se encontró/entregó)
+    // Col 3: Cant Real (lo que realmente se entregó)
     const cantRealStr = (parts[3] || "0").replace(",", ".").replace(/[^0-9.]/g, "");
     const cantReal = Math.floor(parseFloat(cantRealStr) || 0);
 
-    // Saltar si no hay ninguna cantidad
-    if (cantPedida <= 0 && cantReal <= 0) continue;
+    // Omitir si no se entregó (pedido cerrado, sin stock = no viene)
+    if (cantReal <= 0) continue;
 
     // Si Cant Pedida = 0 pero Cant Real > 0 (producto extra no pedido),
     // usamos Cant Real como qty para que el conteo tenga sentido
     const qty = cantPedida > 0 ? cantPedida : cantReal;
-    const isDone = cantReal > 0;
 
     // Col 4: Precio Unitario
     const priceStr = (parts[4] || "").replace(",", ".").replace(/[^0-9.]/g, "");
@@ -66,7 +68,7 @@ function parseLines(raw) {
     // Col 8: Controlado (1 = sí)
     const isControlled = (parts[8] || "").trim() === "1";
 
-    items.push({ ean, description, qty, cantReal, isDone, price, descMedioPago, isControlled });
+    items.push({ ean, description, qty, cantReal, price, descMedioPago, isControlled });
   }
 
   return items;
@@ -85,8 +87,6 @@ export default function ImportOrder() {
   const nav = useNavigate();
 
   const preview = useMemo(() => parseLines(raw), [raw]);
-  const doneCount    = preview.filter((it) => it.isDone).length;
-  const pendingCount = preview.filter((it) => !it.isDone).length;
 
   async function onImport() {
     setError("");
@@ -99,7 +99,7 @@ export default function ImportOrder() {
     setLoading(true);
     try {
       const res = await apiPost(`/orders/${orderId}/import`, { raw });
-      toastSuccess(`Importado: ${res.done} encontrados, ${res.pending} pendientes`);
+      toastSuccess(`Importado: ${res.count} productos`);
       nav(`/order/${orderId}`);
     } catch (e) {
       const msg = e?.response?.data?.message || e.message || "Error importando";
@@ -117,8 +117,8 @@ export default function ImportOrder() {
       <div>
         <h1 className="text-xl font-semibold">Importar pedido</h1>
         <p className="text-xs text-gray-500 mt-1">
-          Copiá la tabla desde el sistema y pegala acá. Las columnas deben estar
-          separadas por TAB (como al copiar desde Excel o una tabla web).
+          Copiá la tabla del pedido cerrado y pegala acá. Solo se importan los productos
+          con Cant Real &gt; 0 (los que realmente se entregaron).
         </p>
       </div>
 
@@ -138,7 +138,7 @@ export default function ImportOrder() {
             loading
               ? "Importando..."
               : preview.length > 0
-                ? `Importar · ${doneCount} encontrados, ${pendingCount} pendientes`
+                ? `Importar ${preview.length} producto${preview.length !== 1 ? "s" : ""}`
                 : "Importar"
           }
           size="md"
@@ -163,27 +163,14 @@ export default function ImportOrder() {
           <div className="font-semibold">Vista previa</div>
           <div className="text-xs text-gray-500">
             {preview.length === 0
-              ? "Pegá la tabla arriba para ver los ítems detectados"
-              : `${preview.length} ítem${preview.length !== 1 ? "s" : ""} · ${doneCount} encontrados · ${pendingCount} pendientes`}
+              ? "Pegá la tabla arriba — solo aparecen productos con Cant Real > 0"
+              : `${preview.length} producto${preview.length !== 1 ? "s" : ""} detectado${preview.length !== 1 ? "s" : ""} (todos entregados)`}
           </div>
         </div>
 
-        {preview.length > 0 && (
-          <div className="px-4 py-2 border-b bg-gray-50 flex gap-4 text-[11px] text-gray-500">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm bg-green-100 border border-green-300"/>
-              Encontrado (C.Real &gt; 0)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-3 rounded-sm bg-gray-100 border border-gray-300"/>
-              Pendiente (C.Real = 0)
-            </span>
-          </div>
-        )}
-
         {preview.length === 0 ? (
           <div className="p-4 text-sm text-gray-500 text-center">
-            Todavía no hay ítems detectados.
+            Todavía no hay productos detectados.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -201,18 +188,13 @@ export default function ImportOrder() {
               </thead>
               <tbody>
                 {preview.map((it, idx) => (
-                  <tr
-                    key={`${it.ean}-${idx}`}
-                    className={`border-t ${it.isDone ? "bg-green-50" : "bg-gray-50/40"}`}
-                  >
+                  <tr key={`${it.ean}-${idx}`} className="border-t bg-green-50">
                     <td className="px-3 py-2 font-mono text-gray-600">{it.ean}</td>
                     <td className="px-3 py-2 max-w-[160px]">
                       <div className="truncate" title={it.description}>{it.description}</div>
                     </td>
-                    <td className="px-3 py-2 text-right font-semibold">{it.qty}</td>
-                    <td className={`px-3 py-2 text-right font-semibold ${it.isDone ? "text-green-700" : "text-gray-400"}`}>
-                      {it.cantReal > 0 ? it.cantReal : <span className="text-gray-300">—</span>}
-                    </td>
+                    <td className="px-3 py-2 text-right text-gray-500">{it.qty}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-green-700">{it.cantReal}</td>
                     <td className="px-3 py-2 text-right text-gray-600">{fmt(it.price)}</td>
                     <td className="px-3 py-2 text-center">
                       {it.descMedioPago
