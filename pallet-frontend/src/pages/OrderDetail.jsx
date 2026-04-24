@@ -184,6 +184,10 @@ export default function OrderDetail() {
   // null | { item, newStatus, newQty, totalOrganized, deficit, keepQtys:{[base_id]:qty}, saving }
   const [qtyConflict, setQtyConflict] = useState(null);
 
+  // modal reabrir pallet para organizar (cuando el pallet está done)
+  // null | { pallet, reopening }
+  const [reopenModal, setReopenModal] = useState(null);
+
   // desvincular pallet
   const [detachingPallet, setDetachingPallet] = useState(null);
   const [confirmDetachPallet, setConfirmDetachPallet] = useState(null);
@@ -460,6 +464,28 @@ export default function OrderDetail() {
   }
 
   // ── Organizar en pallet ───────────────────────────────────────────────────
+
+  /** Reabre el pallet y luego abre el modal de organización */
+  async function reopenAndOrganize() {
+    if (!reopenModal) return;
+    const p = reopenModal.pallet;
+    setReopenModal((prev) => prev && { ...prev, reopening: true });
+    try {
+      await apiPost(`/pallets/${p.id}/reopen`);
+      // Actualización optimista: marcar el pallet como open en el estado local
+      setPallets((prev) =>
+        prev.map((pl) => (pl.id === p.id ? { ...pl, status: "open" } : pl))
+      );
+      toastSuccess("Pallet reabierto");
+      setReopenModal(null);
+      openOrganizeModal({ ...p, status: "open" });
+      load(); // refrescar en segundo plano
+    } catch (e) {
+      toastError(e?.response?.data?.message || e.message || "Error reabriendo pallet");
+      setReopenModal((prev) => prev && { ...prev, reopening: false });
+    }
+  }
+
   async function openOrganizeModal(pallet) {
     setOrganizeModal({ palletId: pallet.id, palletCode: pallet.code, step: "base", bases: [], selectedBase: null, quantities: {}, loading: true, saving: false });
     try {
@@ -686,36 +712,56 @@ export default function OrderDetail() {
         {pallets.length > 0 && (
           <div className="flex flex-col gap-2">
             <div className="text-sm text-gray-500">Pallets asociados:</div>
-            {pallets.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-2 bg-light-gray rounded-xl p-2"
-              >
-                <Link
-                  to={`/pallet/${p.id}`}
-                  className="flex-1 text-sm text-left text-gray-800 font-semibold hover:underline"
+            {pallets.map((p) => {
+              const isPalletDone = p.status === "done";
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-2 bg-light-gray rounded-xl p-2"
                 >
-                  {p.code}
-                </Link>
-                {order?.status !== "done" && modalItems.length > 0 && (
-                  <button
-                    onClick={() => openOrganizeModal(p)}
-                    className="px-2 py-1 text-xs bg-gray-900 text-white rounded-lg font-medium active:scale-[0.98]"
-                  >
-                    📦 Organizar
-                  </button>
-                )}
-                {order?.status !== "done" && (
-                  <button
-                    onClick={() => setConfirmDetachPallet(p)}
-                    disabled={detachingPallet === p.id}
-                    className="px-2 py-1 text-xs bg-red-600 text-white border border-red-300 rounded hover:bg-red-50 disabled:opacity-50"
-                  >
-                    Desvincular
-                  </button>
-                )}
-              </div>
-            ))}
+                  <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                    <Link
+                      to={`/pallet/${p.id}`}
+                      className="text-sm text-gray-800 font-semibold hover:underline truncate"
+                    >
+                      {p.code}
+                    </Link>
+                    {isPalletDone && (
+                      <span className="flex-shrink-0 text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full font-medium">
+                        🔒 cerrado
+                      </span>
+                    )}
+                  </div>
+
+                  {order?.status !== "done" && modalItems.length > 0 && (
+                    <button
+                      onClick={() =>
+                        isPalletDone
+                          ? setReopenModal({ pallet: p, reopening: false })
+                          : openOrganizeModal(p)
+                      }
+                      className={`px-2 py-1 text-xs rounded-lg font-medium active:scale-[0.98] flex-shrink-0 ${
+                        isPalletDone
+                          ? "bg-gray-200 text-gray-600"
+                          : "bg-gray-900 text-white"
+                      }`}
+                    >
+                      {isPalletDone ? "🔒 Organizar" : "📦 Organizar"}
+                    </button>
+                  )}
+
+                  {order?.status !== "done" && (
+                    <button
+                      onClick={() => setConfirmDetachPallet(p)}
+                      disabled={detachingPallet === p.id}
+                      className="px-2 py-1 text-xs bg-red-600 text-white border border-red-300 rounded hover:bg-red-50 disabled:opacity-50 flex-shrink-0"
+                    >
+                      Desvincular
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1080,6 +1126,41 @@ export default function OrderDetail() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal reabrir pallet para organizar ──────────────────────────────── */}
+      {reopenModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl p-6 space-y-4">
+            <div className="text-center space-y-2">
+              <div className="text-4xl">🔒</div>
+              <p className="font-bold text-lg">Pallet finalizado</p>
+              <p className="text-sm text-gray-600 leading-snug">
+                <span className="font-semibold font-mono">{reopenModal.pallet.code}</span>{" "}
+                está cerrado. Para organizar productos necesitás reabrirlo.
+              </p>
+              <p className="text-xs text-gray-400">
+                Podés volver a finalizarlo después de hacer los cambios.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setReopenModal(null)}
+                disabled={reopenModal.reopening}
+                className="flex-1 rounded-xl py-3 border text-sm text-gray-600 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={reopenAndOrganize}
+                disabled={reopenModal.reopening}
+                className="flex-1 rounded-xl py-3 bg-green-600 text-white text-sm font-semibold disabled:opacity-60"
+              >
+                {reopenModal.reopening ? "Reabriendo…" : "Reabrir y organizar"}
+              </button>
+            </div>
           </div>
         </div>
       )}

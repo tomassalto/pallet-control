@@ -278,6 +278,10 @@ class PalletBaseController extends Controller
             return response()->json(['message' => 'Base no encontrada en este pallet'], 404);
         }
 
+        if ($sourcePallet->status === 'done') {
+            return response()->json(['message' => 'El pallet está finalizado. Reabrilo antes de migrar productos.'], 422);
+        }
+
         $data = $request->validate([
             'items'                  => ['required', 'array', 'min:1'],
             'items.*.order_item_id'  => ['required', 'integer', 'exists:order_items,id'],
@@ -410,6 +414,10 @@ class PalletBaseController extends Controller
     {
         if ($base->pallet_id !== $pallet->id) {
             return response()->json(['message' => 'Base no encontrada en este pallet'], 404);
+        }
+
+        if ($pallet->status === 'done') {
+            return response()->json(['message' => 'El pallet está finalizado. Reabrilo antes de modificar sus bases.'], 422);
         }
 
         $data = $request->validate([

@@ -350,6 +350,30 @@ export default function PalletDetail() {
     });
   }
 
+  /** Muestra confirmación para reabrir el pallet y, si acepta, ejecuta onConfirmed */
+  function confirmReopenThen(onConfirmed) {
+    setConfirmModal({
+      title: "Pallet finalizado",
+      message:
+        "Este pallet está cerrado. ¿Querés reabrirlo para poder hacer cambios? Podés volver a finalizarlo después.",
+      confirmText: "Reabrir y continuar",
+      cancelText: "Cancelar",
+      confirmColor: "green",
+      onConfirm: async () => {
+        try {
+          await apiPost(`/pallets/${palletId}/reopen`);
+          toastSuccess("Pallet reabierto");
+          await load();
+          onConfirmed();
+        } catch (e) {
+          toastError(
+            e.response?.data?.message || e.message || "Error reabriendo pallet"
+          );
+        }
+      },
+    });
+  }
+
   async function handleDeletePallet() {
     setConfirmModal({
       title: "Eliminar pallet",
@@ -396,6 +420,8 @@ export default function PalletDetail() {
       </div>
     );
   }
+  const palletDone = pallet.status === "done";
+
   return (
     <div className="space-y-2">
       <div className="flex justify-start">
@@ -601,10 +627,18 @@ export default function PalletDetail() {
                   </Link>
                   {(base.order_items?.length || 0) > 0 && (
                     <button
-                      onClick={() => openMigrateModal(base)}
-                      className="col-span-2 rounded-lg py-2.5 border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 active:scale-[0.99] text-sm font-medium"
+                      onClick={() =>
+                        palletDone
+                          ? confirmReopenThen(() => openMigrateModal(base))
+                          : openMigrateModal(base)
+                      }
+                      className={`col-span-2 rounded-lg py-2.5 border active:scale-[0.99] text-sm font-medium ${
+                        palletDone
+                          ? "border-gray-300 bg-gray-50 text-gray-500 hover:bg-gray-100"
+                          : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                      }`}
                     >
-                      🔀 Migrar productos
+                      {palletDone ? "🔒 Migrar productos (pallet cerrado)" : "🔀 Migrar productos"}
                     </button>
                   )}
                 </div>
