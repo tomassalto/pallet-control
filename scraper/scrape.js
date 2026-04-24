@@ -120,20 +120,73 @@ async function login(page) {
 
   // Paso 2: click "Ingresar" (top right)
   console.log("   → Click 'Ingresar'");
-  await page.locator('a:has-text("Ingresar"), button:has-text("Ingresar"), span:has-text("Ingresar")').first().click();
-  await sleep(1500);
+  // Volcar el HTML de la página para debug
+  fs.writeFileSync(path.join(__dirname, "debug-page0.html"), await page.content());
 
-  // Screenshot para debug
-  await page.screenshot({ path: path.join(__dirname, "debug-step1.png") });
+  // Intentar distintos selectores para el botón "Ingresar" del header
+  const ingresarSelectors = [
+    'a:has-text("Ingresar")',
+    'button:has-text("Ingresar")',
+    'span:has-text("Ingresar")',
+    '[class*="login"]:has-text("Ingresar")',
+    '[class*="ingresar"]',
+    '[href*="login"]',
+  ];
+  let clickedIngresar = false;
+  for (const sel of ingresarSelectors) {
+    try {
+      const el = page.locator(sel).first();
+      if (await el.count() > 0) {
+        await el.click({ timeout: 5000 });
+        console.log(`   → 'Ingresar' clickeado con selector: ${sel}`);
+        clickedIngresar = true;
+        break;
+      }
+    } catch (_) {}
+  }
+  if (!clickedIngresar) {
+    console.log("   ⚠️  No se encontró el botón Ingresar — intentando con click en coordenadas...");
+    await page.mouse.click(1450, 55); // posición aproximada del botón en 1280x800
+  }
+  await sleep(2000);
+
+  // Screenshot + HTML tras click en Ingresar
+  await page.screenshot({ path: path.join(__dirname, "debug-step1.png"), fullPage: false });
+  fs.writeFileSync(path.join(__dirname, "debug-page1.html"), await page.content());
+  console.log("   📸 debug-step1.png guardado");
 
   // Paso 3: click "Comercio o Emprendimiento"
-  // Es una tarjeta con imagen + texto — :has-text() busca en todo el árbol interno
-  console.log("   → Click 'Comercio o Emprendimiento'");
-  // Esperar que aparezca el modal
-  await page.waitForSelector(':has-text("EMPRENDIMIENTO")', { timeout: 10000 });
-  // Buscar el elemento más chico que contenga el texto (la tarjeta en sí)
-  const comercioCard = page.locator('div:has-text("EMPRENDIMIENTO"), button:has-text("EMPRENDIMIENTO")').last();
-  await comercioCard.click();
+  console.log("   → Buscando tarjeta 'Comercio o Emprendimiento'...");
+
+  // Intentar múltiples selectores para la tarjeta
+  const comercioSelectors = [
+    'text=/COMERCIO/i',
+    'text=/EMPRENDIMIENTO/i',
+    ':has-text("EMPRENDIMIENTO")',
+    ':has-text("Comercio")',
+    ':has-text("CUIT")',   // "Ingresá con CUIT o DNI" es texto único de esa tarjeta
+  ];
+  let clickedComercio = false;
+  for (const sel of comercioSelectors) {
+    try {
+      // waitForSelector con timeout corto para ver si existe
+      await page.waitForSelector(sel, { timeout: 3000 });
+      const els = page.locator(sel);
+      const count = await els.count();
+      console.log(`   → Selector "${sel}" encontró ${count} elemento(s)`);
+      if (count > 0) {
+        // Usar el último (normalmente el contenedor más específico)
+        await els.last().click({ timeout: 5000 });
+        console.log(`   ✅ Click en tarjeta Comercio con: ${sel}`);
+        clickedComercio = true;
+        break;
+      }
+    } catch (_) {}
+  }
+  if (!clickedComercio) {
+    console.log("   ❌ No se encontró la tarjeta Comercio. Revisá debug-step1.png y debug-page1.html");
+    throw new Error("No se encontró el botón 'Comercio o Emprendimiento'");
+  }
   await sleep(1500);
 
   await page.screenshot({ path: path.join(__dirname, "debug-step2.png") });
