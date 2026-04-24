@@ -213,17 +213,10 @@ async function login(page) {
   // Paso 6: completar datos de contacto
   console.log("   → Completando datos de contacto...");
 
-  // Nombre y Apellido (placeholder "Ej: Juan Perez")
-  await page.locator('input[placeholder*="Juan" i], input[placeholder*="nombre" i]').first().fill(CARREFOUR_NAME);
-
-  // CUIT / DNI (placeholder "Ej: 30112233440")
-  await page.locator('input[placeholder*="30112" i], input[placeholder*="cuit" i], input[placeholder*="dni" i]').first().fill(CARREFOUR_DNI);
-
-  // Teléfono
-  await page.locator('input[placeholder*="011" i], input[placeholder*="tel" i], input[placeholder*="cel" i]').first().fill(CARREFOUR_PHONE);
-
-  // Email
-  await page.locator('input[placeholder*="email" i], input[placeholder*="mail" i], input[type="email"]').first().fill(CARREFOUR_EMAIL);
+  await page.locator('#user-name,  input[name="name"]').first().fill(CARREFOUR_NAME);
+  await page.locator('#user-cuit,  input[name="numberId"]').first().fill(CARREFOUR_DNI);
+  await page.locator('#user-phone, input[name="phone"]').first().fill(CARREFOUR_PHONE);
+  await page.locator('#user-email, input[name="email"]').first().fill(CARREFOUR_EMAIL);
 
   await page.screenshot({ path: path.join(__dirname, "debug-step5.png") });
 
