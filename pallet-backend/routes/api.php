@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\OrderTicketController;
 use App\Http\Controllers\Api\BotController;
 use App\Http\Controllers\Api\ProductImageController;
+use App\Http\Controllers\Api\PublicPalletController;
 use App\Http\Controllers\Api\TelegramBotController;
 use App\Http\Controllers\Api\UserController;
 
@@ -33,6 +34,9 @@ Route::prefix('v1')->group(function () {
 
     // Producto por EAN — lectura pública (no requiere auth)
     Route::get('/products/by-ean/{ean}', [ProductController::class, 'showByEan']);
+
+    // Vista pública de pallet (QR) — no requiere auth
+    Route::get('/public/pallets/{code}', [PublicPalletController::class, 'show']);
 
     // Telegram webhook (sin auth Sanctum, valida X-Telegram-Bot-Api-Secret-Token)
     Route::post('/telegram/webhook', [TelegramBotController::class, 'webhook']);
