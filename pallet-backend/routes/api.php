@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\ProductImageController;
 use App\Http\Controllers\Api\PublicPalletController;
 use App\Http\Controllers\Api\TelegramBotController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\PendingItemController;
 
 Route::prefix('v1')->group(function () {
     // Ruta del bot de WhatsApp (sin auth Sanctum, usa X-Bot-Secret)
@@ -131,6 +132,14 @@ Route::prefix('v1')->group(function () {
 
             // Activity Logs
             Route::get('/activity-logs', [ActivityLogController::class, 'index']);
+
+            // Pending Items
+            // IMPORTANTE: summary debe ir ANTES de la ruta dinámica {pendingItem}
+            Route::get('/pending-items/summary', [PendingItemController::class, 'summary']);
+            Route::get('/pending-items', [PendingItemController::class, 'index']);
+            Route::post('/pending-items', [PendingItemController::class, 'store']);
+            Route::patch('/pending-items/{pendingItem}', [PendingItemController::class, 'update']);
+            Route::delete('/pending-items/{pendingItem}', [PendingItemController::class, 'destroy']);
 
         }); // end has.role
 

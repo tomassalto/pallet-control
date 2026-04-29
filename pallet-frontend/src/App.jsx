@@ -24,6 +24,7 @@ import OrderHistory from "./pages/OrderHistory";
 import AllLogs from "./pages/AllLogs";
 import AdminUsers from "./pages/AdminUsers";
 import PalletPublicView from "./pages/PalletPublicView";
+import Pendientes from "./pages/Pendientes";
 
 export default function App() {
   const { dark } = useTheme();
@@ -66,6 +67,7 @@ export default function App() {
                 <Route path="/order/:orderId/history" element={<RequireAuth><OrderHistory /></RequireAuth>} />
                 <Route path="/productos" element={<RequireAuth><ProductLookup /></RequireAuth>} />
                 <Route path="/logs" element={<RequireAuth><AllLogs /></RequireAuth>} />
+                <Route path="/pending-items" element={<RequireAuth><Pendientes /></RequireAuth>} />
                 <Route path="/admin/users" element={<RequireAuth><AdminUsers /></RequireAuth>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

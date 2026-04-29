@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { apiGet } from "../api/client";
 
 function cx(...arr) {
   return arr.filter(Boolean).join(" ");
@@ -13,6 +14,7 @@ const NAV_ICON = {
   "/pallets": "📦",
   "/orders": "🗒️",
   "/clients": "👤",
+  "/pending-items": "🚨",
   "/productos": "🔍",
   "/logs": "📋",
   "/admin/users": "👥",
@@ -25,6 +27,7 @@ export default function SidebarLayout({ title = "Pallet Control", children }) {
   const { user, logout } = useAuth() || {};
   const { dark, toggle } = useTheme();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -35,6 +38,14 @@ export default function SidebarLayout({ title = "Pallet Control", children }) {
 
   const isPending = user && user.role === null;
 
+  // Fetch pending items count — se actualiza al cambiar de página
+  useEffect(() => {
+    if (!user || isPending) return;
+    apiGet("/pending-items/summary")
+      .then((d) => setPendingCount(d.pending_count ?? 0))
+      .catch(() => {});
+  }, [pathname, user, isPending]);
+
   const items = useMemo(
     () => [
       { to: "/", label: "Inicio" },
@@ -42,6 +53,7 @@ export default function SidebarLayout({ title = "Pallet Control", children }) {
       { to: "/pallets", label: "Mis pallets" },
       { to: "/orders", label: "Mis pedidos" },
       { to: "/clients", label: "Mis clientes" },
+      { to: "/pending-items", label: "Pendientes" },
       { to: "/productos", label: "Buscar producto" },
       { to: "/logs", label: "Logs" },
       ...(["admin", "superadmin"].includes(user?.role)
@@ -120,7 +132,12 @@ export default function SidebarLayout({ title = "Pallet Control", children }) {
                 <span className="text-base leading-none w-5 text-center select-none">
                   {icon}
                 </span>
-                <span>{it.label}</span>
+                <span className="flex-1">{it.label}</span>
+                {it.to === "/pending-items" && pendingCount > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
+                    {pendingCount}
+                  </span>
+                )}
               </Link>
             );
           })}

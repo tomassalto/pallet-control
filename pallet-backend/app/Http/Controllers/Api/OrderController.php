@@ -25,6 +25,16 @@ class OrderController extends Controller
             $q->where('customer_id', $request->integer('customer_id'));
         }
 
+        // Búsqueda por código (para modales/autocomplete)
+        if ($request->filled('search')) {
+            $q->where('code', 'like', '%' . $request->string('search') . '%');
+        }
+
+        // Respuesta simple sin paginar (para autocomplete)
+        if ($request->filled('limit')) {
+            return $q->limit($request->integer('limit'))->get();
+        }
+
         return $q->paginate(20);
     }
 

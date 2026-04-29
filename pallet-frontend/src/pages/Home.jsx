@@ -13,12 +13,17 @@ export default function Home() {
   const canWrite = user?.role !== null && user?.role !== undefined;
   const [loading, setLoading] = useState(true);
   const [lastOpenOrder, setLastOpenOrder] = useState(null);
+  const [pendingCount, setPendingCount] = useState(0);
 
   async function load() {
     setLoading(true);
     try {
-      const orderData = await apiGet("/orders/last-open");
-      setLastOpenOrder(orderData?.order || null);
+      const [orderData, summaryData] = await Promise.allSettled([
+        apiGet("/orders/last-open"),
+        apiGet("/pending-items/summary"),
+      ]);
+      setLastOpenOrder(orderData.value?.order || null);
+      setPendingCount(summaryData.value?.pending_count ?? 0);
     } catch {
       setLastOpenOrder(null);
     } finally {
@@ -49,6 +54,35 @@ export default function Home() {
           </p>
         </div>
       </div>
+
+      {/* ── Alerta pendientes ────────────────────────────────────────── */}
+      {pendingCount > 0 && (
+        <Link
+          to="/pending-items"
+          className="flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-2xl px-4 py-3 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+        >
+          <span className="text-2xl flex-shrink-0">🚨</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-red-700 dark:text-red-400">
+              {pendingCount === 1
+                ? "1 pendiente sin resolver"
+                : `${pendingCount} pendientes sin resolver`}
+            </p>
+            <p className="text-xs text-red-500 dark:text-red-500 mt-0.5 truncate">
+              Hay productos faltantes que todavía no fueron entregados
+            </p>
+          </div>
+          <svg
+            className="w-4 h-4 text-red-400 flex-shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={2.5}
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+      )}
 
       {/* ── Continuar último pedido ──────────────────────────────────── */}
       {lastOpenOrder && (
