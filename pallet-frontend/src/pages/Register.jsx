@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { toastSuccess, toastError } from "../ui/toast";
-import Button from "../ui/Button";
-import Title from "../ui/Title";
+import AuthLayout from "../ui/AuthLayout";
+import Spinner from "../ui/Spinner";
 
 export default function Register() {
   const nav = useNavigate();
@@ -20,7 +20,6 @@ export default function Register() {
       toastError("Las contraseñas no coinciden");
       return;
     }
-
     setLoading(true);
     try {
       const result = await register(name, email, password, password2);
@@ -38,57 +37,65 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-dvh flex flex-col gap-6 items-center justify-center mt-[-50px] mb-[-40px]">
-      <Title size="4xl">Crear cuenta</Title>
+    <AuthLayout>
+      <form onSubmit={onSubmit} className="p-6 flex flex-col gap-4">
+        <h1 className="text-xl font-bold text-gray-900 text-center mb-1">
+          Crear cuenta
+        </h1>
 
-      <form
-        onSubmit={onSubmit}
-        className="bg-white py-6 px-4 border border-border rounded-2xl flex flex-col gap-4 w-full items-center"
-      >
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Nombre"
-          className="w-full px-3 py-3 bg-[#eaeaea]"
-        />
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          type="email"
-          placeholder="Email"
-          className="w-full px-3 py-3 bg-[#eaeaea]"
-        />
-        <input
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          type="password"
-          placeholder="Contraseña"
-          className="w-full px-3 py-3 bg-[#eaeaea]"
-        />
-        <input
-          value={password2}
-          onChange={(e) => setPassword2(e.target.value)}
-          type="password"
-          placeholder="Repetir contraseña"
-          className="w-full px-3 py-3 bg-[#eaeaea]"
-        />
+        <div className="flex flex-col gap-3">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Nombre completo"
+            autoComplete="name"
+            required
+            className="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-shadow"
+          />
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="email"
+            placeholder="Email"
+            autoComplete="email"
+            required
+            className="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-shadow"
+          />
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            type="password"
+            placeholder="Contraseña"
+            autoComplete="new-password"
+            required
+            className="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-shadow"
+          />
+          <input
+            value={password2}
+            onChange={(e) => setPassword2(e.target.value)}
+            type="password"
+            placeholder="Repetir contraseña"
+            autoComplete="new-password"
+            required
+            className="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-shadow"
+          />
+        </div>
 
-        <Button
-          disabled={loading}
-          text={loading ? "Creando..." : "Registrarme"}
-          size="md"
-          color="black"
-          className="w-3/4 rounded-xl"
+        <button
           type="submit"
-        />
-      </form>
+          disabled={loading}
+          className="w-full py-2.5 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2 mt-1"
+        >
+          {loading ? <><Spinner size="sm" /> Creando cuenta…</> : "Registrarme"}
+        </button>
 
-      <div className="text-sm">
-        ¿Ya tenés cuenta?{" "}
-        <Link className="underline" to="/login">
-          Entrar
-        </Link>
-      </div>
-    </div>
+        <p className="text-center text-sm text-gray-500">
+          ¿Ya tenés cuenta?{" "}
+          <Link to="/login" className="text-gray-900 font-medium hover:underline">
+            Entrar
+          </Link>
+        </p>
+      </form>
+    </AuthLayout>
   );
 }

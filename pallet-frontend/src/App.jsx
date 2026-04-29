@@ -3,6 +3,7 @@ import RequireAuth from "./auth/RequireAuth";
 import SidebarLayout from "./ui/SidebarLayout";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { useTheme } from "./context/ThemeContext";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -25,22 +26,30 @@ import AdminUsers from "./pages/AdminUsers";
 import PalletPublicView from "./pages/PalletPublicView";
 
 export default function App() {
+  const { dark } = useTheme();
+
   return (
     <>
+      {/* Toast global — disponible en auth y en app */}
+      <ToastContainer
+        position="top-center"
+        autoClose={3000}
+        theme={dark ? "dark" : "light"}
+        toastClassName="!rounded-xl !text-sm"
+      />
       <Routes>
-        {/* ── Rutas públicas (sin sidebar, sin auth) ─────────────────────── */}
+        {/* ── Sin layout: páginas públicas y auth ────────────────────────── */}
         <Route path="/pallet-view/:code" element={<PalletPublicView />} />
-        {/* Alias con prefijo /app/ — por si el usuario llega con esa URL */}
         <Route path="/app/pallet-view/:code" element={<PalletPublicView />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-        {/* ── Rutas de la app (con sidebar) ──────────────────────────────── */}
+        {/* ── Con sidebar: rutas autenticadas ────────────────────────────── */}
         <Route
           path="*"
           element={
             <SidebarLayout title="Pallet Control">
               <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
                 <Route path="/" element={<RequireAuth><Home /></RequireAuth>} />
                 <Route path="/pallets/new" element={<RequireAuth><CreatePallet /></RequireAuth>} />
                 <Route path="/orders/new" element={<RequireAuth><CreateOrder /></RequireAuth>} />
@@ -60,7 +69,6 @@ export default function App() {
                 <Route path="/admin/users" element={<RequireAuth><AdminUsers /></RequireAuth>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
-              <ToastContainer />
             </SidebarLayout>
           }
         />

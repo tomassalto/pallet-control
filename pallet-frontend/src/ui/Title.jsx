@@ -18,16 +18,17 @@ const SIZE_CLASSES = {
 
 export default function Title({
   children,
-  size = "lg",
-  className = "",
+  size = "",
+  className = "text-4xl lg:text-5xl",
   as: Component = "h1",
 }) {
-  const sizeClass = SIZE_CLASSES[size] || SIZE_CLASSES.lg;
+  // size prop solo aplica si se pasa explícitamente; si no, className controla el tamaño
+  const sizeClass = size ? SIZE_CLASSES[size] : "";
 
   return (
     <Component
       className={clsx(
-        " font-['Montserrat'] font-semibold text-center",
+        "font-['Montserrat'] font-semibold text-center",
         sizeClass,
         className,
       )}

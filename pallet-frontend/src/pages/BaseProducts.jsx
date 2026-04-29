@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { apiGet, apiPatch } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
 import BackButton from "../ui/BackButton";
-import Title from "../ui/Title";
+import { PageSpinner } from "../ui/Spinner";
 
 // Thumbnail con fallback al emoji 📦
 function ProductImage({ src, alt }) {
@@ -133,7 +133,7 @@ export default function BaseProducts() {
   }
 
   // ── Estados de carga ───────────────────────────────────────────────────────
-  if (loading) return <p className="text-sm text-gray-500 p-4">Cargando…</p>;
+  if (loading) return <PageSpinner />;
 
   if (error || !base) {
     return (
@@ -155,16 +155,22 @@ export default function BaseProducts() {
       <BackButton to={`/pallet/${palletId}`} />
 
       {/* Header */}
-      <div className="bg-white border rounded-2xl p-4 space-y-0.5">
-        <Title size="2xl">{pallet?.code}</Title>
-        <p className="text-gray-600 font-semibold text-lg">
+      <div className="space-y-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+          {pallet?.code}
+        </p>
+        <h1 className="font-semibold text-2xl md:text-3xl text-gray-900 dark:text-white leading-tight">
           {base.name || `Base #${base.id}`}
+        </h1>
+        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+          Productos asignados
         </p>
       </div>
 
       {palletDone && (
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-xl p-3 text-sm">
-          Este pallet está finalizado. Solo lectura.
+        <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-300 rounded-2xl px-4 py-3 text-sm">
+          <span>🔒</span>
+          <span>Este pallet está finalizado — solo lectura.</span>
         </div>
       )}
 

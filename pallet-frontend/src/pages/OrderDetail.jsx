@@ -9,6 +9,9 @@ import PhotoViewer from "../ui/PhotoViewer";
 import QRModal from "../ui/QRModal";
 import OrganizeModal from "../Components/OrganizeModal";
 import QtyConflictModal from "../Components/QtyConflictModal";
+import { PageSpinner } from "../ui/Spinner";
+import { StatusBadge } from "../ui/EntityCard";
+import { ActionItem, Icons } from "../ui/ActionList";
 
 function onlyDigits(v) {
   return (v || "").replace(/\D/g, "");
@@ -33,11 +36,11 @@ function ItemCard({
   return (
     <button
       onClick={onSelect}
-      className={`w-full text-left rounded-xl border ${borderColor} ${bgColor} text-black px-3 py-3 text-sm active:scale-[0.99]`}
+      className={`w-full text-left rounded-xl border ${borderColor} ${bgColor} dark:bg-gray-800/70 dark:border-gray-700 text-gray-900 dark:text-gray-100 px-3 py-3 text-sm active:scale-[0.99]`}
     >
       <div className="flex items-center justify-between gap-3">
         {/* Imagen del producto */}
-        <div className="w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200">
+        <div className="w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 flex items-center justify-center border border-gray-200 dark:border-gray-600">
           {it.image_url && !imgErr ? (
             <img
               src={it.image_url}
@@ -51,7 +54,7 @@ function ItemCard({
         </div>
 
         <div className="flex flex-col gap-1 flex-1 min-w-0">
-          <div className="text-[10px] text-gray-500">EAN</div>
+          <div className="text-[10px] text-gray-500 dark:text-gray-400">EAN</div>
           <div className="font-mono font-semibold text-lg">{shortEan}</div>
 
           <div className={`text-sm ${textClass(it.status)} wrap-break-word`}>
@@ -61,17 +64,17 @@ function ItemCard({
           {/* Badges: precio, descuento MP, controlado */}
           <div className="flex flex-wrap gap-1 mt-0.5">
             {it.price != null && (
-              <span className="text-[10px] text-gray-500 font-mono">
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
                 ${Number(it.price).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
               </span>
             )}
             {it.desc_medio_pago != null && (
-              <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+              <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-medium">
                 💳 -{Number(it.desc_medio_pago).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
               </span>
             )}
             {it.is_controlled && (
-              <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-medium">
+              <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded font-medium">
                 Controlado
               </span>
             )}
@@ -80,11 +83,11 @@ function ItemCard({
           {/* Ubicaciones del producto - solo mostrar si está marcado como "listo" */}
           {it.status === "done" && it.locations && it.locations.length > 0 && (
             <div className="mt-2 space-y-1">
-              <div className="text-[10px] text-gray-500">Ubicación:</div>
+              <div className="text-[10px] text-gray-500 dark:text-gray-400">Ubicación:</div>
               {it.locations.map((loc, idx) => (
                 <div
                   key={idx}
-                  className="text-xs text-gray-600 bg-gray-100 rounded px-2 py-1"
+                  className="text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700/60 rounded px-2 py-1"
                 >
                   <Link
                     to={`/pallet/${loc.pallet_id}`}
@@ -133,7 +136,17 @@ function ItemCard({
   );
 }
 
-// Miniatura con fallback 📦 (sin hooks externos, cada instancia tiene su estado)
+// ── Estilos de botón compartidos ─────────────────────────────────────────
+const SEC_LABEL = "text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500";
+const BTN_SEC   = "flex items-center justify-center w-full py-3 px-4 rounded-xl bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors";
+const BTN_PRI   = "w-full py-3 px-4 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-semibold hover:bg-gray-700 dark:hover:bg-gray-100 disabled:opacity-40 transition-colors";
+const BTN_GREEN = "w-full py-3 px-4 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors";
+
+function orderStatusBadge(status) {
+  if (status === "done")   return { label: "Completo",   color: "green" };
+  if (status === "paused") return { label: "Pausado",    color: "amber" };
+  return                          { label: "En proceso", color: "blue"  };
+}
 
 export default function OrderDetail() {
   const { orderId } = useParams();
@@ -566,7 +579,7 @@ export default function OrderDetail() {
     return "border-gray-200";
   }
 
-  if (loading) return <div className="text-sm text-gray-600">Cargando…</div>;
+  if (loading) return <PageSpinner />;
 
   if (error) {
     return (
@@ -586,70 +599,77 @@ export default function OrderDetail() {
       {/* Modal asociar pallet */}
       {openAttachPallet && (
         <div className="fixed inset-0 z-50 bg-black/60 p-4 flex items-center justify-center">
-          <div className="w-full max-w-md bg-white rounded-2xl p-4 max-h-[80vh] flex flex-col">
+          <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl p-4 max-h-[80vh] flex flex-col shadow-2xl">
+            {/* Header */}
             <div className="flex items-center justify-between mb-4">
-              <div className="font-semibold text-lg">Asociar a pallet</div>
+              <h2 className="font-bold text-lg text-gray-900 dark:text-white">Asociar a pallet</h2>
               <button
                 onClick={() => setOpenAttachPallet(false)}
-                className="px-3 py-2 border rounded-lg text-sm"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
-                Cerrar
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
-            {/* Botón crear pallet nuevo */}
+            {/* Crear pallet nuevo */}
             <div className="mb-4">
               <button
                 onClick={async () => {
                   try {
                     const pallet = await apiPost(`/pallets`, { note: null });
                     toastSuccess(`Pallet creado: ${pallet.code}`);
-                    // Asociar el pallet recién creado al pedido
                     await onAttachPallet(pallet.id);
                   } catch (e) {
-                    toastError(
-                      e?.data?.message || e?.message || "Error creando pallet",
-                    );
+                    toastError(e?.data?.message || e?.message || "Error creando pallet");
                   }
                 }}
-                className="w-full bg-black text-white rounded-xl p-3 text-sm font-medium active:scale-[0.99]"
+                className="w-full flex items-center justify-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl py-3 text-sm font-bold hover:bg-gray-700 dark:hover:bg-gray-100 active:scale-[0.99] transition-all"
               >
-                + Crear pallet nuevo
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Crear pallet nuevo
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            {/* Lista de pallets */}
+            <div className="flex-1 overflow-y-auto space-y-2">
               {loadingPallets ? (
-                <div className="text-sm text-gray-600 text-center py-8">
-                  Cargando pallets...
-                </div>
+                <PageSpinner />
               ) : availablePallets.length === 0 ? (
-                <div className="text-sm text-gray-600 text-center py-8">
+                <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
                   No hay pallets disponibles para asociar
                 </div>
               ) : (
                 <>
-                  <div className="text-xs text-gray-500 mb-2">
-                    Pallets existentes:
-                  </div>
-                  <div className="space-y-2">
-                    {availablePallets.map((pallet) => (
-                      <button
-                        key={pallet.id}
-                        onClick={() => onAttachPallet(pallet.id)}
-                        className="w-full text-left bg-white border rounded-xl p-4 hover:bg-gray-50 active:scale-[0.99]"
-                      >
-                        <div className="text-xs text-gray-500">Código</div>
-                        <div className="font-mono font-semibold">
-                          {pallet.code}
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">
+                    Pallets existentes
+                  </p>
+                  {availablePallets.map((pallet) => (
+                    <button
+                      key={pallet.id}
+                      onClick={() => onAttachPallet(pallet.id)}
+                      className="relative w-full text-left bg-white dark:bg-gray-700/60 border border-gray-200 dark:border-gray-600/50 rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] active:shadow-none transition-all duration-150"
+                    >
+                      {/* Acento izquierdo */}
+                      <div className={`absolute left-0 top-0 bottom-0 w-1 ${pallet.status === "done" ? "bg-green-500" : "bg-blue-500"}`} />
+                      <div className="pl-4 pr-3 py-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-mono font-bold text-gray-900 dark:text-white">
+                            {pallet.code}
+                          </p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 capitalize">
+                            {pallet.status === "done" ? "✓ Completo" : "En proceso"}
+                          </p>
                         </div>
-                        <div className="mt-2 text-xs text-gray-500">Estado</div>
-                        <div className="capitalize text-sm font-medium">
-                          {pallet.status}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                        <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </button>
+                  ))}
                 </>
               )}
             </div>
@@ -658,31 +678,23 @@ export default function OrderDetail() {
       )}
 
       {pallets.length > 0 ? (
-        <div className="flex justify-start">
-          <BackButton to={`/pallet/${pallets[0].id}`} />
-        </div>
+        <BackButton to={`/pallet/${pallets[0].id}`} />
       ) : (
-        <div className="flex justify-start">
-          <BackButton to="/" />
-        </div>
+        <BackButton to="/" />
       )}
 
-      <div className="bg-white border border-border rounded-2xl p-4 flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
-          <Title size="3xl">Pedido #{order?.code}</Title>
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div className="space-y-2.5">
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="font-mono font-bold text-2xl md:text-3xl text-gray-900 dark:text-white leading-tight">
+            Pedido #{order?.code}
+          </h1>
           <button
             onClick={() => setShowQR(true)}
             title="Ver QR del pedido"
-            className="shrink-0 p-2 rounded-xl border border-gray-200 hover:bg-gray-50 active:scale-95 transition-transform"
+            className="shrink-0 p-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-6 h-6 text-gray-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.8}
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <rect x="3" y="3" width="7" height="7" rx="1" />
               <rect x="14" y="3" width="7" height="7" rx="1" />
               <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -691,144 +703,133 @@ export default function OrderDetail() {
           </button>
         </div>
 
+        {order && (() => { const b = orderStatusBadge(order.status); return <StatusBadge label={b.label} color={b.color} />; })()}
+
+        {/* Pallets asociados como chips */}
         {pallets.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <div className="text-sm text-gray-500">Pallets asociados:</div>
-            {pallets.map((p) => {
-              const isPalletDone = p.status === "done";
-              return (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-2 bg-light-gray rounded-xl p-2"
-                >
-                  <div className="flex-1 flex items-center gap-1.5 min-w-0">
+          <div className="space-y-2 pt-1">
+            <p className={SEC_LABEL}>Pallets asociados</p>
+            <div className="flex flex-wrap gap-2">
+              {pallets.map((p) => {
+                const isPalletDone = p.status === "done";
+                return (
+                  <div key={p.id} className="inline-flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700/60 rounded-xl px-3 py-1.5">
                     <Link
                       to={`/pallet/${p.id}`}
-                      className="text-sm text-gray-800 font-semibold hover:underline truncate"
+                      className="text-sm font-semibold text-gray-800 dark:text-gray-200 hover:underline font-mono"
                     >
                       {p.code}
                     </Link>
                     {isPalletDone && (
-                      <span className="flex-shrink-0 text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full font-medium">
-                        🔒 cerrado
+                      <span className="text-[10px] bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded-full font-medium">
+                        cerrado
                       </span>
                     )}
+                    {order?.status !== "done" && modalItems.length > 0 && (
+                      <button
+                        onClick={() => isPalletDone ? setReopenModal({ pallet: p, reopening: false }) : openOrganizeModal(p)}
+                        className={`text-[11px] px-2 py-0.5 rounded-lg font-semibold transition-colors ${
+                          isPalletDone
+                            ? "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300"
+                            : "bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-700"
+                        }`}
+                      >
+                        {isPalletDone ? "🔒" : "📦"} Organizar
+                      </button>
+                    )}
+                    {order?.status !== "done" && (
+                      <button
+                        onClick={() => setConfirmDetachPallet(p)}
+                        disabled={detachingPallet === p.id}
+                        className="text-[11px] px-2 py-0.5 rounded-lg font-semibold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 transition-colors"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
-
-                  {order?.status !== "done" && modalItems.length > 0 && (
-                    <button
-                      onClick={() =>
-                        isPalletDone
-                          ? setReopenModal({ pallet: p, reopening: false })
-                          : openOrganizeModal(p)
-                      }
-                      className={`px-2 py-1 text-xs rounded-lg font-medium active:scale-[0.98] flex-shrink-0 ${
-                        isPalletDone
-                          ? "bg-gray-200 text-gray-600"
-                          : "bg-gray-900 text-white"
-                      }`}
-                    >
-                      {isPalletDone ? "🔒 Organizar" : "📦 Organizar"}
-                    </button>
-                  )}
-
-                  {order?.status !== "done" && (
-                    <button
-                      onClick={() => setConfirmDetachPallet(p)}
-                      disabled={detachingPallet === p.id}
-                      className="px-2 py-1 text-xs bg-red-600 text-white border border-red-300 rounded hover:bg-red-50 disabled:opacity-50 flex-shrink-0"
-                    >
-                      Desvincular
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Tickets */}
-      <div className="bg-white flex flex-col gap-2 border p-4 border-border rounded-2xl overflow-hidden">
-        <div className="flex flex-col gap-2 items-center justify-center">
-          <Title size="2xl">Ticket del pedido</Title>
+      {/* ── Tickets ────────────────────────────────────────────────────── */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className={SEC_LABEL}>Ticket del pedido</p>
           {tickets.length === 0 && order?.status !== "done" && (
             <button
               onClick={() => setOpenAddTicket(true)}
-              className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
+              className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
             >
-              Agregar ticket
+              + Agregar
             </button>
           )}
         </div>
         {tickets.length === 0 ? (
-          <div className=" text-sm text-gray-500 text-center">
-            No hay tickets agregados
-          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400 py-1">
+            No hay tickets agregados.
+          </p>
         ) : (
-          <div>
+          <div className="space-y-2">
             {tickets.map((ticket) => (
-              <TicketCard
-                key={ticket.id}
-                ticket={ticket}
-                orderId={orderId}
-                onUpdate={load}
-              />
+              <TicketCard key={ticket.id} ticket={ticket} orderId={orderId} onUpdate={load} />
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Botones de acción */}
-      {order?.status !== "done" ? (
-        <div className="bg-white border border-border rounded-2xl p-2 grid grid-cols-2 gap-2">
-          <Link
-            to={`/order/${orderId}/import`}
-            className="inline-flex items-center justify-center rounded-xl px-3 py-2 bg-light-gray text-black text-sm active:scale-[0.99]"
-          >
-            Importar pedido
-          </Link>
-          <button
-            onClick={() => {
-              setOpenAttachPallet(true);
-              loadAvailablePallets();
-            }}
-            className="inline-flex items-center justify-center rounded-xl px-3 py-2 border border-border bg-light-gray text-black text-sm sh active:scale-[0.99]"
-          >
-            Asociar pallet
-          </button>
-          <button
-            onClick={() => setOpenAddProduct(true)}
-            className="inline-flex items-center justify-center rounded-xl px-3 py-2 border border-border bg-light-gray text-black text-sm active:scale-[0.99]"
-          >
-            Agregar producto
-          </button>
-          <Link
+      {/* ── Acciones ───────────────────────────────────────────────────── */}
+      <section className="space-y-2.5">
+        <p className={SEC_LABEL}>Acciones</p>
+        {order?.status !== "done" ? (
+          <div className="space-y-2">
+            <ActionItem
+              icon={Icons.Import}
+              iconBg="bg-blue-500"
+              label="Importar pedido"
+              sublabel="Cargar productos desde texto copiado"
+              to={`/order/${orderId}/import`}
+            />
+            <ActionItem
+              icon={Icons.Pallet}
+              iconBg="bg-purple-500"
+              label="Asociar pallet"
+              sublabel="Vincular este pedido a un pallet existente"
+              onClick={() => { setOpenAttachPallet(true); loadAvailablePallets(); }}
+            />
+            <ActionItem
+              icon={Icons.Plus}
+              iconBg="bg-green-500"
+              label="Agregar producto"
+              sublabel="Buscar por EAN o últimos 4 dígitos"
+              onClick={() => setOpenAddProduct(true)}
+            />
+            <ActionItem
+              icon={Icons.History}
+              iconBg="bg-gray-500"
+              label="Historial"
+              sublabel="Registro de cambios del pedido"
+              to={`/order/${orderId}/history`}
+            />
+            {order?.status === "open" && canFinalize && (
+              <button onClick={handleFinalize} disabled={finalizing}
+                className="w-full py-3.5 rounded-2xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold disabled:opacity-60 transition-colors mt-1">
+                {finalizing ? "Finalizando…" : "✓ Finalizar pedido"}
+              </button>
+            )}
+          </div>
+        ) : (
+          <ActionItem
+            icon={Icons.History}
+            iconBg="bg-gray-500"
+            label="Ver historial"
+            sublabel="Registro de actividad del pedido"
             to={`/order/${orderId}/history`}
-            className="inline-flex items-center justify-center rounded-xl px-3 py-2 border border-border bg-light-gray text-black text-sm active:scale-[0.99]"
-          >
-            Historial
-          </Link>
-          {order?.status === "open" && canFinalize && (
-            <button
-              onClick={handleFinalize}
-              disabled={finalizing}
-              className="col-span-2 rounded-lg py-2 bg-green-600 text-white text-sm disabled:opacity-60"
-            >
-              {finalizing ? "Finalizando..." : "Finalizar pedido"}
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="flex justify-center items-center">
-          <Link
-            to={`/order/${orderId}/history`}
-            className="inline-flex items-center justify-center w-[100px] rounded-xl px-3 py-2 border bg-white text-sm active:scale-[0.99]"
-          >
-            Historial
-          </Link>
-        </div>
-      )}
+          />
+        )}
+      </section>
 
 
       {/* Modal agregar producto */}
@@ -986,71 +987,56 @@ export default function OrderDetail() {
           </Accordion>
         </div>
       ) : items.length === 0 ? (
-        // Mensaje cuando no hay productos
-        <div className="bg-white border-border rounded-2xl p-8 text-center">
-          <div className="text-gray-600">
-            <div className="font-semibold text-base mb-2">
-              No hay productos en este pedido
-            </div>
-            <div className="text-sm text-gray-500">
-              Importá un pedido para comenzar a utilizar las funciones
-            </div>
-          </div>
+        // Sin productos
+        <div className="text-center py-10 space-y-1">
+          <p className="font-semibold text-gray-700 dark:text-gray-300">No hay productos en este pedido</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Importá un pedido para comenzar.</p>
         </div>
       ) : (
-        // Vista de todos los ítems para pedidos no finalizados
-        <div className="bg-white border border-border rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 flex items-center justify-between">
-            <div className="font-semibold">Productos del pedido</div>
-            <div className="text-xs text-gray-500 space-x-2">
+        // Ítems para pedidos no finalizados
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className={SEC_LABEL}>Productos del pedido</p>
+            <div className="flex gap-2">
               {items.filter((i) => i.status === "pending").length > 0 && (
-                <span className="text-amber-600 font-medium">
+                <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
                   {items.filter((i) => i.status === "pending").length} pend.
                 </span>
               )}
               {items.filter((i) => i.status === "done").length > 0 && (
-                <span className="text-green-600 font-medium">
+                <span className="text-xs font-semibold text-green-600 dark:text-green-400">
                   {items.filter((i) => i.status === "done").length} listos
                 </span>
               )}
               {items.filter((i) => i.status === "removed").length > 0 && (
-                <span className="text-red-500 font-medium">
+                <span className="text-xs font-semibold text-red-500 dark:text-red-400">
                   {items.filter((i) => i.status === "removed").length} quit.
                 </span>
               )}
             </div>
           </div>
 
-          {items.length === 0 ? (
-            <div className="p-4 text-sm text-gray-600">Sin productos.</div>
-          ) : (
-            <div className="p-2 flex flex-col gap-3">
-              {[...items]
-                .sort((a, b) => a.description.localeCompare(b.description))
-                .map((it) => (
-                  <ItemCard
-                    key={it.id}
-                    item={it}
-                    onSelect={() => {
-                      setActionItem(it);
-                      setActionQty(
-                        it.status === "removed" ? "0" : String(it.qty ?? ""),
-                      );
-                    }}
-                    borderColor={rowClass(it.status)}
-                    bgColor="bg-gray-50"
-                  />
-                ))}
-            </div>
-          )}
+          <div className="flex flex-col gap-3">
+            {[...items]
+              .sort((a, b) => a.description.localeCompare(b.description))
+              .map((it) => (
+                <ItemCard
+                  key={it.id}
+                  item={it}
+                  onSelect={() => {
+                    setActionItem(it);
+                    setActionQty(it.status === "removed" ? "0" : String(it.qty ?? ""));
+                  }}
+                  borderColor={rowClass(it.status)}
+                  bgColor="bg-gray-50"
+                />
+              ))}
+          </div>
 
-          <button
-            onClick={load}
-            className="m-4 w-[calc(100%-2rem)] rounded-lg py-2 border text-sm"
-          >
+          <button onClick={load} className={BTN_SEC}>
             Refrescar
           </button>
-        </div>
+        </section>
       )}
 
       {/* Modal acciones ítem */}
@@ -1347,45 +1333,61 @@ function TicketCard({ ticket, orderId, onUpdate }) {
   }
 
   return (
-    <div className="bg-light-gray rounded-lg p-2 w-full flex flex-col gap-2">
-      <div className="flex items-center justify-between w-full">
-        <div className="font-semibold text-sm text-left min-w-[100px]">
-          {ticket.code || "Sin código"}
-        </div>
-        {ticket.note && (
-          <div className="text-xs text-gray-500 text-left flex-1 mx-2">
-            {ticket.note}
-          </div>
-        )}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="text-xs px-2 py-1 bg-[#101652] text-white border rounded hover:bg-gray-50"
-          >
-            {expanded ? "Ocultar" : "Ver fotos"}
-          </button>
-          <button
-            onClick={() => setConfirmDeleteTicket(true)}
-            className="text-xs px-2 py-1 border border-red-300  bg-red-600 text-white rounded hover:bg-red-50"
-          >
-            Eliminar
-          </button>
-        </div>
-      </div>
+    <div className="relative bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-2xl overflow-hidden shadow-sm">
+      {/* Acento izquierdo */}
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500" />
 
-      {expanded && (
-        <div className="space-y-2 mt-2 w-full">
-          <div className="grid grid-cols-2 gap-2 w-full">
+      <div className="pl-5 pr-4 py-3.5 space-y-0">
+        {/* ── Header ─────────────────────────────────────────────── */}
+        <div className="flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="font-mono font-bold text-gray-900 dark:text-white leading-tight">
+              {ticket.code || "Sin código"}
+            </p>
+            {ticket.note && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {ticket.note}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Contador de fotos */}
+            {(ticket.photos?.length || 0) > 0 && (
+              <span className="text-[11px] bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full font-semibold">
+                {ticket.photos.length} foto{ticket.photos.length !== 1 ? "s" : ""}
+              </span>
+            )}
+            {/* Toggle ver fotos */}
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            >
+              {expanded ? "Ocultar" : "Ver fotos"}
+            </button>
+            {/* Eliminar */}
+            <button
+              onClick={() => setConfirmDeleteTicket(true)}
+              className="text-xs px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400 font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              Eliminar
+            </button>
+          </div>
+        </div>
+
+        {/* ── Grilla de fotos ─────────────────────────────────────── */}
+        {expanded && (
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
             {ticket.photos?.map((photo) => {
               const photoUrl = getPhotoUrl(photo);
               return (
                 <div
                   key={photo.id}
-                  className="relative aspect-square rounded-lg overflow-hidden border bg-gray-100 min-h-[120px]"
+                  className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-150"
                 >
                   <button
                     onClick={() => setSelectedPhoto(photo)}
-                    className="w-full h-full flex items-center justify-center"
+                    className="w-full h-full"
                   >
                     <img
                       src={photoUrl}
@@ -1393,24 +1395,28 @@ function TicketCard({ ticket, orderId, onUpdate }) {
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         e.target.style.display = "none";
-                        e.target.parentElement.innerHTML =
-                          '<div class="w-full h-full flex items-center justify-center text-gray-400 text-xs">Error cargando imagen</div>';
+                        e.target.nextSibling.style.display = "flex";
                       }}
                     />
+                    <div className="hidden w-full h-full items-center justify-center text-xs text-gray-500 dark:text-gray-400">
+                      Error cargando
+                    </div>
                   </button>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeletePhoto(photo.id);
-                    }}
-                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10 hover:bg-red-700"
+                    onClick={(e) => { e.stopPropagation(); handleDeletePhoto(photo.id); }}
+                    className="absolute top-1.5 right-1.5 bg-black/50 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10 transition-colors"
                   >
                     ✕
                   </button>
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent text-white text-[10px] px-2 py-1.5">
+                    {new Date(photo.created_at).toLocaleDateString(undefined, { dateStyle: "short" })}
+                  </div>
                 </div>
               );
             })}
-            <label className="relative aspect-square rounded-lg overflow-hidden border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center cursor-pointer hover:bg-gray-100 hover:border-gray-400 active:scale-[0.98] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+
+            {/* Celda para subir foto */}
+            <label className="relative aspect-square rounded-xl overflow-hidden border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/40 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/40 hover:border-gray-400 active:scale-[0.98] transition-colors">
               <input
                 type="file"
                 accept="image/*"
@@ -1418,35 +1424,26 @@ function TicketCard({ ticket, orderId, onUpdate }) {
                 onChange={handleUploadPhoto}
                 disabled={uploading}
               />
-              <div className="flex flex-col items-center justify-center text-gray-400">
-                {uploading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-600 mb-1"></div>
-                    <div className="text-xs text-gray-500">Subiendo...</div>
-                  </>
-                ) : (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-8 w-8"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 4v16m8-8H4"
-                    />
+              {uploading ? (
+                <>
+                  <div className="w-6 h-6 rounded-full border-2 border-gray-400 border-r-transparent animate-spin" />
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500">Subiendo…</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-7 h-7 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zM18.75 10.5h.008v.008h-.008V10.5z" />
                   </svg>
-                )}
-              </div>
+                  <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500">Agregar foto</span>
+                </>
+              )}
             </label>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Modal para ver foto ampliada */}
+      {/* Modal foto ampliada */}
       {selectedPhoto && (
         <PhotoViewer
           photoUrl={getPhotoUrl(selectedPhoto)}
@@ -1462,48 +1459,35 @@ function TicketCard({ ticket, orderId, onUpdate }) {
       {/* Modal confirmar eliminar ticket */}
       {confirmDeleteTicket && (
         <>
-          <div
-            className="fixed inset-0 bg-black/50 z-40"
-            onClick={() => setConfirmDeleteTicket(false)}
-          />
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setConfirmDeleteTicket(false)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div
-              className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="space-y-2">
-                <div className="font-semibold text-lg">¿Eliminar ticket?</div>
-                <div className="text-sm text-gray-700">
-                  Estás por eliminar el ticket{" "}
-                  <span className="font-semibold">
-                    {ticket.code || "Sin código"}
-                  </span>
-                  . Esta acción no se puede deshacer.
-                </div>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="space-y-1.5">
+                <p className="font-bold text-lg text-gray-900 dark:text-white">¿Eliminar ticket?</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Ticket <span className="font-semibold text-gray-900 dark:text-white">{ticket.code || "Sin código"}</span> y todas sus fotos serán eliminados permanentemente.
+                </p>
               </div>
 
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <div className="text-sm text-red-800">
-                  <div className="font-semibold mb-1">ADVERTENCIA:</div>
-                  <div>
-                    Se eliminarán todas las fotos asociadas a este ticket.
-                  </div>
-                </div>
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl p-3.5">
+                <p className="text-sm text-red-800 dark:text-red-300">
+                  <span className="font-semibold">Atención:</span> esta acción no se puede deshacer.
+                </p>
               </div>
 
               <div className="flex gap-2">
                 <button
-                  onClick={handleDeleteTicket}
-                  disabled={deleting}
-                  className="flex-1 rounded-lg py-3 bg-red-600 text-white disabled:opacity-60"
-                >
-                  {deleting ? "Eliminando..." : "Eliminar"}
-                </button>
-                <button
                   onClick={() => setConfirmDeleteTicket(false)}
-                  className="flex-1 rounded-lg py-3 border bg-white text-gray-700 hover:bg-gray-50"
+                  className="flex-1 rounded-xl py-3 border border-gray-200 dark:border-gray-600 bg-white dark:bg-transparent text-gray-700 dark:text-gray-300 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
                   Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteTicket}
+                  disabled={deleting}
+                  className="flex-1 rounded-xl py-3 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-60 transition-colors"
+                >
+                  {deleting ? "Eliminando…" : "Eliminar"}
                 </button>
               </div>
             </div>

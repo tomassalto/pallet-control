@@ -4,12 +4,12 @@ import { apiGet } from "../api/client";
 
 // ── Paleta de colores por pedido ─────────────────────────────────────────────
 const COLORS = [
-  { bg: "bg-blue-50",   border: "border-blue-200",   badge: "bg-blue-600",   dot: "bg-blue-500"   },
-  { bg: "bg-emerald-50",border: "border-emerald-200", badge: "bg-emerald-600",dot: "bg-emerald-500" },
-  { bg: "bg-violet-50", border: "border-violet-200",  badge: "bg-violet-600", dot: "bg-violet-500"  },
-  { bg: "bg-amber-50",  border: "border-amber-200",   badge: "bg-amber-500",  dot: "bg-amber-400"   },
-  { bg: "bg-rose-50",   border: "border-rose-200",    badge: "bg-rose-600",   dot: "bg-rose-500"    },
-  { bg: "bg-cyan-50",   border: "border-cyan-200",    badge: "bg-cyan-600",   dot: "bg-cyan-500"    },
+  { bg: "bg-blue-50 dark:bg-blue-950/40",       border: "border-blue-200 dark:border-blue-800",       badge: "bg-blue-600",    dot: "bg-blue-500",    customer: "text-gray-700 dark:text-blue-200"    },
+  { bg: "bg-emerald-50 dark:bg-emerald-950/40",  border: "border-emerald-200 dark:border-emerald-800",  badge: "bg-emerald-600",  dot: "bg-emerald-500",  customer: "text-gray-700 dark:text-emerald-200"  },
+  { bg: "bg-violet-50 dark:bg-violet-950/40",    border: "border-violet-200 dark:border-violet-800",    badge: "bg-violet-600",   dot: "bg-violet-500",   customer: "text-gray-700 dark:text-violet-200"   },
+  { bg: "bg-amber-50 dark:bg-amber-950/40",      border: "border-amber-200 dark:border-amber-800",      badge: "bg-amber-500",    dot: "bg-amber-400",    customer: "text-gray-700 dark:text-amber-200"    },
+  { bg: "bg-rose-50 dark:bg-rose-950/40",        border: "border-rose-200 dark:border-rose-800",        badge: "bg-rose-600",     dot: "bg-rose-500",     customer: "text-gray-700 dark:text-rose-200"     },
+  { bg: "bg-cyan-50 dark:bg-cyan-950/40",        border: "border-cyan-200 dark:border-cyan-800",        badge: "bg-cyan-600",     dot: "bg-cyan-500",     customer: "text-gray-700 dark:text-cyan-200"     },
 ];
 const color = (idx) => COLORS[idx % COLORS.length];
 
@@ -17,9 +17,9 @@ const color = (idx) => COLORS[idx % COLORS.length];
 function ProductRow({ item, c }) {
   const [err, setErr] = useState(false);
   return (
-    <div className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
+    <div className="flex items-center gap-3 py-2.5 border-b border-gray-100 dark:border-gray-700/50 last:border-0">
       {/* Imagen */}
-      <div className="w-12 h-12 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center">
+      <div className="w-12 h-12 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
         {item.image_url && !err ? (
           <img
             src={item.image_url}
@@ -34,8 +34,10 @@ function ProductRow({ item, c }) {
 
       {/* Descripción */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium leading-snug line-clamp-2">{item.description}</p>
-        <p className="text-xs text-gray-400 mt-0.5 font-mono">{item.ean}</p>
+        <p className="text-sm font-medium leading-snug line-clamp-2 text-gray-900 dark:text-gray-100">
+          {item.description}
+        </p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 font-mono">{item.ean}</p>
       </div>
 
       {/* Cantidad */}
@@ -49,7 +51,6 @@ function ProductRow({ item, c }) {
 
 // ── Lightbox modal ───────────────────────────────────────────────────────────
 function Lightbox({ url, onClose }) {
-  // Cerrar con Escape
   useEffect(() => {
     function onKey(e) { if (e.key === "Escape") onClose(); }
     window.addEventListener("keydown", onKey);
@@ -61,7 +62,6 @@ function Lightbox({ url, onClose }) {
       className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
       onClick={onClose}
     >
-      {/* Botón cerrar */}
       <button
         onClick={onClose}
         className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-xl leading-none transition-colors"
@@ -69,8 +69,6 @@ function Lightbox({ url, onClose }) {
       >
         ✕
       </button>
-
-      {/* Imagen */}
       <img
         src={url}
         alt=""
@@ -98,12 +96,11 @@ function PhotoStrip({ photos }) {
             <img
               src={p.url}
               alt=""
-              className="h-28 w-28 object-cover rounded-2xl border border-gray-200 shadow-sm"
+              className="h-28 w-28 object-cover rounded-2xl border border-gray-200 dark:border-gray-600 shadow-sm"
             />
           </button>
         ))}
       </div>
-
       {selected && <Lightbox url={selected} onClose={() => setSelected(null)} />}
     </>
   );
@@ -125,17 +122,19 @@ function OrderCard({ order, idx }) {
           #{order.code}
         </span>
         {order.customer && (
-          <span className="text-sm text-gray-700 font-medium truncate">{order.customer}</span>
+          <span className={`text-sm font-medium truncate ${c.customer}`}>
+            {order.customer}
+          </span>
         )}
-        <span className="ml-auto text-xs text-gray-400 flex-shrink-0">
+        <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
           {order.items.length} prod.
         </span>
-        <span className="text-gray-400 text-sm">{open ? "▲" : "▼"}</span>
+        <span className="text-gray-400 dark:text-gray-500 text-sm">{open ? "▲" : "▼"}</span>
       </button>
 
       {/* Productos */}
       {open && (
-        <div className="bg-white px-4">
+        <div className="bg-white dark:bg-gray-800 px-4">
           {order.items.length === 0 ? (
             <p className="py-6 text-sm text-gray-400 text-center">Sin productos registrados</p>
           ) : (
@@ -161,13 +160,13 @@ function BaseOrderGroup({ group, idx }) {
           #{group.order_code}
         </span>
         {group.customer && (
-          <span className="text-xs text-gray-500 truncate">{group.customer}</span>
+          <span className={`text-xs truncate ${c.customer}`}>{group.customer}</span>
         )}
-        <span className="ml-auto text-xs text-gray-400 flex-shrink-0">
+        <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
           {group.items.length} prod.
         </span>
       </div>
-      <div className="px-4 bg-white">
+      <div className="px-4 bg-white dark:bg-gray-800">
         {group.items.map((item, i) => (
           <ProductRow key={`${item.ean}-${i}`} item={item} c={c} />
         ))}
@@ -184,11 +183,11 @@ function BaseCard({ base, orderColorMap, baseNum }) {
   const hasItems = totalItems > 0;
 
   return (
-    <div className="rounded-2xl border border-gray-200 overflow-hidden shadow-sm bg-white">
+    <div className="rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm bg-white dark:bg-gray-800">
       {/* Header oscuro de la base */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-4 py-3 bg-gray-800 text-left"
+        className="w-full flex items-center gap-2 px-4 py-3 bg-gray-800 dark:bg-gray-900/80 text-left"
       >
         <span className="text-white text-base">🧱</span>
         <span className="text-white font-bold text-sm">
@@ -204,14 +203,14 @@ function BaseCard({ base, orderColorMap, baseNum }) {
         <>
           {/* Fotos de la base */}
           {hasPhotos && (
-            <div className="px-4 pt-3 pb-2 bg-gray-50 border-b border-gray-100">
+            <div className="px-4 pt-3 pb-2 bg-gray-50 dark:bg-gray-700/30 border-b border-gray-100 dark:border-gray-700">
               <PhotoStrip photos={base.photos} />
             </div>
           )}
 
           {/* Productos agrupados por pedido */}
           {hasItems ? (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-gray-100 dark:divide-gray-700">
               {base.orders
                 ?.filter((g) => g.items.length > 0)
                 .map((group) => (
@@ -224,7 +223,7 @@ function BaseCard({ base, orderColorMap, baseNum }) {
             </div>
           ) : (
             !hasPhotos && (
-              <p className="py-6 text-sm text-gray-400 text-center">
+              <p className="py-6 text-sm text-gray-400 dark:text-gray-500 text-center">
                 Base sin contenido registrado
               </p>
             )
@@ -241,6 +240,21 @@ export default function PalletPublicView() {
   const [pallet, setPallet] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  // Dark mode: localStorage tiene prioridad; si no hay nada guardado, usa preferencia del sistema
+  const [isDark, setIsDark] = useState(() => {
+    try {
+      const saved = localStorage.getItem("pallet-theme");
+      if (saved !== null) return saved === "dark";
+    } catch { /* ignore */ }
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+    try { localStorage.setItem("pallet-theme", isDark ? "dark" : "light"); } catch { /* ignore */ }
+  }, [isDark]);
 
   useEffect(() => {
     apiGet(`/public/pallets/${code}`)
@@ -249,9 +263,38 @@ export default function PalletPublicView() {
       .finally(() => setLoading(false));
   }, [code]);
 
+  async function handleShare() {
+    const url = window.location.href;
+    const title = `Pallet ${code} — Pallet Control`;
+    const text = `Ver el contenido del pallet ${code}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url });
+      } catch {
+        // usuario canceló el share sheet — no hacer nada
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        const el = document.createElement("textarea");
+        el.value = url;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand("copy");
+        document.body.removeChild(el);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    }
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <p className="text-gray-400 text-sm animate-pulse">Cargando…</p>
       </div>
     );
@@ -259,10 +302,10 @@ export default function PalletPublicView() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-6">
         <div className="text-center">
           <p className="text-5xl mb-4">📭</p>
-          <p className="text-lg font-semibold text-gray-700">Pallet no encontrado</p>
+          <p className="text-lg font-semibold text-gray-700 dark:text-gray-200">Pallet no encontrado</p>
           <p className="text-sm text-gray-400 mt-1">Código: {code}</p>
         </div>
       </div>
@@ -277,30 +320,78 @@ export default function PalletPublicView() {
   pallet.orders.forEach((o, i) => { orderColorMap[o.id] = i; });
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+
       {/* ── Header sticky ──────────────────────────────────────── */}
-      <div className="bg-white border-b sticky top-0 z-10 shadow-sm">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-gray-900 flex items-center justify-center flex-shrink-0 text-2xl">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-2">
+
+          {/* Ícono */}
+          <div className="w-10 h-10 rounded-xl bg-gray-900 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 text-xl">
             📦
           </div>
+
+          {/* Info */}
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-lg leading-tight">Pallet {pallet.code}</p>
-            <p className="text-xs text-gray-500">
+            <p className="font-bold text-base leading-tight text-gray-900 dark:text-white">
+              {pallet.code}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               {pallet.orders.length} pedido{pallet.orders.length !== 1 ? "s" : ""} ·{" "}
-              {totalProds} producto{totalProds !== 1 ? "s" : ""} ·{" "}
-              {pallet.bases.length} base{pallet.bases.length !== 1 ? "s" : ""}
+              {totalProds} prod. · {pallet.bases.length} base{pallet.bases.length !== 1 ? "s" : ""}
             </p>
           </div>
-          <span
-            className={`flex-shrink-0 text-xs font-semibold px-3 py-1 rounded-full ${
-              isDone
-                ? "bg-green-100 text-green-700"
-                : "bg-amber-100 text-amber-700"
-            }`}
-          >
-            {isDone ? "✅ Finalizado" : "🔄 En preparación"}
+
+          {/* Estado */}
+          <span className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${
+            isDone
+              ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+              : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+          }`}>
+            {isDone ? "✅ Listo" : "🔄 En prep."}
           </span>
+
+          {/* Toggle dark / light */}
+          <button
+            onClick={() => setIsDark((v) => !v)}
+            title={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            className="flex-shrink-0 w-8 h-8 rounded-xl bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center transition-colors"
+          >
+            {isDark ? (
+              /* Sol → ir a light */
+              <svg className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2.25a.75.75 0 0 1 .75.75v2.25a.75.75 0 0 1-1.5 0V3a.75.75 0 0 1 .75-.75ZM7.5 12a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM18.894 6.166a.75.75 0 0 0-1.06-1.06l-1.591 1.59a.75.75 0 1 0 1.06 1.061l1.591-1.59ZM21.75 12a.75.75 0 0 1-.75.75h-2.25a.75.75 0 0 1 0-1.5H21a.75.75 0 0 1 .75.75ZM17.834 18.894a.75.75 0 0 0 1.06-1.06l-1.59-1.591a.75.75 0 1 0-1.061 1.06l1.59 1.591ZM12 18a.75.75 0 0 1 .75.75V21a.75.75 0 0 1-1.5 0v-2.25A.75.75 0 0 1 12 18ZM7.166 17.834a.75.75 0 0 0-1.06 1.06l1.59 1.591a.75.75 0 1 0 1.061-1.06l-1.59-1.591ZM6 12a.75.75 0 0 1-.75.75H3a.75.75 0 0 1 0-1.5h2.25A.75.75 0 0 1 6 12ZM6.166 6.166a.75.75 0 0 0 1.06-1.06L5.636 3.515a.75.75 0 0 0-1.061 1.06l1.591 1.591Z" />
+              </svg>
+            ) : (
+              /* Luna → ir a dark */
+              <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+                <path fillRule="evenodd" d="M9.528 1.718a.75.75 0 0 1 .162.819A8.97 8.97 0 0 0 9 6a9 9 0 0 0 9 9 8.97 8.97 0 0 0 3.463-.69.75.75 0 0 1 .981.98 10.503 10.503 0 0 1-9.694 6.46c-5.799 0-10.5-4.7-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 0 1 .818.162Z" clipRule="evenodd" />
+              </svg>
+            )}
+          </button>
+
+          {/* Botón compartir */}
+          <button
+            onClick={handleShare}
+            title="Compartir"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors active:scale-95"
+          >
+            {copied ? (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                <span>Copiado</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185z" />
+                </svg>
+                <span className="hidden sm:inline">Compartir</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -310,7 +401,7 @@ export default function PalletPublicView() {
         {/* ─── Fotos del pallet ─────────────────────────────── */}
         {pallet.photos?.length > 0 && (
           <section>
-            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
               📸 Fotos del pallet
             </h2>
             <PhotoStrip photos={pallet.photos} />
@@ -319,11 +410,11 @@ export default function PalletPublicView() {
 
         {/* ─── Pedidos ──────────────────────────────────────── */}
         <section>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
             🧾 Pedidos en este pallet
           </h2>
           {pallet.orders.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-100 py-12 text-center text-gray-400">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 py-12 text-center text-gray-400">
               <p className="text-4xl mb-3">🗂️</p>
               <p className="text-sm">Sin pedidos asignados</p>
             </div>
@@ -339,7 +430,7 @@ export default function PalletPublicView() {
         {/* ─── Bases ────────────────────────────────────────── */}
         {pallet.bases?.length > 0 && (
           <section>
-            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
               🧱 Bases del pallet
             </h2>
             <div className="space-y-3">
@@ -356,7 +447,7 @@ export default function PalletPublicView() {
         )}
 
         {/* Footer */}
-        <p className="text-center text-xs text-gray-300 pb-4 pt-2">
+        <p className="text-center text-xs text-gray-300 dark:text-gray-600 pb-4 pt-2">
           Pallet Control · Solo lectura
         </p>
       </div>

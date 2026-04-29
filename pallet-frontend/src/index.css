@@ -4,6 +4,16 @@
 @variant dark (&:where(.dark, .dark *));
 
 @theme {
+  /* ── Breakpoints custom ─────────────────────────────────── */
+  --breakpoint-xs:    24.375rem;  /* 390px  — iPhone 14/15       */
+  --breakpoint-hd720: 80rem;      /* 1280px — Monitor 720p       */
+  --breakpoint-mac:   90rem;      /* 1440px — MacBook            */
+  --breakpoint-hd:    96rem;      /* 1536px — HD                 */
+  --breakpoint-fhd:   120rem;     /* 1920px — Monitor 1080p      */
+  --breakpoint-2k:    160rem;     /* 2560px — Monitor 2K         */
+  --breakpoint-4k:    240rem;     /* 3840px — Monitor 4K         */
+
+  /* ── Colores ────────────────────────────────────────────── */
   --color-gold: #bf953f;
   --color-yellow: #ffa800;
   --color-light-gold: #b59e57;
@@ -18,48 +28,102 @@
   --color-light-gray-2: #efeff1;
 }
 
+/* ─── Base ──────────────────────────────────────────────── */
 body,
 #root {
   background-color: #f3f4f6;
   min-height: 100vh;
 }
 
-/* ─── Dark mode: base ──────────────────────────────────────── */
 .dark body,
 .dark #root {
   background-color: #111010;
 }
 
-/* ─── Dark mode: superficies ───────────────────────────────── */
-.dark .bg-white    { background-color: #1c1c1c; }
-.dark .bg-gray-50  { background-color: #191919; }
-.dark .bg-gray-100 { background-color: #2b2b2b; }
+/* ─── Surfaces ──────────────────────────────────────────── */
+.dark .bg-white         { background-color: #1c1c1c; }
+.dark .bg-gray-50       { background-color: #191919; }
+.dark .bg-gray-100      { background-color: #2b2b2b; }
+.dark .bg-gray-200      { background-color: #374151; }
 
-/* ─── Dark mode: texto ─────────────────────────────────────── */
-.dark .text-gray-900 { color: #f3f4f6; }
-.dark .text-gray-800 { color: #e5e7eb; }
-.dark .text-gray-700 { color: #d1d5db; }
-.dark .text-gray-600 { color: #9ca3af; }
-.dark .text-gray-500 { color: #6b7280; }
-.dark .text-gray-400 { color: #4b5563; }
+/* Hover surfaces */
+.dark .hover\:bg-gray-50:hover   { background-color: #222222; }
+.dark .hover\:bg-gray-100:hover  { background-color: #333333; }
+.dark .hover\:bg-gray-200:hover  { background-color: #374151; }
 
-/* ─── Dark mode: bordes ────────────────────────────────────── */
-.dark .border   { border-color: #2b2b2b; }
-.dark .border-b { border-bottom-color: #2b2b2b; }
-.dark .border-r { border-right-color:  #2b2b2b; }
-.dark .border-t { border-top-color:    #2b2b2b; }
-.dark .border-l { border-left-color:   #2b2b2b; }
+/* Active surfaces */
+.dark .active\:bg-gray-50:active  { background-color: #222222; }
+.dark .active\:bg-gray-100:active { background-color: #333333; }
 
-/* ─── Dark mode: inputs ────────────────────────────────────── */
+/* Coloured surfaces — keep tinted but darker */
+.dark .bg-amber-50  { background-color: #3b1f02; }
+.dark .bg-amber-100 { background-color: #451f03; }
+.dark .bg-red-50    { background-color: #3b0a0a; }
+.dark .bg-green-50  { background-color: #052e16; }
+.dark .bg-blue-50   { background-color: #082044; }
+.dark .bg-blue-100  { background-color: #0c2a52; }
+.dark .bg-orange-50 { background-color: #3d1a06; }
+
+/* ─── Text ──────────────────────────────────────────────── */
+/* Primary scale — lighter in dark */
+.dark .text-gray-900 { color: #f9fafb; }
+.dark .text-gray-800 { color: #f3f4f6; }
+.dark .text-gray-700 { color: #e5e7eb; }
+.dark .text-gray-600 { color: #d1d5db; }
+/* Secondary / muted — still readable */
+.dark .text-gray-500 { color: #9ca3af; }
+.dark .text-gray-400 { color: #6b7280; }
+.dark .text-gray-300 { color: #4b5563; }
+
+/* Coloured text — keep readable in dark */
+.dark .text-amber-800  { color: #fcd34d; }
+.dark .text-amber-700  { color: #fbbf24; }
+.dark .text-red-800    { color: #fca5a5; }
+.dark .text-blue-600   { color: #93c5fd; }
+.dark .text-blue-700   { color: #60a5fa; }
+.dark .text-orange-600 { color: #fb923c; }
+.dark .text-orange-700 { color: #f97316; }
+
+/* ─── Borders ───────────────────────────────────────────── */
+.dark .border           { border-color: #2b2b2b; }
+.dark .border-b         { border-bottom-color: #2b2b2b; }
+.dark .border-r         { border-right-color:  #2b2b2b; }
+.dark .border-t         { border-top-color:    #2b2b2b; }
+.dark .border-l         { border-left-color:   #2b2b2b; }
+.dark .border-gray-100  { border-color: #1f2937; }
+.dark .border-gray-200  { border-color: #2b2b2b; }
+.dark .border-gray-300  { border-color: #374151; }
+.dark .border-gray-400  { border-color: #4b5563; }
+.dark .divide-gray-100 > * + * { border-color: #1f2937; }
+.dark .divide-gray-200 > * + * { border-color: #2b2b2b; }
+
+/* Coloured borders */
+.dark .border-amber-300 { border-color: #92400e; }
+.dark .border-red-200   { border-color: #7f1d1d; }
+.dark .border-green-500 { border-color: #16a34a; }
+.dark .border-red-500   { border-color: #dc2626; }
+
+/* ─── Inputs ────────────────────────────────────────────── */
 .dark input:not([type="checkbox"]):not([type="radio"]),
 .dark textarea,
 .dark select {
   background-color: #2b2b2b;
   color: #f3f4f6;
-  border-color: #2b2b2b;
+  border-color: #374151;
 }
 
 .dark input::placeholder,
 .dark textarea::placeholder {
   color: #6b7280;
 }
+
+/* ─── Focus rings ───────────────────────────────────────── */
+.dark .focus\:ring-gray-300:focus {
+  --tw-ring-color: #374151;
+}
+
+/* ─── Scrollbar (Webkit) ────────────────────────────────── */
+.dark ::-webkit-scrollbar { width: 6px; height: 6px; }
+.dark ::-webkit-scrollbar-track  { background: #1c1c1c; }
+.dark ::-webkit-scrollbar-thumb  { background: #374151; border-radius: 3px; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #4b5563; }

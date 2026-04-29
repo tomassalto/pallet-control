@@ -1,11 +1,13 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: "class",
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     extend: {
       fontFamily: {
         montserrat: ["Montserrat", "sans-serif"],
       },
+      // En Tailwind v4 los breakpoints se definen en index.css con --breakpoint-*
       colors: {
         gold: "#BF953F",
         yellow: "#FFA800",

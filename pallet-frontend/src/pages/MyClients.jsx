@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { apiGet } from "../api/client";
 import { toastError } from "../ui/toast";
 import Title from "../ui/Title";
+import { PageSpinner, InlineSpinner } from "../ui/Spinner";
 import BackButton from "../ui/BackButton";
 import Accordion from "../ui/Accordion";
 
@@ -68,7 +69,7 @@ export default function MyClients() {
       </div>
 
       {loading ? (
-        <div className="text-sm text-gray-600">Cargando clientes…</div>
+        <PageSpinner />
       ) : customers.length === 0 ? (
         <div className="text-sm text-gray-600">
           Todavía no hay clientes registrados.
@@ -100,7 +101,7 @@ export default function MyClients() {
 
           {/* Pedidos del cliente */}
           {loadingOrders ? (
-            <div className="text-sm text-gray-600">Cargando pedidos…</div>
+            <PageSpinner />
           ) : customerOrders.length === 0 ? (
             <div className="text-sm text-gray-600">
               Este cliente no tiene pedidos aún.

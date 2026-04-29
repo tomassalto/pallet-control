@@ -3,6 +3,7 @@ import { useAuth } from "../auth/AuthContext";
 import { apiGet, apiPatch, apiPost } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
 import Title from "../ui/Title";
+import { PageSpinner } from "../ui/Spinner";
 
 const ROLE_LABELS = {
   superadmin: { label: "Superadmin", bg: "bg-purple-100 text-purple-800" },
@@ -52,7 +53,7 @@ export default function AdminUsers() {
     }
   }
 
-  if (loading) return <p className="text-center py-10 text-gray-500">Cargando...</p>;
+  if (loading) return <PageSpinner />;
 
   const pending = users.filter((u) => u.role === null);
   const rest    = users.filter((u) => u.role !== null);
