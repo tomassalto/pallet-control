@@ -234,6 +234,166 @@ function BaseCard({ base, orderColorMap, baseNum }) {
   );
 }
 
+// ── Foto de ticket con overlays de EAN ───────────────────────────────────────
+function TicketPhotoHighlight({ photo }) {
+  const [tooltip, setTooltip] = useState(null); // highlight activo para tooltip
+  const [imgLoaded, setImgLoaded] = useState(false);
+
+  const hasHighlights = photo.highlights?.length > 0;
+  const isProcessed = photo.ocr_processed;
+
+  return (
+    <div className="space-y-2">
+      {/* Imagen con overlays */}
+      <div className="relative w-full rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
+        <img
+          src={photo.url}
+          alt="Ticket"
+          className="w-full h-auto block"
+          onLoad={() => setImgLoaded(true)}
+        />
+
+        {/* Overlays de EAN — solo cuando la imagen ya cargó */}
+        {imgLoaded && hasHighlights && photo.highlights.map((h, i) => {
+          const { bbox, img_w, img_h } = h;
+          const left   = (bbox.left   / img_w) * 100;
+          const top    = (bbox.top    / img_h) * 100;
+          const width  = ((bbox.right - bbox.left) / img_w) * 100;
+          const height = ((bbox.bottom - bbox.top)  / img_h) * 100;
+
+          return (
+            <div key={i}>
+              {/* Highlight box */}
+              <div
+                style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}
+                className="absolute border-2 border-green-400 bg-green-400/25 rounded cursor-pointer transition-opacity hover:bg-green-400/40"
+                onMouseEnter={() => setTooltip(h)}
+                onMouseLeave={() => setTooltip(null)}
+                onClick={() => setTooltip(tooltip?.ean === h.ean ? null : h)}
+              />
+
+              {/* Tooltip al hover */}
+              {tooltip?.ean === h.ean && (
+                <div
+                  style={{
+                    left: `${Math.min(left + width + 1, 55)}%`,
+                    top:  `${top}%`,
+                  }}
+                  className="absolute z-20 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-xl px-3 py-2 shadow-xl max-w-[180px] pointer-events-none"
+                >
+                  <p className="font-semibold leading-snug mb-1">{h.description}</p>
+                  <p className="text-green-400 font-bold">{h.qty_in_pallet} unid. en pallet</p>
+                  {h.orders?.length > 1 && (
+                    <div className="mt-1 space-y-0.5 text-gray-300">
+                      {h.orders.map((o, oi) => (
+                        <p key={oi}>#{o.code}: {o.qty} unid.</p>
+                      ))}
+                    </div>
+                  )}
+                  {h.orders?.length === 1 && (
+                    <p className="text-gray-300 mt-0.5">Pedido #{h.orders[0].code}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Badge de estado OCR */}
+        <div className="absolute top-2 right-2">
+          {!isProcessed ? (
+            <span className="text-[10px] bg-amber-500/90 text-white font-semibold px-2 py-1 rounded-full">
+              Procesando…
+            </span>
+          ) : hasHighlights ? (
+            <span className="text-[10px] bg-green-500/90 text-white font-semibold px-2 py-1 rounded-full">
+              {photo.highlight_count} producto{photo.highlight_count !== 1 ? "s" : ""} detectado{photo.highlight_count !== 1 ? "s" : ""}
+            </span>
+          ) : (
+            <span className="text-[10px] bg-gray-500/70 text-white font-semibold px-2 py-1 rounded-full">
+              Sin coincidencias
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Lista de productos detectados debajo de la imagen */}
+      {hasHighlights && (
+        <div className="space-y-1">
+          {photo.highlights.map((h, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/40 rounded-xl px-3 py-2"
+            >
+              <span className="text-green-500 text-sm flex-shrink-0">✓</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 line-clamp-1">
+                  {h.description}
+                </p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 font-mono">{h.ean}</p>
+              </div>
+              <span className="flex-shrink-0 text-xs font-bold text-green-600 dark:text-green-400">
+                {h.qty_in_pallet} unid.
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Sección de tickets de un pedido ──────────────────────────────────────────
+function TicketSection({ section }) {
+  const [open, setOpen] = useState(true);
+  const totalPhotos = section.tickets.reduce((s, t) => s + t.photos.length, 0);
+  const totalHighlights = section.tickets.reduce(
+    (s, t) => s + t.photos.reduce((ps, p) => ps + (p.highlight_count ?? 0), 0),
+    0
+  );
+
+  if (totalPhotos === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      {/* Header */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-4 py-3 bg-indigo-700 text-left"
+      >
+        <span className="text-white text-base">🧾</span>
+        <span className="text-white font-bold text-sm truncate">
+          Pedido #{section.order_code}
+          {section.customer && <span className="font-normal opacity-80"> · {section.customer}</span>}
+        </span>
+        <span className="ml-auto text-indigo-300 text-xs flex-shrink-0">
+          {totalPhotos} foto{totalPhotos !== 1 ? "s" : ""}
+          {totalHighlights > 0 && ` · ${totalHighlights} ✓`}
+        </span>
+        <span className="text-indigo-300 text-sm">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
+          {section.tickets.map((ticket) =>
+            ticket.photos.map((photo) => (
+              <div key={photo.id} className="p-4">
+                {(ticket.code || ticket.note) && (
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
+                    {ticket.code && <span className="font-mono font-semibold">#{ticket.code} </span>}
+                    {ticket.note}
+                  </p>
+                )}
+                <TicketPhotoHighlight photo={photo} />
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Vista principal ──────────────────────────────────────────────────────────
 export default function PalletPublicView() {
   const { code } = useParams();
@@ -441,6 +601,23 @@ export default function PalletPublicView() {
                   baseNum={i + 1}
                   orderColorMap={orderColorMap}
                 />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ─── Tickets del cliente ──────────────────────────── */}
+        {pallet.ticket_sections?.some((s) => s.tickets.some((t) => t.photos.length > 0)) && (
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
+              🧾 Tickets del cliente
+            </h2>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-3 -mt-1">
+              Los productos resaltados en verde coinciden con lo que está en este pallet.
+            </p>
+            <div className="space-y-3">
+              {pallet.ticket_sections.map((section) => (
+                <TicketSection key={section.order_id} section={section} />
               ))}
             </div>
           </section>

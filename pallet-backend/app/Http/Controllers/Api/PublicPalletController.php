@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Pallet;
 use App\Models\Product;
+use App\Services\TicketOcrService;
 
 class PublicPalletController extends Controller
 {
@@ -14,11 +15,15 @@ class PublicPalletController extends Controller
      * La sección "orders" muestra únicamente los productos que están
      * asignados a alguna base de este pallet (no todos los ítems del pedido).
      * Las cantidades son la suma de todas las bases donde aparece ese ítem.
+     *
+     * La sección "ticket_highlights" incluye los tickets del pedido con
+     * sus fotos y los overlays de EAN detectados por OCR.
      */
     public function show(string $code)
     {
         $pallet = Pallet::with([
             'orders.customer',
+            'orders.tickets.photos',      // ← tickets para la vista pública
             'photos',
             'bases'                => fn ($q) => $q->orderBy('created_at'),
             'bases.photos'         => fn ($q) => $q->orderBy('created_at'),
@@ -47,7 +52,6 @@ class PublicPalletController extends Controller
         ])->values();
 
         // ── Resumen de pedidos: SOLO los ítems asignados a bases ──────────
-        //    Agrupamos por order_item_id acumulando qty de todas las bases.
         $palletItemsMap = [];
         foreach ($pallet->bases as $base) {
             foreach ($base->orderItems as $item) {
@@ -62,7 +66,33 @@ class PublicPalletController extends Controller
             }
         }
 
-        // Agrupar por pedido
+        // ── Mapa EAN → info del pallet (para OCR matching) ───────────────
+        // Agrupa por EAN acumulando cantidades de todos los pedidos/bases.
+        $palletEanMap = [];
+        foreach ($palletItemsMap as $data) {
+            $item    = $data['item'];
+            $ean     = $item->ean;
+            $orderId = $item->order_id;
+            $order   = $pallet->orders->firstWhere('id', $orderId);
+
+            if (! $ean) continue;
+
+            if (! isset($palletEanMap[$ean])) {
+                $palletEanMap[$ean] = [
+                    'description' => $item->description,
+                    'total_qty'   => 0,
+                    'orders'      => [],
+                ];
+            }
+
+            $palletEanMap[$ean]['total_qty'] += $data['qty'];
+            $palletEanMap[$ean]['orders'][]   = [
+                'code' => $order?->code ?? "#{$orderId}",
+                'qty'  => $data['qty'],
+            ];
+        }
+
+        // Agrupar por pedido para la sección de orders
         $orderMap = [];
         foreach ($palletItemsMap as $data) {
             $orderItem = $data['item'];
@@ -86,7 +116,6 @@ class PublicPalletController extends Controller
             ];
         }
 
-        // Ordenar ítems por descripción dentro de cada pedido
         foreach ($orderMap as &$o) {
             usort($o['items'], fn ($a, $b) => strcmp($a['description'], $b['description']));
         }
@@ -125,12 +154,56 @@ class PublicPalletController extends Controller
             ];
         })->values();
 
+        // ── Tickets con OCR highlights ─────────────────────────────────────
+        // Para cada pedido del pallet, incluimos sus tickets con sus fotos.
+        // Si la foto tiene ocr_data procesado, calculamos los highlights.
+        $ticketsByOrder = [];
+        foreach ($pallet->orders as $order) {
+            if ($order->tickets->isEmpty()) continue;
+
+            $ticketList = $order->tickets->map(function ($ticket) use ($palletEanMap) {
+                $photos = $ticket->photos->map(function ($photo) use ($palletEanMap) {
+                    $highlights = [];
+
+                    if ($photo->ocr_processed_at && $photo->ocr_data) {
+                        $highlights = TicketOcrService::buildHighlights(
+                            $photo->ocr_data,
+                            $palletEanMap
+                        );
+                    }
+
+                    return [
+                        'id'                => $photo->id,
+                        'url'               => $photo->url,
+                        'ocr_processed'     => $photo->ocr_processed_at !== null,
+                        'highlight_count'   => count($highlights),
+                        'highlights'        => $highlights,
+                    ];
+                })->values();
+
+                return [
+                    'id'     => $ticket->id,
+                    'code'   => $ticket->code,
+                    'note'   => $ticket->note,
+                    'photos' => $photos,
+                ];
+            })->values();
+
+            $ticketsByOrder[] = [
+                'order_id'   => $order->id,
+                'order_code' => $order->code,
+                'customer'   => $order->customer?->name,
+                'tickets'    => $ticketList,
+            ];
+        }
+
         return response()->json([
-            'code'   => $pallet->code,
-            'status' => $pallet->status,
-            'photos' => $photos,
-            'orders' => $orders,
-            'bases'  => $bases,
+            'code'            => $pallet->code,
+            'status'          => $pallet->status,
+            'photos'          => $photos,
+            'orders'          => $orders,
+            'bases'           => $bases,
+            'ticket_sections' => $ticketsByOrder,
         ]);
     }
 }

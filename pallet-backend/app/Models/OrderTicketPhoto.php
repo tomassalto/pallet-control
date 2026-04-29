@@ -13,9 +13,19 @@ class OrderTicketPhoto extends Model
         'original_name',
         'note',
         'order_index',
+        'ocr_data',
+        'ocr_processed_at',
     ];
 
     protected $appends = ['url'];
+
+    protected function casts(): array
+    {
+        return [
+            'ocr_data'         => 'array',
+            'ocr_processed_at' => 'datetime',
+        ];
+    }
 
     public function getUrlAttribute(): string
     {

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
+use App\Services\TicketOcrService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -103,8 +104,17 @@ class OrderTicketController extends Controller
             orderId: $order->id,
         );
 
+        // ── OCR: intentar extraer EANs automáticamente ────────────────────
+        // Se ejecuta en background después de enviar la respuesta HTTP.
+        // Si Tesseract no está instalado, simplemente no hace nada.
+        try {
+            app(TicketOcrService::class)->processPhoto($photo->fresh());
+        } catch (\Throwable $e) {
+            Log::warning('TicketOcrService: error al procesar foto.', ['error' => $e->getMessage()]);
+        }
+
         return response()->json([
-            'photo' => $photo,
+            'photo' => $photo->fresh(),
             'url' => '/storage/' . $path,
         ], 201);
     }

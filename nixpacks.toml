@@ -15,7 +15,9 @@ nixPkgs = [
   "php83Extensions.intl",
   "php83Extensions.zip",
   "php83Extensions.curl",
-  "nodejs_22"
+  "nodejs_22",
+  "tesseract",
+  "imagemagick"
 ]
 
 [phases.install]
