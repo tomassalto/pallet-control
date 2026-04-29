@@ -7,6 +7,8 @@ import Title from "../ui/Title";
 import Accordion from "../ui/Accordion";
 import PhotoViewer from "../ui/PhotoViewer";
 import QRModal from "../ui/QRModal";
+import OrganizeModal from "../Components/OrganizeModal";
+import QtyConflictModal from "../Components/QtyConflictModal";
 
 function onlyDigits(v) {
   return (v || "").replace(/\D/g, "");
@@ -132,26 +134,6 @@ function ItemCard({
 }
 
 // Miniatura con fallback 📦 (sin hooks externos, cada instancia tiene su estado)
-function ModalProductImage({ src, alt }) {
-  const [err, setErr] = useState(false);
-  if (!src || err) {
-    return (
-      <div className="w-11 h-11 flex-shrink-0 rounded-xl bg-gray-100 flex items-center justify-center border border-gray-200 text-xl select-none">
-        📦
-      </div>
-    );
-  }
-  return (
-    <div className="w-11 h-11 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
-      <img
-        src={src}
-        alt={alt}
-        className="w-full h-full object-contain"
-        onError={() => setErr(true)}
-      />
-    </div>
-  );
-}
 
 export default function OrderDetail() {
   const { orderId } = useParams();
@@ -1166,150 +1148,12 @@ export default function OrderDetail() {
       )}
 
       {/* ── Modal conflicto cantidad vs. organizadas ──────────────────────────── */}
-      {qtyConflict && (() => {
-        const { item, newQty, totalOrganized, deficit, keepQtys, saving } = qtyConflict;
-        const totalFreed = (item.locations ?? []).reduce(
-          (s, l) => s + ((l.qty ?? 0) - (keepQtys[l.base_id] ?? l.qty)),
-          0
-        );
-        const canConfirm = totalFreed >= deficit && !saving;
-
-        return (
-          <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center">
-            <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl flex flex-col max-h-[90vh]">
-
-              {/* Header */}
-              <div className="px-4 pt-5 pb-3 border-b flex-shrink-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-bold text-base">⚠️ Hay unidades organizadas</p>
-                    <p className="text-sm text-gray-500 mt-0.5 leading-snug">
-                      Querés cambiar{" "}
-                      <span className="font-medium text-gray-800">{item.description}</span>{" "}
-                      a{" "}
-                      <span className="font-semibold">{newQty} u.</span>, pero tenés{" "}
-                      <span className="font-semibold text-orange-600">{totalOrganized} organizadas</span>.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setQtyConflict(null)}
-                    className="text-gray-400 hover:text-gray-700 text-xl leading-none flex-shrink-0 mt-0.5"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                {/* Barra de progreso */}
-                <div className="mt-3">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-gray-500">
-                      Liberando <span className={totalFreed >= deficit ? "text-green-600 font-semibold" : "text-orange-600 font-semibold"}>{totalFreed}</span> de{" "}
-                      <span className="font-semibold">{deficit}</span> necesarias
-                    </span>
-                    {totalFreed >= deficit && (
-                      <span className="text-green-600 text-xs font-medium">✓ Listo</span>
-                    )}
-                  </div>
-                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${totalFreed >= deficit ? "bg-green-500" : "bg-orange-400"}`}
-                      style={{ width: `${Math.min(100, (totalFreed / deficit) * 100)}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Lista de ubicaciones */}
-              <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
-                {(item.locations ?? []).map((loc) => {
-                  const keepQty = keepQtys[loc.base_id] ?? loc.qty;
-                  const freed = loc.qty - keepQty;
-                  return (
-                    <div key={loc.base_id} className="px-4 py-3 flex items-center gap-3">
-                      {/* Info de ubicación */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-800 truncate">
-                          {loc.pallet_code}
-                        </p>
-                        <p className="text-xs text-gray-500">{loc.base_name ?? `Base #${loc.base_id}`}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {loc.qty} asignadas actualmente
-                        </p>
-                      </div>
-
-                      {/* Badge "liberar" */}
-                      <div className="text-center w-14 flex-shrink-0">
-                        {freed > 0 ? (
-                          <span className="inline-block bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                            −{freed}
-                          </span>
-                        ) : (
-                          <span className="inline-block bg-gray-100 text-gray-400 text-xs px-2 py-0.5 rounded-full">
-                            sin cambio
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Stepper para "mantener" */}
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => setConflictKeep(loc.base_id, keepQty - 1, loc.qty)}
-                          disabled={keepQty === 0}
-                          className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 disabled:opacity-25 hover:bg-gray-50 text-lg leading-none select-none"
-                        >
-                          −
-                        </button>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={keepQty === 0 ? "" : keepQty}
-                          placeholder="0"
-                          onChange={(e) => setConflictKeep(loc.base_id, e.target.value, loc.qty)}
-                          onFocus={(e) => e.target.select()}
-                          className="w-12 text-center text-sm font-bold border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                        />
-                        <button
-                          onClick={() => setConflictKeep(loc.base_id, keepQty + 1, loc.qty)}
-                          disabled={keepQty >= loc.qty}
-                          className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 disabled:opacity-25 hover:bg-gray-50 text-lg leading-none select-none"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Footer con label y botones */}
-              <div className="px-4 py-4 border-t flex-shrink-0 space-y-2">
-                {!canConfirm && (
-                  <p className="text-xs text-center text-orange-600">
-                    Todavía necesitás liberar{" "}
-                    <span className="font-semibold">{deficit - totalFreed}</span>{" "}
-                    unidad{deficit - totalFreed !== 1 ? "es" : ""} más
-                  </p>
-                )}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setQtyConflict(null)}
-                    className="flex-1 rounded-2xl py-3 border text-sm text-gray-600"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={resolveConflictAndSave}
-                    disabled={!canConfirm}
-                    className="flex-1 rounded-2xl py-3 bg-gray-900 text-white text-sm font-bold disabled:opacity-40"
-                  >
-                    {saving ? "Guardando…" : "Confirmar y guardar"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      <QtyConflictModal
+        qtyConflict={qtyConflict}
+        setQtyConflict={setQtyConflict}
+        setConflictKeep={setConflictKeep}
+        resolveConflictAndSave={resolveConflictAndSave}
+      />
 
       {/* Modal confirmar desvincular pallet */}
       {confirmDetachPallet && (
@@ -1402,181 +1246,19 @@ export default function OrderDetail() {
       )}
 
       {/* ── Modal Organizar en pallet ──────────────────────────────────── */}
-      {organizeModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center">
-          <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl flex flex-col max-h-[90vh]">
-
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 pt-5 pb-3 border-b flex-shrink-0">
-              <div>
-                <p className="font-bold text-base">📦 {organizeModal.palletCode}</p>
-                {organizeModal.step === "products" && (
-                  <p className="text-sm text-gray-500">
-                    {organizeModal.selectedBase?.name ||
-                      `Base ${(organizeModal.bases.findIndex((b) => b.id === organizeModal.selectedBase?.id) ?? 0) + 1}`}
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={() => setOrganizeModal(null)}
-                className="text-gray-400 hover:text-gray-700 text-xl leading-none"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* ── Paso 1: selección de base ─────────────────────────── */}
-            {organizeModal.step === "base" && (
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                <p className="text-sm text-gray-500">
-                  ¿En qué base querés poner los productos de este pedido?
-                </p>
-
-                {organizeModal.loading ? (
-                  <p className="text-center text-gray-400 py-8 text-sm">Cargando…</p>
-                ) : (
-                  <>
-                    {organizeModal.bases.length === 0 && (
-                      <p className="text-sm text-gray-400 text-center py-4">
-                        Este pallet no tiene bases todavía.
-                      </p>
-                    )}
-
-                    {organizeModal.bases.map((base, i) => {
-                      const count = countFromThisOrderInBase(base);
-                      return (
-                        <button
-                          key={base.id}
-                          onClick={() => selectBaseForOrganize(base)}
-                          className="w-full text-left rounded-2xl border border-gray-200 p-4 hover:bg-gray-50 active:scale-[0.99] transition-colors"
-                        >
-                          <p className="font-semibold text-sm">
-                            {base.name || `Base ${i + 1}`}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {count > 0
-                              ? `${count} producto${count !== 1 ? "s" : ""} de este pedido ya asignados`
-                              : "Sin productos de este pedido aún"}
-                          </p>
-                        </button>
-                      );
-                    })}
-
-                    <button
-                      onClick={createBaseAndOrganize}
-                      disabled={organizeModal.loading}
-                      className="w-full border-2 border-dashed border-gray-300 rounded-2xl p-4 text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-50 active:scale-[0.99]"
-                    >
-                      + Crear nueva base
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* ── Paso 2: asignar cantidades ────────────────────────── */}
-            {organizeModal.step === "products" && (
-              <>
-                <div className="px-4 py-2 border-b flex-shrink-0">
-                  <button
-                    onClick={() =>
-                      setOrganizeModal((prev) =>
-                        prev ? { ...prev, step: "base", selectedBase: null, quantities: {} } : null
-                      )
-                    }
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    ← Cambiar base
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
-                  {modalItems.length === 0 ? (
-                    <p className="text-center text-sm text-gray-400 py-10">
-                      No hay productos importados en este pedido.
-                    </p>
-                  ) : (
-                    modalItems.map((item) => {
-                      const cur = organizeModal.quantities[item.id] ?? 0;
-                      const max = modalMaxQty(item);
-                      const active = cur > 0;
-                      return (
-                        <div
-                          key={item.id}
-                          className={[
-                            "flex items-center gap-3 px-4 py-3",
-                            active ? "border-l-4 border-l-gray-800" : "opacity-70",
-                          ].join(" ")}
-                        >
-                          {/* Imagen del producto */}
-                          <ModalProductImage src={item.image_url} alt={item.description} />
-
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium leading-snug">{item.description}</p>
-                            <p className="text-xs font-mono text-gray-400 mt-0.5">{item.ean}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              Disp:{" "}
-                              <span className={max === 0 && !active ? "text-red-500 font-medium" : ""}>
-                                {max}
-                              </span>
-                              {" / "}{item.qty} unid.
-                            </p>
-                          </div>
-
-                          {/* Stepper */}
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <button
-                              onClick={() => decModalQty(item.id)}
-                              disabled={cur === 0}
-                              className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 disabled:opacity-25 hover:bg-gray-50 text-lg leading-none select-none"
-                            >
-                              −
-                            </button>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={cur === 0 ? "" : cur}
-                              placeholder="0"
-                              onChange={(e) => setModalQty(item, e.target.value)}
-                              onFocus={(e) => e.target.select()}
-                              className="w-12 text-center text-sm font-bold border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                            />
-                            <button
-                              onClick={() => incModalQty(item)}
-                              disabled={cur >= max || max === 0}
-                              className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center disabled:opacity-25 text-lg leading-none select-none"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* Botón guardar */}
-                <div className="p-4 border-t flex-shrink-0">
-                  {(() => {
-                    const count = Object.values(organizeModal.quantities).filter((q) => q > 0).length;
-                    return (
-                      <button
-                        onClick={saveOrganize}
-                        disabled={organizeModal.saving}
-                        className="w-full py-3.5 rounded-2xl bg-gray-900 text-white font-bold text-sm disabled:opacity-60"
-                      >
-                        {organizeModal.saving
-                          ? "Guardando…"
-                          : `Guardar — ${count} producto${count !== 1 ? "s" : ""} en esta base`}
-                      </button>
-                    );
-                  })()}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <OrganizeModal
+        organizeModal={organizeModal}
+        setOrganizeModal={setOrganizeModal}
+        modalItems={modalItems}
+        modalMaxQty={modalMaxQty}
+        decModalQty={decModalQty}
+        incModalQty={incModalQty}
+        setModalQty={setModalQty}
+        selectBaseForOrganize={selectBaseForOrganize}
+        createBaseAndOrganize={createBaseAndOrganize}
+        saveOrganize={saveOrganize}
+        countFromThisOrderInBase={countFromThisOrderInBase}
+      />
 
       {/* QR Modal */}
       {showQR && order && (

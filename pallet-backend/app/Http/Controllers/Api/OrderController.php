@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreOrderRequest;
 use App\Helpers\TelegramNotifier;
 use App\Models\Customer;
 use App\Models\Order;
@@ -27,14 +28,9 @@ class OrderController extends Controller
         return $q->paginate(20);
     }
 
-    public function store(Request $request)
+    public function store(StoreOrderRequest $request)
     {
-        $data = $request->validate([
-            'customer_name' => 'nullable|string|max:255',
-            'customer_id' => 'nullable|integer|exists:customers,id',
-            'code' => 'required|string|max:255',
-            'note' => 'nullable|string',
-        ]);
+        $data = $request->validated();
 
         $customerId = $data['customer_id'] ?? null;
 
@@ -52,14 +48,12 @@ class OrderController extends Controller
         ]);
 
         \App\Helpers\ActivityLogger::log(
-            'order_created',
-            'order',
-            $order->id,
-            "Pedido '{$order->code}' creado",
-            null,
-            null,
-            ['code' => $order->code, 'status' => 'open'],
-            $order->id
+            action: 'order_created',
+            entityType: 'order',
+            entityId: $order->id,
+            description: "Pedido '{$order->code}' creado",
+            newValues: ['code' => $order->code, 'status' => 'open'],
+            orderId: $order->id,
         );
 
         TelegramNotifier::send("🆕 *Nuevo pedido* `#{$order->code}` creado");
@@ -164,14 +158,13 @@ class OrderController extends Controller
         $pallet->orders()->syncWithoutDetaching([$order->id]);
 
         \App\Helpers\ActivityLogger::log(
-            'order_assigned',
-            'order',
-            $order->id,
-            "Pedido '{$order->code}' asociado al pallet '{$pallet->code}'",
-            $pallet->id,
-            null,
-            ['order_code' => $order->code],
-            $order->id
+            action: 'order_assigned',
+            entityType: 'order',
+            entityId: $order->id,
+            description: "Pedido '{$order->code}' asociado al pallet '{$pallet->code}'",
+            palletId: $pallet->id,
+            newValues: ['order_code' => $order->code],
+            orderId: $order->id,
         );
 
         TelegramNotifier::send("🔗 Pedido `#{$order->code}` asociado al pallet `{$pallet->code}`");
@@ -216,7 +209,8 @@ class OrderController extends Controller
             'order_ids.*' => ['integer'],
         ]);
 
-        $orders = Order::with('items', 'pallets')
+        // Misma lógica que canFinalize: distribución de unidades en bases
+        $orders = Order::with(['items', 'pallets.bases.orderItems'])
             ->whereIn('id', $data['order_ids'])
             ->get()
             ->keyBy('id');
@@ -224,15 +218,26 @@ class OrderController extends Controller
         $result = [];
         foreach ($data['order_ids'] as $id) {
             $order = $orders->get($id);
-            if (!$order) {
+
+            if (!$order || $order->items->isEmpty() || $order->pallets->isEmpty()) {
                 $result[$id] = false;
                 continue;
             }
-            $result[$id] = (
-                $order->items->isNotEmpty() &&
-                $order->pallets->isNotEmpty() &&
-                $order->items->where('status', 'pending')->isEmpty() &&
-                $order->items->where('status', 'done')->isNotEmpty()
+
+            // Sumar unidades asignadas por ítem en todas las bases de todos los pallets
+            $assignedQtys = [];
+            foreach ($order->pallets as $pallet) {
+                foreach ($pallet->bases as $base) {
+                    foreach ($base->orderItems as $item) {
+                        if ($item->order_id === $order->id) {
+                            $assignedQtys[$item->id] = ($assignedQtys[$item->id] ?? 0) + $item->pivot->qty;
+                        }
+                    }
+                }
+            }
+
+            $result[$id] = $order->items->every(
+                fn($item) => ($assignedQtys[$item->id] ?? 0) >= $item->qty
             );
         }
 
@@ -332,14 +337,13 @@ class OrderController extends Controller
         $order->update(['status' => 'done']);
 
         \App\Helpers\ActivityLogger::log(
-            'order_finalized',
-            'order',
-            $order->id,
-            "Pedido '{$order->code}' finalizado",
-            null,
-            ['status' => 'open'],
-            ['status' => 'done'],
-            $order->id
+            action: 'order_finalized',
+            entityType: 'order',
+            entityId: $order->id,
+            description: "Pedido '{$order->code}' finalizado",
+            oldValues: ['status' => 'open'],
+            newValues: ['status' => 'done'],
+            orderId: $order->id,
         );
 
         TelegramNotifier::send("✅ Pedido `#{$order->code}` *finalizado*");
@@ -378,14 +382,13 @@ class OrderController extends Controller
         $order->pallets()->detach($pallet->id);
 
         \App\Helpers\ActivityLogger::log(
-            'pallet_detached',
-            'order',
-            $order->id,
-            "Pallet '{$pallet->code}' desvinculado del pedido '{$order->code}'. Se eliminaron las asignaciones de productos a las bases de este pallet.",
-            $pallet->id,
-            ['pallet_code' => $pallet->code],
-            null,
-            $order->id
+            action: 'pallet_detached',
+            entityType: 'order',
+            entityId: $order->id,
+            description: "Pallet '{$pallet->code}' desvinculado del pedido '{$order->code}'. Se eliminaron las asignaciones de productos a las bases de este pallet.",
+            palletId: $pallet->id,
+            oldValues: ['pallet_code' => $pallet->code],
+            orderId: $order->id,
         );
 
         TelegramNotifier::send("⛓️ Pallet `{$pallet->code}` desvinculado del pedido `#{$order->code}`");

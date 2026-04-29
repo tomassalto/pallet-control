@@ -45,13 +45,12 @@ class PalletPhotoController extends Controller
         ]);
 
         \App\Helpers\ActivityLogger::log(
-            'pallet_photo_uploaded',
-            'pallet_photo',
-            $photo->id,
-            "Foto agregada al pallet '{$pallet->code}': {$file->getClientOriginalName()}",
-            $pallet->id,
-            null,
-            ['photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()]
+            action: 'pallet_photo_uploaded',
+            entityType: 'pallet_photo',
+            entityId: $photo->id,
+            description: "Foto agregada al pallet '{$pallet->code}': {$file->getClientOriginalName()}",
+            palletId: $pallet->id,
+            newValues: ['photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()],
         );
 
         return response()->json([
@@ -75,13 +74,12 @@ class PalletPhotoController extends Controller
         $photo->delete();
 
         \App\Helpers\ActivityLogger::log(
-            'pallet_photo_deleted',
-            'pallet_photo',
-            null,
-            "Foto eliminada del pallet '{$pallet->code}': {$photoName}",
-            $pallet->id,
-            ['photo_id' => $photo->id, 'original_name' => $photoName],
-            null
+            action: 'pallet_photo_deleted',
+            entityType: 'pallet_photo',
+            entityId: null,
+            description: "Foto eliminada del pallet '{$pallet->code}': {$photoName}",
+            palletId: $pallet->id,
+            oldValues: ['photo_id' => $photo->id, 'original_name' => $photoName],
         );
 
         return response()->json(['message' => 'Foto eliminada'], 200);

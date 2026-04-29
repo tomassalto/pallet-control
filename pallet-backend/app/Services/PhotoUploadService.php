@@ -76,9 +76,12 @@ class PhotoUploadService
         ]);
 
         ActivityLogger::log(
-            'pallet_photo_uploaded', 'pallet_photo', $photo->id,
-            "Foto agregada al pallet '{$pallet->code}' vía bot",
-            $pallet->id, null, ['photo_id' => $photo->id, 'via' => 'bot']
+            action: 'pallet_photo_uploaded',
+            entityType: 'pallet_photo',
+            entityId: $photo->id,
+            description: "Foto agregada al pallet '{$pallet->code}' vía bot",
+            palletId: $pallet->id,
+            newValues: ['photo_id' => $photo->id, 'via' => 'bot'],
         );
 
         return [
@@ -114,9 +117,12 @@ class PhotoUploadService
         $baseName = $base->name ?? 'Sin nombre';
 
         ActivityLogger::log(
-            'base_photo_uploaded', 'pallet_base_photo', $photo->id,
-            "Foto agregada a base '{$baseName}' del pallet '{$pallet->code}' vía bot",
-            $pallet->id, null, ['photo_id' => $photo->id, 'via' => 'bot']
+            action: 'base_photo_uploaded',
+            entityType: 'pallet_base_photo',
+            entityId: $photo->id,
+            description: "Foto agregada a base '{$baseName}' del pallet '{$pallet->code}' vía bot",
+            palletId: $pallet->id,
+            newValues: ['photo_id' => $photo->id, 'via' => 'bot'],
         );
 
         return [
@@ -149,11 +155,12 @@ class PhotoUploadService
         ]);
 
         ActivityLogger::log(
-            'order_ticket_photo_uploaded', 'order_ticket_photo', $photo->id,
-            "Foto agregada al pedido '{$order->code}' vía bot",
-            null, null,
-            ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'via' => 'bot'],
-            $order->id
+            action: 'order_ticket_photo_uploaded',
+            entityType: 'order_ticket_photo',
+            entityId: $photo->id,
+            description: "Foto agregada al pedido '{$order->code}' vía bot",
+            newValues: ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'via' => 'bot'],
+            orderId: $order->id,
         );
 
         return [

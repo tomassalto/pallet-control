@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateOrderItemRequest;
 use App\Helpers\ActivityLogger;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -67,14 +68,13 @@ class OrderItemController extends Controller
             $palletId = $order->pallets()->first()?->id;
 
             ActivityLogger::log(
-                'item_added',
-                'order_item',
-                $item->id,
-                "Producto agregado: {$desc} (EAN: {$ean}) - Cantidad: {$data['qty']}",
-                $palletId,
-                null,
-                ['ean' => $ean, 'description' => $desc, 'qty' => $data['qty']],
-                $order->id
+                action: 'item_added',
+                entityType: 'order_item',
+                entityId: $item->id,
+                description: "Producto agregado: {$desc} (EAN: {$ean}) - Cantidad: {$data['qty']}",
+                palletId: $palletId,
+                newValues: ['ean' => $ean, 'description' => $desc, 'qty' => $data['qty']],
+                orderId: $order->id,
             );
 
             return response()->json($item, 201);
@@ -122,27 +122,22 @@ class OrderItemController extends Controller
         $palletId = $order->pallets()->first()?->id;
 
         ActivityLogger::log(
-            'item_added',
-            'order_item',
-            $item->id,
-            "Producto agregado: {$p->name} (EAN: {$p->ean}) - Cantidad: {$data['qty']}",
-            $palletId,
-            null,
-            ['ean' => $p->ean, 'description' => $p->name, 'qty' => $data['qty']],
-            $order->id
+            action: 'item_added',
+            entityType: 'order_item',
+            entityId: $item->id,
+            description: "Producto agregado: {$p->name} (EAN: {$p->ean}) - Cantidad: {$data['qty']}",
+            palletId: $palletId,
+            newValues: ['ean' => $p->ean, 'description' => $p->name, 'qty' => $data['qty']],
+            orderId: $order->id,
         );
 
         return response()->json($item, 201);
     }
 
     // PATCH /order-items/{item}
-    public function update(Request $request, OrderItem $item)
+    public function update(UpdateOrderItemRequest $request, OrderItem $item)
     {
-        $data = $request->validate([
-            'status' => ['nullable', 'in:pending,done,removed'],
-            'qty' => ['nullable', 'integer', 'min:1'],
-            'done_qty' => ['nullable', 'integer', 'min:0'],
-        ]);
+        $data = $request->validated();
 
         $oldValues = [];
         $newValues = [];
@@ -184,14 +179,14 @@ class OrderItemController extends Controller
             $action = isset($data['status']) && $data['status'] === 'removed' ? 'item_removed' : (isset($data['qty']) ? 'item_quantity_changed' : 'item_status_changed');
 
             ActivityLogger::log(
-                $action,
-                'order_item',
-                $item->id,
-                "{$item->description} (EAN: {$item->ean}): " . implode(', ', $descriptions),
-                $palletId,
-                !empty($oldValues) ? $oldValues : null,
-                !empty($newValues) ? $newValues : null,
-                $item->order_id
+                action: $action,
+                entityType: 'order_item',
+                entityId: $item->id,
+                description: "{$item->description} (EAN: {$item->ean}): " . implode(', ', $descriptions),
+                palletId: $palletId,
+                oldValues: !empty($oldValues) ? $oldValues : null,
+                newValues: !empty($newValues) ? $newValues : null,
+                orderId: $item->order_id,
             );
         }
 

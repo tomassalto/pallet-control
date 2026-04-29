@@ -79,13 +79,13 @@ class PhotoAnnotationController extends Controller
         $baseName = $base->name ?? "Base #{$base->id}";
 
         \App\Helpers\ActivityLogger::log(
-            'photo_annotations_saved',
-            'photo_annotation',
-            $photo->id,
-            "Anotaciones guardadas en foto de la base '{$baseName}' del pallet '{$pallet->code}': {$annotationsCount} anotación(es)" . ($existingCount > 0 ? " (reemplazaron {$existingCount} anterior(es))" : ""),
-            $pallet->id,
-            $existingCount > 0 ? ['annotations_count' => $existingCount] : null,
-            ['annotations_count' => $annotationsCount]
+            action: 'photo_annotations_saved',
+            entityType: 'photo_annotation',
+            entityId: $photo->id,
+            description: "Anotaciones guardadas en foto de la base '{$baseName}' del pallet '{$pallet->code}': {$annotationsCount} anotación(es)" . ($existingCount > 0 ? " (reemplazaron {$existingCount} anterior(es))" : ""),
+            palletId: $pallet->id,
+            oldValues: $existingCount > 0 ? ['annotations_count' => $existingCount] : null,
+            newValues: ['annotations_count' => $annotationsCount],
         );
 
         return response()->json([

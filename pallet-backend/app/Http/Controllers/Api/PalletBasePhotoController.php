@@ -152,13 +152,12 @@ class PalletBasePhotoController extends Controller
             ]);
 
             \App\Helpers\ActivityLogger::log(
-                'base_photo_uploaded',
-                'pallet_base_photo',
-                $photo->id,
-                "Foto agregada a la base '" . ($base->name ?? "Base #{$base->id}") . "' del pallet '{$pallet->code}': {$file->getClientOriginalName()}",
-                $pallet->id,
-                null,
-                ['base_id' => $base->id, 'base_name' => $base->name, 'photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()]
+                action: 'base_photo_uploaded',
+                entityType: 'pallet_base_photo',
+                entityId: $photo->id,
+                description: "Foto agregada a la base '" . ($base->name ?? "Base #{$base->id}") . "' del pallet '{$pallet->code}': {$file->getClientOriginalName()}",
+                palletId: $pallet->id,
+                newValues: ['base_id' => $base->id, 'base_name' => $base->name, 'photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()],
             );
 
             return response()->json([
@@ -202,13 +201,12 @@ class PalletBasePhotoController extends Controller
         $photo->delete();
 
         \App\Helpers\ActivityLogger::log(
-            'base_photo_deleted',
-            'pallet_base_photo',
-            null,
-            "Foto eliminada de la base '" . ($base->name ?? "Base #{$base->id}") . "' del pallet '{$pallet->code}': {$photoName}",
-            $pallet->id,
-            ['base_id' => $base->id, 'base_name' => $base->name, 'photo_id' => $photo->id, 'original_name' => $photoName],
-            null
+            action: 'base_photo_deleted',
+            entityType: 'pallet_base_photo',
+            entityId: null,
+            description: "Foto eliminada de la base '" . ($base->name ?? "Base #{$base->id}") . "' del pallet '{$pallet->code}': {$photoName}",
+            palletId: $pallet->id,
+            oldValues: ['base_id' => $base->id, 'base_name' => $base->name, 'photo_id' => $photo->id, 'original_name' => $photoName],
         );
 
         return response()->json(['message' => 'Foto eliminada'], 200);

@@ -47,13 +47,12 @@ class PalletController extends Controller
         ]);
 
         ActivityLogger::log(
-            'pallet_created',
-            'pallet',
-            $pallet->id,
-            "Pallet '{$pallet->code}' creado",
-            $pallet->id,
-            null,
-            ['code' => $pallet->code, 'status' => 'open']
+            action: 'pallet_created',
+            entityType: 'pallet',
+            entityId: $pallet->id,
+            description: "Pallet '{$pallet->code}' creado",
+            palletId: $pallet->id,
+            newValues: ['code' => $pallet->code, 'status' => 'open'],
         );
 
         TelegramNotifier::send("📦 *Nuevo pallet* `{$pallet->code}` creado");
@@ -158,28 +157,25 @@ class PalletController extends Controller
         // Si el pedido es nuevo, registrar su creación
         if ($wasNewOrder) {
             ActivityLogger::log(
-                'order_created',
-                'order',
-                $order->id,
-                "Pedido '{$order->code}' creado",
-                null,
-                null,
-                ['code' => $order->code, 'status' => 'open'],
-                $order->id
+                action: 'order_created',
+                entityType: 'order',
+                entityId: $order->id,
+                description: "Pedido '{$order->code}' creado",
+                newValues: ['code' => $order->code, 'status' => 'open'],
+                orderId: $order->id,
             );
         }
 
         $pallet->orders()->syncWithoutDetaching([$order->id]);
 
         ActivityLogger::log(
-            'order_assigned',
-            'order',
-            $order->id,
-            "Pedido '{$order->code}' asignado al pallet '{$pallet->code}'",
-            $pallet->id,
-            null,
-            ['order_code' => $order->code],
-            $order->id
+            action: 'order_assigned',
+            entityType: 'order',
+            entityId: $order->id,
+            description: "Pedido '{$order->code}' asignado al pallet '{$pallet->code}'",
+            palletId: $pallet->id,
+            newValues: ['order_code' => $order->code],
+            orderId: $order->id,
         );
 
         if ($wasNewOrder) {
@@ -273,13 +269,13 @@ class PalletController extends Controller
         $pallet->update(['status' => 'done']);
 
         ActivityLogger::log(
-            'pallet_finalized',
-            'pallet',
-            $pallet->id,
-            "Pallet '{$pallet->code}' finalizado",
-            $pallet->id,
-            ['status' => $oldStatus],
-            ['status' => 'done']
+            action: 'pallet_finalized',
+            entityType: 'pallet',
+            entityId: $pallet->id,
+            description: "Pallet '{$pallet->code}' finalizado",
+            palletId: $pallet->id,
+            oldValues: ['status' => $oldStatus],
+            newValues: ['status' => 'done'],
         );
 
         TelegramNotifier::send("🎉 Pallet `{$pallet->code}` *cerrado* ✓");
@@ -303,13 +299,13 @@ class PalletController extends Controller
         $pallet->update(['status' => 'open']);
 
         ActivityLogger::log(
-            'pallet_reopened',
-            'pallet',
-            $pallet->id,
-            "Pallet '{$pallet->code}' reabierto",
-            $pallet->id,
-            ['status' => $oldStatus],
-            ['status' => 'open']
+            action: 'pallet_reopened',
+            entityType: 'pallet',
+            entityId: $pallet->id,
+            description: "Pallet '{$pallet->code}' reabierto",
+            palletId: $pallet->id,
+            oldValues: ['status' => $oldStatus],
+            newValues: ['status' => 'open'],
         );
 
         TelegramNotifier::send("🔄 Pallet `{$pallet->code}` *reabierto*");
@@ -344,13 +340,11 @@ class PalletController extends Controller
         $pallet->delete();
 
         ActivityLogger::log(
-            'pallet_deleted',
-            'pallet',
-            $palletId,
-            "Pallet '{$palletCode}' eliminado",
-            null,
-            ['code' => $palletCode],
-            null
+            action: 'pallet_deleted',
+            entityType: 'pallet',
+            entityId: $palletId,
+            description: "Pallet '{$palletCode}' eliminado",
+            oldValues: ['code' => $palletCode],
         );
 
         TelegramNotifier::send("🗑️ Pallet `{$palletCode}` eliminado");

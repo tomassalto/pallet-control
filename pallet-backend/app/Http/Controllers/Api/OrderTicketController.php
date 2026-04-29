@@ -37,14 +37,12 @@ class OrderTicketController extends Controller
         ]);
 
         ActivityLogger::log(
-            'order_ticket_created',
-            'order_ticket',
-            $ticket->id,
-            "Ticket agregado al pedido '{$order->code}': " . ($ticket->code ?? 'Sin código'),
-            null, // palletId
-            null, // oldValues
-            ['ticket_id' => $ticket->id, 'code' => $ticket->code], // newValues
-            $order->id // orderId
+            action: 'order_ticket_created',
+            entityType: 'order_ticket',
+            entityId: $ticket->id,
+            description: "Ticket agregado al pedido '{$order->code}': " . ($ticket->code ?? 'Sin código'),
+            newValues: ['ticket_id' => $ticket->id, 'code' => $ticket->code],
+            orderId: $order->id,
         );
 
         return response()->json($ticket->load('photos'), 201);
@@ -97,14 +95,12 @@ class OrderTicketController extends Controller
         ]);
 
         ActivityLogger::log(
-            'order_ticket_photo_uploaded',
-            'order_ticket_photo',
-            $photo->id,
-            "Foto agregada al ticket del pedido '{$order->code}': {$file->getClientOriginalName()}",
-            null, // palletId
-            null, // oldValues
-            ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()], // newValues
-            $order->id // orderId
+            action: 'order_ticket_photo_uploaded',
+            entityType: 'order_ticket_photo',
+            entityId: $photo->id,
+            description: "Foto agregada al ticket del pedido '{$order->code}': {$file->getClientOriginalName()}",
+            newValues: ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()],
+            orderId: $order->id,
         );
 
         return response()->json([
@@ -132,14 +128,12 @@ class OrderTicketController extends Controller
         $ticket->delete();
 
         ActivityLogger::log(
-            'order_ticket_deleted',
-            'order_ticket',
-            null,
-            "Ticket eliminado del pedido '{$order->code}': {$ticketCode}",
-            null, // palletId
-            ['ticket_id' => $ticketId, 'code' => $ticketCode], // oldValues
-            null, // newValues
-            $order->id // orderId
+            action: 'order_ticket_deleted',
+            entityType: 'order_ticket',
+            entityId: null,
+            description: "Ticket eliminado del pedido '{$order->code}': {$ticketCode}",
+            oldValues: ['ticket_id' => $ticketId, 'code' => $ticketCode],
+            orderId: $order->id,
         );
 
         return response()->json(['message' => 'Ticket eliminado'], 200);
@@ -165,14 +159,12 @@ class OrderTicketController extends Controller
         $photo->delete();
 
         ActivityLogger::log(
-            'order_ticket_photo_deleted',
-            'order_ticket_photo',
-            null,
-            "Foto eliminada del ticket del pedido '{$order->code}': {$photoName}",
-            null, // palletId
-            ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'original_name' => $photoName], // oldValues
-            null, // newValues
-            $order->id // orderId
+            action: 'order_ticket_photo_deleted',
+            entityType: 'order_ticket_photo',
+            entityId: null,
+            description: "Foto eliminada del ticket del pedido '{$order->code}': {$photoName}",
+            oldValues: ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'original_name' => $photoName],
+            orderId: $order->id,
         );
 
         return response()->json(['message' => 'Foto eliminada'], 200);

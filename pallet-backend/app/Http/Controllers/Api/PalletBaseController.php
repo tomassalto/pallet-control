@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdjustPalletBaseItemRequest;
+use App\Http\Requests\MigratePalletBaseRequest;
+use App\Http\Requests\StorePalletBaseRequest;
 use App\Helpers\ActivityLogger;
 use App\Models\OrderItem;
 use App\Models\Pallet;
 use App\Models\PalletBase;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 
@@ -20,15 +22,9 @@ class PalletBaseController extends Controller
         return response()->json($bases);
     }
 
-    public function store(Request $request, Pallet $pallet)
+    public function store(StorePalletBaseRequest $request, Pallet $pallet)
     {
-        $data = $request->validate([
-            'name' => ['nullable', 'string', 'max:255'],
-            'note' => ['nullable', 'string', 'max:2000'],
-            'items' => ['nullable', 'array'],
-            'items.*.order_item_id' => ['required', 'integer', 'exists:order_items,id'],
-            'items.*.qty' => ['required', 'integer', 'min:1'],
-        ]);
+        $data = $request->validated();
 
         $base = PalletBase::create([
             'pallet_id' => $pallet->id,
@@ -97,45 +93,37 @@ class PalletBaseController extends Controller
                 $orderItem = $orderItemsMap->get($orderItemId);
                 if ($orderItem) {
                     ActivityLogger::log(
-                        'item_assigned_to_base',
-                        'order_item',
-                        $orderItemId,
-                        "Producto '{$orderItem->description}' asignado a base '" . ($base->name ?? 'Sin nombre') . "' - Cantidad: {$pivotData['qty']}",
-                        $pallet->id,
-                        null,
-                        ['base_id' => $base->id, 'base_name' => $base->name, 'qty' => $pivotData['qty']]
+                        action: 'item_assigned_to_base',
+                        entityType: 'order_item',
+                        entityId: $orderItemId,
+                        description: "Producto '{$orderItem->description}' asignado a base '" . ($base->name ?? 'Sin nombre') . "' - Cantidad: {$pivotData['qty']}",
+                        palletId: $pallet->id,
+                        newValues: ['base_id' => $base->id, 'base_name' => $base->name, 'qty' => $pivotData['qty']],
                     );
                 }
             }
         }
 
         ActivityLogger::log(
-            'base_created',
-            'pallet_base',
-            $base->id,
-            "Base creada: '" . ($base->name ?? 'Sin nombre') . "'",
-            $pallet->id,
-            null,
-            ['name' => $base->name, 'note' => $base->note]
+            action: 'base_created',
+            entityType: 'pallet_base',
+            entityId: $base->id,
+            description: "Base creada: '" . ($base->name ?? 'Sin nombre') . "'",
+            palletId: $pallet->id,
+            newValues: ['name' => $base->name, 'note' => $base->note],
         );
 
         return response()->json($base->load(['photos', 'orderItems']), 201);
     }
 
-    public function update(Request $request, Pallet $pallet, PalletBase $base)
+    public function update(StorePalletBaseRequest $request, Pallet $pallet, PalletBase $base)
     {
         // Verificar que la base pertenece al pallet
         if ($base->pallet_id !== $pallet->id) {
             return response()->json(['message' => 'Base no encontrada'], 404);
         }
 
-        $data = $request->validate([
-            'name' => ['nullable', 'string', 'max:255'],
-            'note' => ['nullable', 'string', 'max:2000'],
-            'items' => ['nullable', 'array'],
-            'items.*.order_item_id' => ['required', 'integer', 'exists:order_items,id'],
-            'items.*.qty' => ['required', 'integer', 'min:1'],
-        ]);
+        $data = $request->validated();
 
         $oldValues = [];
         $newValues = [];
@@ -239,13 +227,13 @@ class PalletBaseController extends Controller
                     $oldQty = $oldItems[$orderItemId]['qty'] ?? 0;
                     if ($oldQty != $pivotData['qty']) {
                         ActivityLogger::log(
-                            'item_base_qty_changed',
-                            'order_item',
-                            $orderItemId,
-                            "Cantidad de '{$orderItem->description}' en base '" . ($base->name ?? 'Sin nombre') . "' cambiada de {$oldQty} a {$pivotData['qty']}",
-                            $pallet->id,
-                            ['base_id' => $base->id, 'qty' => $oldQty],
-                            ['base_id' => $base->id, 'qty' => $pivotData['qty']]
+                            action: 'item_base_qty_changed',
+                            entityType: 'order_item',
+                            entityId: $orderItemId,
+                            description: "Cantidad de '{$orderItem->description}' en base '" . ($base->name ?? 'Sin nombre') . "' cambiada de {$oldQty} a {$pivotData['qty']}",
+                            palletId: $pallet->id,
+                            oldValues: ['base_id' => $base->id, 'qty' => $oldQty],
+                            newValues: ['base_id' => $base->id, 'qty' => $pivotData['qty']],
                         );
                     }
                 }
@@ -255,13 +243,13 @@ class PalletBaseController extends Controller
         // Registrar log si hubo cambios en nombre o nota
         if (!empty($descriptions)) {
             ActivityLogger::log(
-                'base_updated',
-                'pallet_base',
-                $base->id,
-                "Base '" . ($base->name ?? 'Sin nombre') . "': " . implode(', ', $descriptions),
-                $pallet->id,
-                !empty($oldValues) ? $oldValues : null,
-                !empty($newValues) ? $newValues : null
+                action: 'base_updated',
+                entityType: 'pallet_base',
+                entityId: $base->id,
+                description: "Base '" . ($base->name ?? 'Sin nombre') . "': " . implode(', ', $descriptions),
+                palletId: $pallet->id,
+                oldValues: !empty($oldValues) ? $oldValues : null,
+                newValues: !empty($newValues) ? $newValues : null,
             );
         }
 
@@ -269,7 +257,7 @@ class PalletBaseController extends Controller
     }
 
     // POST /pallets/{pallet}/bases/{base}/migrate
-    public function migrate(Request $request, Pallet $pallet, PalletBase $base)
+    public function migrate(MigratePalletBaseRequest $request, Pallet $pallet, PalletBase $base)
     {
         $sourcePallet = $pallet;
         $sourceBase   = $base;
@@ -282,13 +270,7 @@ class PalletBaseController extends Controller
             return response()->json(['message' => 'El pallet está finalizado. Reabrilo antes de migrar productos.'], 422);
         }
 
-        $data = $request->validate([
-            'items'                  => ['required', 'array', 'min:1'],
-            'items.*.order_item_id'  => ['required', 'integer', 'exists:order_items,id'],
-            'items.*.qty'            => ['required', 'integer', 'min:1'],
-            'destination_pallet_id'  => ['nullable', 'integer', 'exists:pallets,id'],
-            'destination_base_id'    => ['nullable', 'integer', 'exists:pallet_bases,id'],
-        ]);
+        $data = $request->validated();
 
         $orderItemIds = collect($data['items'])->pluck('order_item_id');
 
@@ -386,13 +368,13 @@ class PalletBaseController extends Controller
 
                 // Log
                 ActivityLogger::log(
-                    'item_migrated',
-                    'order_item',
-                    $orderItemId,
-                    "Migrado '{$orderItem?->description}': {$qtyToMove} u. de [{$sourceName}] → [{$destName}]",
-                    $sourcePallet->id,
-                    ['source' => $sourceName, 'qty' => $qtyToMove],
-                    ['dest'   => $destName,   'qty' => $qtyToMove],
+                    action: 'item_migrated',
+                    entityType: 'order_item',
+                    entityId: $orderItemId,
+                    description: "Migrado '{$orderItem?->description}': {$qtyToMove} u. de [{$sourceName}] → [{$destName}]",
+                    palletId: $sourcePallet->id,
+                    oldValues: ['source' => $sourceName, 'qty' => $qtyToMove],
+                    newValues: ['dest' => $destName, 'qty' => $qtyToMove],
                 );
             }
 
@@ -410,7 +392,7 @@ class PalletBaseController extends Controller
 
     // PATCH /pallets/{pallet}/bases/{base}/adjust-item
     // Ajusta la qty de UN item en UNA base (usado para resolver conflictos de cantidad)
-    public function adjustItem(Request $request, Pallet $pallet, PalletBase $base)
+    public function adjustItem(AdjustPalletBaseItemRequest $request, Pallet $pallet, PalletBase $base)
     {
         if ($base->pallet_id !== $pallet->id) {
             return response()->json(['message' => 'Base no encontrada en este pallet'], 404);
@@ -420,10 +402,7 @@ class PalletBaseController extends Controller
             return response()->json(['message' => 'El pallet está finalizado. Reabrilo antes de modificar sus bases.'], 422);
         }
 
-        $data = $request->validate([
-            'order_item_id' => ['required', 'integer', 'exists:order_items,id'],
-            'qty'           => ['required', 'integer', 'min:0'],
-        ]);
+        $data = $request->validated();
 
         $orderItem = OrderItem::findOrFail($data['order_item_id']);
 
@@ -447,13 +426,13 @@ class PalletBaseController extends Controller
         }
 
         ActivityLogger::log(
-            'item_base_qty_adjusted',
-            'order_item',
-            $orderItem->id,
-            "Cantidad de '{$orderItem->description}' en base '" . ($base->name ?? 'Sin nombre') . "' ajustada de {$oldQty} a {$data['qty']}",
-            $pallet->id,
-            ['base_id' => $base->id, 'qty' => $oldQty],
-            ['base_id' => $base->id, 'qty' => $data['qty']]
+            action: 'item_base_qty_adjusted',
+            entityType: 'order_item',
+            entityId: $orderItem->id,
+            description: "Cantidad de '{$orderItem->description}' en base '" . ($base->name ?? 'Sin nombre') . "' ajustada de {$oldQty} a {$data['qty']}",
+            palletId: $pallet->id,
+            oldValues: ['base_id' => $base->id, 'qty' => $oldQty],
+            newValues: ['base_id' => $base->id, 'qty' => $data['qty']],
         );
 
         return response()->json(['ok' => true, 'old_qty' => $oldQty, 'new_qty' => $data['qty']]);
@@ -472,13 +451,12 @@ class PalletBaseController extends Controller
         $base->delete();
 
         ActivityLogger::log(
-            'base_deleted',
-            'pallet_base',
-            $baseId,
-            "Base eliminada: '{$baseName}'",
-            $pallet->id,
-            ['name' => $baseName, 'note' => $base->note],
-            null
+            action: 'base_deleted',
+            entityType: 'pallet_base',
+            entityId: $baseId,
+            description: "Base eliminada: '{$baseName}'",
+            palletId: $pallet->id,
+            oldValues: ['name' => $baseName, 'note' => $base->note],
         );
 
         return response()->json(['message' => 'Base eliminada'], 200);
