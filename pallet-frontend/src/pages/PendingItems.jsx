@@ -20,6 +20,10 @@ const INPUT_CLS =
 const SEC_LABEL =
   "text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500";
 
+function onlyDigits(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
 // ── OrderSearch ───────────────────────────────────────────────────────────────
 function OrderSearch({ value, onChange }) {
   const [query, setQuery] = useState(value ? `#${value.code}` : "");
@@ -129,6 +133,20 @@ function CreateModal({ onClose, onCreated }) {
   const [qty, setQty] = useState("1");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const selectedQtyMax = selectedItem ? Number(selectedItem.qty) || 0 : 0;
+
+  function handleQtyChange(rawValue) {
+    const digits = onlyDigits(rawValue);
+    if (!digits) {
+      setQty("");
+      return;
+    }
+
+    let next = parseInt(digits, 10);
+    if (!Number.isFinite(next) || next < 1) next = 1;
+    if (selectedQtyMax > 0) next = Math.min(next, selectedQtyMax);
+    setQty(String(next));
+  }
 
   // Cuando se elige un pedido, cargar sus productos
   useEffect(() => {
@@ -154,6 +172,11 @@ function CreateModal({ onClose, onCreated }) {
     const qtyNum = parseInt(qty, 10);
     if (!qtyNum || qtyNum < 1)
       return toastError("La cantidad debe ser mayor a 0");
+    if (selectedQtyMax > 0 && qtyNum > selectedQtyMax) {
+      return toastError(
+        `La cantidad no puede ser mayor a ${selectedQtyMax} (cantidad del pedido)`,
+      );
+    }
 
     setSaving(true);
     try {
@@ -284,8 +307,21 @@ function CreateModal({ onClose, onCreated }) {
             <input
               type="number"
               min="1"
+              max={selectedQtyMax > 0 ? String(selectedQtyMax) : undefined}
               value={qty}
-              onChange={(e) => setQty(e.target.value)}
+              onChange={(e) => handleQtyChange(e.target.value)}
+              onBlur={(e) => handleQtyChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (["e", "E", "+", "-", ".", ","].includes(e.key)) {
+                  e.preventDefault();
+                }
+              }}
+              onPaste={(e) => {
+                const text = e.clipboardData.getData("text");
+                if (/\D/.test(text)) {
+                  e.preventDefault();
+                }
+              }}
               className={`${INPUT_CLS} font-mono text-lg text-center`}
               inputMode="numeric"
             />
@@ -325,7 +361,13 @@ function CreateModal({ onClose, onCreated }) {
             </button>
             <button
               type="submit"
-              disabled={saving || !order || !selectedItem || !qty}
+              disabled={
+                saving ||
+                !order ||
+                !selectedItem ||
+                !qty ||
+                (selectedQtyMax > 0 && (Number(qty) < 1 || Number(qty) > selectedQtyMax))
+              }
               className="flex-1 py-3 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm hover:bg-gray-700 dark:hover:bg-gray-100 disabled:opacity-40 transition-colors"
             >
               {saving ? "Guardando…" : "Crear pendiente"}
@@ -490,7 +532,7 @@ function PendingCard({ item, onResolve, onReopen, onDelete }) {
 }
 
 // ── Vista principal ───────────────────────────────────────────────────────────
-export default function Pendientes() {
+export default function PendingItems() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("pending"); // "pending" | "resolved"
