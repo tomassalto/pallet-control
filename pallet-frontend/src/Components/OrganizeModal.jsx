@@ -5,13 +5,13 @@ function ModalProductImage({ src, alt }) {
   const [err, setErr] = useState(false);
   if (!src || err) {
     return (
-      <div className="w-11 h-11 flex-shrink-0 rounded-xl bg-gray-100 flex items-center justify-center border border-gray-200 text-xl select-none">
+      <div className="w-11 h-11 shrink-0 rounded-xl bg-gray-100 flex items-center justify-center border border-gray-200 text-xl select-none">
         📦
       </div>
     );
   }
   return (
-    <div className="w-11 h-11 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
+    <div className="w-11 h-11 shrink-0 rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
       <img
         src={src}
         alt={alt}
@@ -56,9 +56,8 @@ export default function OrganizeModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center">
       <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl flex flex-col max-h-[90vh]">
-
         {/* Header */}
-        <div className="flex items-center justify-between px-4 pt-5 pb-3 border-b flex-shrink-0">
+        <div className="flex items-center justify-between px-4 pt-5 pb-3 border-b shrink-0">
           <div>
             <p className="font-bold text-base">📦 {organizeModal.palletCode}</p>
             {organizeModal.step === "products" && (
@@ -84,7 +83,9 @@ export default function OrganizeModal({
             </p>
 
             {organizeModal.loading ? (
-              <p className="text-center text-gray-400 py-8 text-sm">Cargando…</p>
+              <p className="text-center text-gray-400 py-8 text-sm">
+                Cargando…
+              </p>
             ) : (
               <>
                 {organizeModal.bases.length === 0 && (
@@ -128,11 +129,18 @@ export default function OrganizeModal({
         {/* ── Paso 2: asignar cantidades ────────────────────────── */}
         {organizeModal.step === "products" && (
           <>
-            <div className="px-4 py-2 border-b flex-shrink-0">
+            <div className="px-4 py-2 border-b shrink-0">
               <button
                 onClick={() =>
                   setOrganizeModal((prev) =>
-                    prev ? { ...prev, step: "base", selectedBase: null, quantities: {} } : null
+                    prev
+                      ? {
+                          ...prev,
+                          step: "base",
+                          selectedBase: null,
+                          quantities: {},
+                        }
+                      : null,
                   )
                 }
                 className="text-sm text-blue-600 hover:underline"
@@ -159,22 +167,36 @@ export default function OrganizeModal({
                         active ? "border-l-4 border-l-gray-800" : "opacity-70",
                       ].join(" ")}
                     >
-                      <ModalProductImage src={item.image_url} alt={item.description} />
+                      <ModalProductImage
+                        src={item.image_url}
+                        alt={item.description}
+                      />
 
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium leading-snug">{item.description}</p>
-                        <p className="text-xs font-mono text-gray-400 mt-0.5">{item.ean}</p>
+                        <p className="text-sm font-medium leading-snug">
+                          {item.description}
+                        </p>
+                        <p className="text-xs font-mono text-gray-400 mt-0.5">
+                          {item.ean}
+                        </p>
                         <p className="text-xs text-gray-500 mt-0.5">
                           Disp:{" "}
-                          <span className={max === 0 && !active ? "text-red-500 font-medium" : ""}>
+                          <span
+                            className={
+                              max === 0 && !active
+                                ? "text-red-500 font-medium"
+                                : ""
+                            }
+                          >
                             {max}
                           </span>
-                          {" / "}{item.qty} unid.
+                          {" / "}
+                          {item.qty} unid.
                         </p>
                       </div>
 
                       {/* Stepper */}
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           onClick={() => decModalQty(item.id)}
                           disabled={cur === 0}
@@ -206,9 +228,11 @@ export default function OrganizeModal({
             </div>
 
             {/* Botón guardar */}
-            <div className="p-4 border-t flex-shrink-0">
+            <div className="p-4 border-t shrink-0">
               {(() => {
-                const count = Object.values(organizeModal.quantities).filter((q) => q > 0).length;
+                const count = Object.values(organizeModal.quantities).filter(
+                  (q) => q > 0,
+                ).length;
                 return (
                   <button
                     onClick={saveOrganize}

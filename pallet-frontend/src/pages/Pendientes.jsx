@@ -42,9 +42,9 @@ function OrderSearch({ value, onChange }) {
       setLoading(true);
       try {
         const res = await apiGet(
-          `/orders?search=${encodeURIComponent(query)}&limit=8`
+          `/orders?search=${encodeURIComponent(query)}&limit=8`,
         );
-        setResults(Array.isArray(res) ? res : res.data ?? []);
+        setResults(Array.isArray(res) ? res : (res.data ?? []));
         setOpen(true);
       } catch {
         setResults([]);
@@ -152,7 +152,8 @@ function CreateModal({ onClose, onCreated }) {
     if (!order) return toastError("Seleccioná un pedido");
     if (!selectedItem) return toastError("Seleccioná un producto");
     const qtyNum = parseInt(qty, 10);
-    if (!qtyNum || qtyNum < 1) return toastError("La cantidad debe ser mayor a 0");
+    if (!qtyNum || qtyNum < 1)
+      return toastError("La cantidad debe ser mayor a 0");
 
     setSaving(true);
     try {
@@ -230,7 +231,7 @@ function CreateModal({ onClose, onCreated }) {
                       }`}
                     >
                       {/* Miniatura */}
-                      <div className="w-9 h-9 flex-shrink-0 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                      <div className="w-9 h-9 shrink-0 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
                         {item.image_url ? (
                           <img
                             src={item.image_url}
@@ -257,7 +258,7 @@ function CreateModal({ onClose, onCreated }) {
                       </div>
                       {selected && (
                         <svg
-                          className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0"
+                          className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0"
                           fill="none"
                           viewBox="0 0 24 24"
                           strokeWidth={2.5}
@@ -380,7 +381,7 @@ function PendingCard({ item, onResolve, onReopen, onDelete }) {
         {/* Top row */}
         <div className="flex items-start gap-3">
           {/* Imagen */}
-          <div className="w-12 h-12 flex-shrink-0 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+          <div className="w-12 h-12 shrink-0 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
             {item.image_url ? (
               <img
                 src={item.image_url}
@@ -411,7 +412,7 @@ function PendingCard({ item, onResolve, onReopen, onDelete }) {
 
           {/* Cantidad faltante */}
           <div
-            className={`flex-shrink-0 text-center px-2.5 py-1.5 rounded-xl ${
+            className={`shrink-0 text-center px-2.5 py-1.5 rounded-xl ${
               isPending
                 ? "bg-red-100 dark:bg-red-900/30"
                 : "bg-green-100 dark:bg-green-900/30"
@@ -443,10 +444,14 @@ function PendingCard({ item, onResolve, onReopen, onDelete }) {
         <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-gray-100 dark:border-gray-700/50">
           <div className="text-[11px] text-gray-400 dark:text-gray-500 space-y-0.5">
             {isPending ? (
-              <span>Creado por {item.created_by_name} · {relativeDate(item.created_at)}</span>
+              <span>
+                Creado por {item.created_by_name} ·{" "}
+                {relativeDate(item.created_at)}
+              </span>
             ) : (
               <span className="text-green-600 dark:text-green-400">
-                ✓ Resuelto por {item.resolved_by_name} · {relativeDate(item.resolved_at)}
+                ✓ Resuelto por {item.resolved_by_name} ·{" "}
+                {relativeDate(item.resolved_at)}
               </span>
             )}
           </div>
@@ -555,7 +560,7 @@ export default function Pendientes() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
+          className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
         >
           <svg
             className="w-4 h-4"
@@ -577,7 +582,7 @@ export default function Pendientes() {
       {/* Alerta si hay pendientes */}
       {!loading && pendingList.length > 0 && (
         <div className="flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-2xl px-4 py-3">
-          <span className="text-2xl flex-shrink-0">🚨</span>
+          <span className="text-2xl shrink-0">🚨</span>
           <div>
             <p className="text-sm font-semibold text-red-700 dark:text-red-400">
               {pendingList.length === 1
@@ -637,13 +642,9 @@ export default function Pendientes() {
         </div>
       ) : current.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-5xl mb-4">
-            {tab === "pending" ? "✅" : "📭"}
-          </p>
+          <p className="text-5xl mb-4">{tab === "pending" ? "✅" : "📭"}</p>
           <p className="text-base font-semibold text-gray-700 dark:text-gray-300">
-            {tab === "pending"
-              ? "¡Todo al día!"
-              : "Sin pendientes resueltos"}
+            {tab === "pending" ? "¡Todo al día!" : "Sin pendientes resueltos"}
           </p>
           <p className="text-sm text-gray-400 mt-1">
             {tab === "pending"

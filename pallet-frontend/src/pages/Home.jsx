@@ -69,7 +69,7 @@ export default function Home() {
           to="/pending-items"
           className="flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-2xl px-4 py-3 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
         >
-          <span className="text-2xl flex-shrink-0">🚨</span>
+          <span className="text-2xl shrink-0">🚨</span>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-red-700 dark:text-red-400">
               {pendingCount === 1
@@ -81,7 +81,7 @@ export default function Home() {
             </p>
           </div>
           <svg
-            className="w-4 h-4 text-red-400 flex-shrink-0"
+            className="w-4 h-4 text-red-400 shrink-0"
             fill="none"
             viewBox="0 0 24 24"
             strokeWidth={2.5}
@@ -117,7 +117,7 @@ export default function Home() {
                 </p>
               </div>
               {/* Pulso activo */}
-              <div className="flex-shrink-0 w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+              <div className="shrink-0 w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
             </div>
 
             {lastOpenOrder.pallets?.length > 0 && (

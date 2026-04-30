@@ -40,7 +40,7 @@ function ItemCard({
     >
       <div className="flex items-center justify-between gap-3">
         {/* Imagen del producto */}
-        <div className="w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 flex items-center justify-center border border-gray-200 dark:border-gray-600">
+        <div className="w-14 h-14 shrink-0 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 flex items-center justify-center border border-gray-200 dark:border-gray-600">
           {it.image_url && !imgErr ? (
             <img
               src={it.image_url}
@@ -54,7 +54,9 @@ function ItemCard({
         </div>
 
         <div className="flex flex-col gap-1 flex-1 min-w-0">
-          <div className="text-[10px] text-gray-500 dark:text-gray-400">EAN</div>
+          <div className="text-[10px] text-gray-500 dark:text-gray-400">
+            EAN
+          </div>
           <div className="font-mono font-semibold text-lg">{shortEan}</div>
 
           <div className={`text-sm ${textClass(it.status)} wrap-break-word`}>
@@ -65,12 +67,18 @@ function ItemCard({
           <div className="flex flex-wrap gap-1 mt-0.5">
             {it.price != null && (
               <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
-                ${Number(it.price).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+                $
+                {Number(it.price).toLocaleString("es-AR", {
+                  minimumFractionDigits: 2,
+                })}
               </span>
             )}
             {it.desc_medio_pago != null && (
               <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-medium">
-                💳 -{Number(it.desc_medio_pago).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+                💳 -
+                {Number(it.desc_medio_pago).toLocaleString("es-AR", {
+                  minimumFractionDigits: 2,
+                })}
               </span>
             )}
             {it.is_controlled && (
@@ -83,7 +91,9 @@ function ItemCard({
           {/* Ubicaciones del producto - solo mostrar si está marcado como "listo" */}
           {it.status === "done" && it.locations && it.locations.length > 0 && (
             <div className="mt-2 space-y-1">
-              <div className="text-[10px] text-gray-500 dark:text-gray-400">Ubicación:</div>
+              <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                Ubicación:
+              </div>
               {it.locations.map((loc, idx) => (
                 <div
                   key={idx}
@@ -137,15 +147,19 @@ function ItemCard({
 }
 
 // ── Estilos de botón compartidos ─────────────────────────────────────────
-const SEC_LABEL = "text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500";
-const BTN_SEC   = "flex items-center justify-center w-full py-3 px-4 rounded-xl bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors";
-const BTN_PRI   = "w-full py-3 px-4 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-semibold hover:bg-gray-700 dark:hover:bg-gray-100 disabled:opacity-40 transition-colors";
-const BTN_GREEN = "w-full py-3 px-4 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors";
+const SEC_LABEL =
+  "text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500";
+const BTN_SEC =
+  "flex items-center justify-center w-full py-3 px-4 rounded-xl bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors";
+const BTN_PRI =
+  "w-full py-3 px-4 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-semibold hover:bg-gray-700 dark:hover:bg-gray-100 disabled:opacity-40 transition-colors";
+const BTN_GREEN =
+  "w-full py-3 px-4 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors";
 
 function orderStatusBadge(status) {
-  if (status === "done")   return { label: "Completo",   color: "green" };
-  if (status === "paused") return { label: "Pausado",    color: "amber" };
-  return                          { label: "En proceso", color: "blue"  };
+  if (status === "done") return { label: "Completo", color: "green" };
+  if (status === "paused") return { label: "Pausado", color: "amber" };
+  return { label: "En proceso", color: "blue" };
 }
 
 export default function OrderDetail() {
@@ -300,7 +314,10 @@ export default function OrderDetail() {
 
   // Items a mostrar en el modal "Organizar en pallet" — todos los que tienen qty > 0
   const modalItems = useMemo(
-    () => items.filter((it) => (it.qty ?? 0) > 0).sort((a, b) => a.description.localeCompare(b.description)),
+    () =>
+      items
+        .filter((it) => (it.qty ?? 0) > 0)
+        .sort((a, b) => a.description.localeCompare(b.description)),
     [items],
   );
 
@@ -340,7 +357,7 @@ export default function OrderDetail() {
       const updated = await apiPatch(`/order-items/${itemId}`, patch);
       // Preservar campos enriquecidos (locations, image_url) que el PATCH no devuelve
       setItems((prev) =>
-        prev.map((it) => (it.id === itemId ? { ...it, ...updated } : it))
+        prev.map((it) => (it.id === itemId ? { ...it, ...updated } : it)),
       );
     } catch (e) {
       toastError(e.message || "No se pudo actualizar");
@@ -351,16 +368,27 @@ export default function OrderDetail() {
 
   /** Intenta guardar la acción. Si hay conflicto, abre el modal de resolución. */
   function tryApplyAction(item, newQty) {
-    const totalOrganized = (item.locations ?? []).reduce((s, l) => s + (l.qty ?? 0), 0);
+    const totalOrganized = (item.locations ?? []).reduce(
+      (s, l) => s + (l.qty ?? 0),
+      0,
+    );
     const newStatus = newQty === 0 ? "removed" : "done";
 
     if (totalOrganized > newQty) {
       const deficit = totalOrganized - newQty;
       // keepQtys: cuántas unidades mantener en cada base (arranca en el valor actual)
       const keepQtys = Object.fromEntries(
-        (item.locations ?? []).map((l) => [l.base_id, l.qty])
+        (item.locations ?? []).map((l) => [l.base_id, l.qty]),
       );
-      setQtyConflict({ item, newStatus, newQty, totalOrganized, deficit, keepQtys, saving: false });
+      setQtyConflict({
+        item,
+        newStatus,
+        newQty,
+        totalOrganized,
+        deficit,
+        keepQtys,
+        saving: false,
+      });
       setActionItem(null); // cierra el modal de acción
       return;
     }
@@ -384,7 +412,7 @@ export default function OrderDetail() {
   function setConflictKeep(baseId, rawVal, maxQty) {
     const v = Math.max(0, Math.min(maxQty, parseInt(rawVal, 10) || 0));
     setQtyConflict((prev) =>
-      prev ? { ...prev, keepQtys: { ...prev.keepQtys, [baseId]: v } } : null
+      prev ? { ...prev, keepQtys: { ...prev.keepQtys, [baseId]: v } } : null,
     );
   }
 
@@ -401,7 +429,7 @@ export default function OrderDetail() {
         if (keepQty !== loc.qty) {
           await apiPatch(
             `/pallets/${loc.pallet_id}/bases/${loc.base_id}/adjust-item`,
-            { order_item_id: item.id, qty: keepQty }
+            { order_item_id: item.id, qty: keepQty },
           );
         }
       }
@@ -469,23 +497,36 @@ export default function OrderDetail() {
       await apiPost(`/pallets/${p.id}/reopen`);
       // Actualización optimista: marcar el pallet como open en el estado local
       setPallets((prev) =>
-        prev.map((pl) => (pl.id === p.id ? { ...pl, status: "open" } : pl))
+        prev.map((pl) => (pl.id === p.id ? { ...pl, status: "open" } : pl)),
       );
       toastSuccess("Pallet reabierto");
       setReopenModal(null);
       openOrganizeModal({ ...p, status: "open" });
       load(); // refrescar en segundo plano
     } catch (e) {
-      toastError(e?.response?.data?.message || e.message || "Error reabriendo pallet");
+      toastError(
+        e?.response?.data?.message || e.message || "Error reabriendo pallet",
+      );
       setReopenModal((prev) => prev && { ...prev, reopening: false });
     }
   }
 
   async function openOrganizeModal(pallet) {
-    setOrganizeModal({ palletId: pallet.id, palletCode: pallet.code, step: "base", bases: [], selectedBase: null, quantities: {}, loading: true, saving: false });
+    setOrganizeModal({
+      palletId: pallet.id,
+      palletCode: pallet.code,
+      step: "base",
+      bases: [],
+      selectedBase: null,
+      quantities: {},
+      loading: true,
+      saving: false,
+    });
     try {
       const data = await apiGet(`/pallets/${pallet.id}`);
-      setOrganizeModal((prev) => prev ? { ...prev, bases: data.bases || [], loading: false } : null);
+      setOrganizeModal((prev) =>
+        prev ? { ...prev, bases: data.bases || [], loading: false } : null,
+      );
     } catch {
       toastError("Error cargando bases del pallet");
       setOrganizeModal(null);
@@ -498,21 +539,38 @@ export default function OrderDetail() {
     base.order_items?.forEach((item) => {
       if (orderItemIds.has(item.id)) init[item.id] = item.pivot?.qty ?? 0;
     });
-    setOrganizeModal((prev) => prev ? { ...prev, step: "products", selectedBase: base, quantities: init } : null);
+    setOrganizeModal((prev) =>
+      prev
+        ? { ...prev, step: "products", selectedBase: base, quantities: init }
+        : null,
+    );
   }
 
   async function createBaseAndOrganize() {
-    setOrganizeModal((prev) => prev ? { ...prev, loading: true } : null);
+    setOrganizeModal((prev) => (prev ? { ...prev, loading: true } : null));
     try {
       const nextNum = (organizeModal.bases?.length ?? 0) + 1;
-      await apiPost(`/pallets/${organizeModal.palletId}/bases`, { name: `Base ${nextNum}` });
+      await apiPost(`/pallets/${organizeModal.palletId}/bases`, {
+        name: `Base ${nextNum}`,
+      });
       const data = await apiGet(`/pallets/${organizeModal.palletId}`);
       const bases = data.bases || [];
       const newBase = bases[bases.length - 1];
-      setOrganizeModal((prev) => prev ? { ...prev, bases, loading: false, step: "products", selectedBase: newBase, quantities: {} } : null);
+      setOrganizeModal((prev) =>
+        prev
+          ? {
+              ...prev,
+              bases,
+              loading: false,
+              step: "products",
+              selectedBase: newBase,
+              quantities: {},
+            }
+          : null,
+      );
     } catch (e) {
       toastError(e?.response?.data?.message || "Error creando base");
-      setOrganizeModal((prev) => prev ? { ...prev, loading: false } : null);
+      setOrganizeModal((prev) => (prev ? { ...prev, loading: false } : null));
     }
   }
 
@@ -541,18 +599,35 @@ export default function OrderDetail() {
   function incModalQty(orderItem) {
     const cur = organizeModal?.quantities[orderItem.id] ?? 0;
     const max = modalMaxQty(orderItem);
-    if (cur < max) setOrganizeModal((prev) => prev ? { ...prev, quantities: { ...prev.quantities, [orderItem.id]: cur + 1 } } : null);
+    if (cur < max)
+      setOrganizeModal((prev) =>
+        prev
+          ? {
+              ...prev,
+              quantities: { ...prev.quantities, [orderItem.id]: cur + 1 },
+            }
+          : null,
+      );
   }
 
   function decModalQty(itemId) {
     const cur = organizeModal?.quantities[itemId] ?? 0;
-    if (cur > 0) setOrganizeModal((prev) => prev ? { ...prev, quantities: { ...prev.quantities, [itemId]: cur - 1 } } : null);
+    if (cur > 0)
+      setOrganizeModal((prev) =>
+        prev
+          ? { ...prev, quantities: { ...prev.quantities, [itemId]: cur - 1 } }
+          : null,
+      );
   }
 
   function setModalQty(orderItem, rawValue) {
     const max = modalMaxQty(orderItem);
     const v = Math.min(Math.max(0, parseInt(rawValue, 10) || 0), max);
-    setOrganizeModal((prev) => prev ? { ...prev, quantities: { ...prev.quantities, [orderItem.id]: v } } : null);
+    setOrganizeModal((prev) =>
+      prev
+        ? { ...prev, quantities: { ...prev.quantities, [orderItem.id]: v } }
+        : null,
+    );
   }
 
   async function saveOrganize() {
@@ -560,15 +635,18 @@ export default function OrderDetail() {
     const payload = Object.entries(organizeModal.quantities)
       .filter(([, q]) => q > 0)
       .map(([id, q]) => ({ order_item_id: parseInt(id, 10), qty: q }));
-    setOrganizeModal((prev) => prev ? { ...prev, saving: true } : null);
+    setOrganizeModal((prev) => (prev ? { ...prev, saving: true } : null));
     try {
-      await apiPatch(`/pallets/${organizeModal.palletId}/bases/${organizeModal.selectedBase.id}`, { items: payload });
+      await apiPatch(
+        `/pallets/${organizeModal.palletId}/bases/${organizeModal.selectedBase.id}`,
+        { items: payload },
+      );
       toastSuccess("Productos asignados al pallet");
       setOrganizeModal(null);
       load();
     } catch (e) {
       toastError(e?.response?.data?.message || "Error al guardar");
-      setOrganizeModal((prev) => prev ? { ...prev, saving: false } : null);
+      setOrganizeModal((prev) => (prev ? { ...prev, saving: false } : null));
     }
   }
 
@@ -602,13 +680,25 @@ export default function OrderDetail() {
           <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl p-4 max-h-[80vh] flex flex-col shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-lg text-gray-900 dark:text-white">Asociar a pallet</h2>
+              <h2 className="font-bold text-lg text-gray-900 dark:text-white">
+                Asociar a pallet
+              </h2>
               <button
                 onClick={() => setOpenAttachPallet(false)}
                 className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2.5}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18 18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -622,13 +712,25 @@ export default function OrderDetail() {
                     toastSuccess(`Pallet creado: ${pallet.code}`);
                     await onAttachPallet(pallet.id);
                   } catch (e) {
-                    toastError(e?.data?.message || e?.message || "Error creando pallet");
+                    toastError(
+                      e?.data?.message || e?.message || "Error creando pallet",
+                    );
                   }
                 }}
                 className="w-full flex items-center justify-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl py-3 text-sm font-bold hover:bg-gray-700 dark:hover:bg-gray-100 active:scale-[0.99] transition-all"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2.5}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 4.5v15m7.5-7.5h-15"
+                  />
                 </svg>
                 Crear pallet nuevo
               </button>
@@ -654,18 +756,32 @@ export default function OrderDetail() {
                       className="relative w-full text-left bg-white dark:bg-gray-700/60 border border-gray-200 dark:border-gray-600/50 rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] active:shadow-none transition-all duration-150"
                     >
                       {/* Acento izquierdo */}
-                      <div className={`absolute left-0 top-0 bottom-0 w-1 ${pallet.status === "done" ? "bg-green-500" : "bg-blue-500"}`} />
+                      <div
+                        className={`absolute left-0 top-0 bottom-0 w-1 ${pallet.status === "done" ? "bg-green-500" : "bg-blue-500"}`}
+                      />
                       <div className="pl-4 pr-3 py-3 flex items-center justify-between gap-3">
                         <div>
                           <p className="font-mono font-bold text-gray-900 dark:text-white">
                             {pallet.code}
                           </p>
                           <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 capitalize">
-                            {pallet.status === "done" ? "✓ Completo" : "En proceso"}
+                            {pallet.status === "done"
+                              ? "✓ Completo"
+                              : "En proceso"}
                           </p>
                         </div>
-                        <svg className="w-4 h-4 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        <svg
+                          className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={2.5}
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9 5l7 7-7 7"
+                          />
                         </svg>
                       </div>
                     </button>
@@ -694,7 +810,14 @@ export default function OrderDetail() {
             title="Ver QR del pedido"
             className="shrink-0 p-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-5 h-5 text-gray-600 dark:text-gray-300"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.8}
+            >
               <rect x="3" y="3" width="7" height="7" rx="1" />
               <rect x="14" y="3" width="7" height="7" rx="1" />
               <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -703,7 +826,11 @@ export default function OrderDetail() {
           </button>
         </div>
 
-        {order && (() => { const b = orderStatusBadge(order.status); return <StatusBadge label={b.label} color={b.color} />; })()}
+        {order &&
+          (() => {
+            const b = orderStatusBadge(order.status);
+            return <StatusBadge label={b.label} color={b.color} />;
+          })()}
 
         {/* Pallets asociados como chips */}
         {pallets.length > 0 && (
@@ -713,7 +840,10 @@ export default function OrderDetail() {
               {pallets.map((p) => {
                 const isPalletDone = p.status === "done";
                 return (
-                  <div key={p.id} className="inline-flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700/60 rounded-xl px-3 py-1.5">
+                  <div
+                    key={p.id}
+                    className="inline-flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700/60 rounded-xl px-3 py-1.5"
+                  >
                     <Link
                       to={`/pallet/${p.id}`}
                       className="text-sm font-semibold text-gray-800 dark:text-gray-200 hover:underline font-mono"
@@ -727,7 +857,11 @@ export default function OrderDetail() {
                     )}
                     {order?.status !== "done" && modalItems.length > 0 && (
                       <button
-                        onClick={() => isPalletDone ? setReopenModal({ pallet: p, reopening: false }) : openOrganizeModal(p)}
+                        onClick={() =>
+                          isPalletDone
+                            ? setReopenModal({ pallet: p, reopening: false })
+                            : openOrganizeModal(p)
+                        }
                         className={`text-[11px] px-2 py-0.5 rounded-lg font-semibold transition-colors ${
                           isPalletDone
                             ? "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300"
@@ -774,7 +908,12 @@ export default function OrderDetail() {
         ) : (
           <div className="space-y-2">
             {tickets.map((ticket) => (
-              <TicketCard key={ticket.id} ticket={ticket} orderId={orderId} onUpdate={load} />
+              <TicketCard
+                key={ticket.id}
+                ticket={ticket}
+                orderId={orderId}
+                onUpdate={load}
+              />
             ))}
           </div>
         )}
@@ -797,7 +936,10 @@ export default function OrderDetail() {
               iconBg="bg-purple-500"
               label="Asociar pallet"
               sublabel="Vincular este pedido a un pallet existente"
-              onClick={() => { setOpenAttachPallet(true); loadAvailablePallets(); }}
+              onClick={() => {
+                setOpenAttachPallet(true);
+                loadAvailablePallets();
+              }}
             />
             <ActionItem
               icon={Icons.Plus}
@@ -814,8 +956,11 @@ export default function OrderDetail() {
               to={`/order/${orderId}/history`}
             />
             {order?.status === "open" && canFinalize && (
-              <button onClick={handleFinalize} disabled={finalizing}
-                className="w-full py-3.5 rounded-2xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold disabled:opacity-60 transition-colors mt-1">
+              <button
+                onClick={handleFinalize}
+                disabled={finalizing}
+                className="w-full py-3.5 rounded-2xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold disabled:opacity-60 transition-colors mt-1"
+              >
                 {finalizing ? "Finalizando…" : "✓ Finalizar pedido"}
               </button>
             )}
@@ -830,7 +975,6 @@ export default function OrderDetail() {
           />
         )}
       </section>
-
 
       {/* Modal agregar producto */}
       {openAddProduct && (
@@ -989,8 +1133,12 @@ export default function OrderDetail() {
       ) : items.length === 0 ? (
         // Sin productos
         <div className="text-center py-10 space-y-1">
-          <p className="font-semibold text-gray-700 dark:text-gray-300">No hay productos en este pedido</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Importá un pedido para comenzar.</p>
+          <p className="font-semibold text-gray-700 dark:text-gray-300">
+            No hay productos en este pedido
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Importá un pedido para comenzar.
+          </p>
         </div>
       ) : (
         // Ítems para pedidos no finalizados
@@ -1025,7 +1173,9 @@ export default function OrderDetail() {
                   item={it}
                   onSelect={() => {
                     setActionItem(it);
-                    setActionQty(it.status === "removed" ? "0" : String(it.qty ?? ""));
+                    setActionQty(
+                      it.status === "removed" ? "0" : String(it.qty ?? ""),
+                    );
                   }}
                   borderColor={rowClass(it.status)}
                   bgColor="bg-gray-50"
@@ -1106,7 +1256,9 @@ export default function OrderDetail() {
               <div className="text-4xl">🔒</div>
               <p className="font-bold text-lg">Pallet finalizado</p>
               <p className="text-sm text-gray-600 leading-snug">
-                <span className="font-semibold font-mono">{reopenModal.pallet.code}</span>{" "}
+                <span className="font-semibold font-mono">
+                  {reopenModal.pallet.code}
+                </span>{" "}
                 está cerrado. Para organizar productos necesitás reabrirlo.
               </p>
               <p className="text-xs text-gray-400">
@@ -1248,7 +1400,11 @@ export default function OrderDetail() {
 
       {/* QR Modal */}
       {showQR && order && (
-        <QRModal order={order} pallet={pallets[0] ?? null} onClose={() => setShowQR(false)} />
+        <QRModal
+          order={order}
+          pallet={pallets[0] ?? null}
+          onClose={() => setShowQR(false)}
+        />
       )}
     </div>
   );
@@ -1351,11 +1507,12 @@ function TicketCard({ ticket, orderId, onUpdate }) {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* Contador de fotos */}
             {(ticket.photos?.length || 0) > 0 && (
               <span className="text-[11px] bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full font-semibold">
-                {ticket.photos.length} foto{ticket.photos.length !== 1 ? "s" : ""}
+                {ticket.photos.length} foto
+                {ticket.photos.length !== 1 ? "s" : ""}
               </span>
             )}
             {/* Toggle ver fotos */}
@@ -1403,13 +1560,18 @@ function TicketCard({ ticket, orderId, onUpdate }) {
                     </div>
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleDeletePhoto(photo.id); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeletePhoto(photo.id);
+                    }}
                     className="absolute top-1.5 right-1.5 bg-black/50 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10 transition-colors"
                   >
                     ✕
                   </button>
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent text-white text-[10px] px-2 py-1.5">
-                    {new Date(photo.created_at).toLocaleDateString(undefined, { dateStyle: "short" })}
+                    {new Date(photo.created_at).toLocaleDateString(undefined, {
+                      dateStyle: "short",
+                    })}
                   </div>
                 </div>
               );
@@ -1427,15 +1589,33 @@ function TicketCard({ ticket, orderId, onUpdate }) {
               {uploading ? (
                 <>
                   <div className="w-6 h-6 rounded-full border-2 border-gray-400 border-r-transparent animate-spin" />
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500">Subiendo…</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                    Subiendo…
+                  </span>
                 </>
               ) : (
                 <>
-                  <svg className="w-7 h-7 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                  <svg
+                    className="w-7 h-7 text-gray-400 dark:text-gray-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zM18.75 10.5h.008v.008h-.008V10.5z"
+                    />
                   </svg>
-                  <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500">Agregar foto</span>
+                  <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500">
+                    Agregar foto
+                  </span>
                 </>
               )}
             </label>
@@ -1459,19 +1639,32 @@ function TicketCard({ ticket, orderId, onUpdate }) {
       {/* Modal confirmar eliminar ticket */}
       {confirmDeleteTicket && (
         <>
-          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setConfirmDeleteTicket(false)} />
+          <div
+            className="fixed inset-0 bg-black/50 z-40"
+            onClick={() => setConfirmDeleteTicket(false)}
+          />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="space-y-1.5">
-                <p className="font-bold text-lg text-gray-900 dark:text-white">¿Eliminar ticket?</p>
+                <p className="font-bold text-lg text-gray-900 dark:text-white">
+                  ¿Eliminar ticket?
+                </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Ticket <span className="font-semibold text-gray-900 dark:text-white">{ticket.code || "Sin código"}</span> y todas sus fotos serán eliminados permanentemente.
+                  Ticket{" "}
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {ticket.code || "Sin código"}
+                  </span>{" "}
+                  y todas sus fotos serán eliminados permanentemente.
                 </p>
               </div>
 
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl p-3.5">
                 <p className="text-sm text-red-800 dark:text-red-300">
-                  <span className="font-semibold">Atención:</span> esta acción no se puede deshacer.
+                  <span className="font-semibold">Atención:</span> esta acción
+                  no se puede deshacer.
                 </p>
               </div>
 

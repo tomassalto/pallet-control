@@ -5,19 +5,22 @@ import BackButton from "../ui/BackButton";
 import { PageSpinner, InlineSpinner } from "../ui/Spinner";
 
 function actionDotColor(action = "") {
-  if (action.includes("delete") || action.includes("elimina")) return "bg-red-400";
-  if (action.includes("create") || action.includes("crea"))   return "bg-green-400";
-  if (action.includes("finalize") || action.includes("done")) return "bg-blue-400";
-  if (action.includes("reopen"))                              return "bg-amber-400";
+  if (action.includes("delete") || action.includes("elimina"))
+    return "bg-red-400";
+  if (action.includes("create") || action.includes("crea"))
+    return "bg-green-400";
+  if (action.includes("finalize") || action.includes("done"))
+    return "bg-blue-400";
+  if (action.includes("reopen")) return "bg-amber-400";
   return "bg-gray-400 dark:bg-gray-500";
 }
 
 export default function AllLogs() {
   const [loading, setLoading] = useState(true);
-  const [logs, setLogs]       = useState([]);
-  const [page, setPage]       = useState(1);
+  const [logs, setLogs] = useState([]);
+  const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
-  const [error, setError]     = useState("");
+  const [error, setError] = useState("");
 
   async function load(nextPage = 1, { append = false } = {}) {
     setError("");
@@ -27,7 +30,9 @@ export default function AllLogs() {
       const rows = data.logs || [];
       setLogs((prev) => (append ? [...prev, ...rows] : rows));
       setPage(data.current_page ?? nextPage);
-      setHasMore((data.current_page ?? nextPage) < (data.last_page ?? nextPage));
+      setHasMore(
+        (data.current_page ?? nextPage) < (data.last_page ?? nextPage),
+      );
     } catch (e) {
       setError(e.message || "Error cargando logs");
     } finally {
@@ -35,7 +40,9 @@ export default function AllLogs() {
     }
   }
 
-  useEffect(() => { load(1); }, []);
+  useEffect(() => {
+    load(1);
+  }, []);
 
   if (loading && logs.length === 0) {
     return (
@@ -67,14 +74,17 @@ export default function AllLogs() {
           Actividad global
         </h1>
         <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-          {logs.length} evento{logs.length !== 1 ? "s" : ""} cargado{logs.length !== 1 ? "s" : ""}
+          {logs.length} evento{logs.length !== 1 ? "s" : ""} cargado
+          {logs.length !== 1 ? "s" : ""}
         </p>
       </div>
 
       {/* Timeline */}
       {logs.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-sm text-gray-500 dark:text-gray-400">No hay actividad registrada aún.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No hay actividad registrada aún.
+          </p>
         </div>
       ) : (
         <div className="relative pl-6">
@@ -85,7 +95,9 @@ export default function AllLogs() {
             {logs.map((log) => (
               <div key={log.id} className="relative">
                 {/* Dot */}
-                <div className={`absolute left-[-19px] top-3.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-gray-900 ${actionDotColor(log.action)}`} />
+                <div
+                  className={`absolute left-[-19px] top-3.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-gray-900 ${actionDotColor(log.action)}`}
+                />
 
                 <div className="bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-2xl px-4 py-3 shadow-sm">
                   <p className="text-sm text-gray-800 dark:text-gray-200 leading-snug">
@@ -93,14 +105,16 @@ export default function AllLogs() {
                   </p>
 
                   {log.context && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{log.context}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {log.context}
+                    </p>
                   )}
 
                   <div className="flex items-center justify-between mt-2 gap-2">
                     <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 truncate">
                       {log.user_name}
                     </span>
-                    <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
+                    <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
                       {log.created_at_formatted}
                     </span>
                   </div>
@@ -113,8 +127,18 @@ export default function AllLogs() {
                           to={`/pallet/${log.pallet_id}`}
                           className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
                         >
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={2.5}
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+                            />
                           </svg>
                           Ver pallet
                         </Link>
@@ -124,8 +148,18 @@ export default function AllLogs() {
                           to={`/order/${log.order_id}`}
                           className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
                         >
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={2.5}
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"
+                            />
                           </svg>
                           Ver pedido
                         </Link>

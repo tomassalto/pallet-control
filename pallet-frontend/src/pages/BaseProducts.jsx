@@ -21,23 +21,27 @@ function ProductImage({ src, alt }) {
 
 // ── Paleta consistente con la vista pública ──────────────────────────────────
 const ORDER_COLORS = [
-  { bg: "bg-blue-50",    badge: "bg-blue-600",    border: "border-l-blue-500"    },
-  { bg: "bg-emerald-50", badge: "bg-emerald-600",  border: "border-l-emerald-500" },
-  { bg: "bg-violet-50",  badge: "bg-violet-600",   border: "border-l-violet-500"  },
-  { bg: "bg-amber-50",   badge: "bg-amber-500",    border: "border-l-amber-400"   },
-  { bg: "bg-rose-50",    badge: "bg-rose-600",     border: "border-l-rose-500"    },
-  { bg: "bg-cyan-50",    badge: "bg-cyan-600",     border: "border-l-cyan-500"    },
+  { bg: "bg-blue-50", badge: "bg-blue-600", border: "border-l-blue-500" },
+  {
+    bg: "bg-emerald-50",
+    badge: "bg-emerald-600",
+    border: "border-l-emerald-500",
+  },
+  { bg: "bg-violet-50", badge: "bg-violet-600", border: "border-l-violet-500" },
+  { bg: "bg-amber-50", badge: "bg-amber-500", border: "border-l-amber-400" },
+  { bg: "bg-rose-50", badge: "bg-rose-600", border: "border-l-rose-500" },
+  { bg: "bg-cyan-50", badge: "bg-cyan-600", border: "border-l-cyan-500" },
 ];
 
 export default function BaseProducts() {
   const { palletId, baseId } = useParams();
 
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [pallet, setPallet]     = useState(null);
-  const [base, setBase]         = useState(null);
-  const [orders, setOrders]     = useState([]);
-  const [error, setError]       = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [pallet, setPallet] = useState(null);
+  const [base, setBase] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [error, setError] = useState("");
 
   // Mapa: order_item_id → qty en esta base (0 = no está, >0 = está)
   const [quantities, setQuantities] = useState({});
@@ -110,7 +114,10 @@ export default function BaseProducts() {
 
   function handleInput(orderItem, raw) {
     const v = parseInt(raw, 10);
-    if (isNaN(v) || v < 0) { setQty(orderItem.id, 0); return; }
+    if (isNaN(v) || v < 0) {
+      setQty(orderItem.id, 0);
+      return;
+    }
     setQty(orderItem.id, Math.min(v, maxQty(orderItem)));
   }
 
@@ -146,7 +153,7 @@ export default function BaseProducts() {
     );
   }
 
-  const palletDone    = pallet?.status === "done";
+  const palletDone = pallet?.status === "done";
   const selectedCount = Object.values(quantities).filter((q) => q > 0).length;
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -182,12 +189,16 @@ export default function BaseProducts() {
       ) : (
         <div className="space-y-3">
           {orders.map((order, orderIdx) => {
-            const c         = ORDER_COLORS[orderIdx % ORDER_COLORS.length];
+            const c = ORDER_COLORS[orderIdx % ORDER_COLORS.length];
             const orderDone = order.status === "done";
 
             // Solo mostrar los ítems que ya están asignados a esta base
-            const baseItemIds = new Set((base?.order_items ?? []).map((i) => i.id));
-            const visibleItems = (order.items ?? []).filter((item) => baseItemIds.has(item.id));
+            const baseItemIds = new Set(
+              (base?.order_items ?? []).map((i) => i.id),
+            );
+            const visibleItems = (order.items ?? []).filter((item) =>
+              baseItemIds.has(item.id),
+            );
 
             if (visibleItems.length === 0) return null;
 
@@ -209,16 +220,17 @@ export default function BaseProducts() {
                     </span>
                   )}
                   <span className="ml-auto text-xs text-gray-400">
-                    {visibleItems.length} producto{visibleItems.length !== 1 ? "s" : ""}
+                    {visibleItems.length} producto
+                    {visibleItems.length !== 1 ? "s" : ""}
                   </span>
                 </div>
 
                 {/* Filas de ítems */}
                 <div className="divide-y divide-gray-100">
                   {visibleItems.map((item) => {
-                    const cur      = quantities[item.id] ?? 0;
-                    const max      = maxQty(item);
-                    const active   = cur > 0;
+                    const cur = quantities[item.id] ?? 0;
+                    const max = maxQty(item);
+                    const active = cur > 0;
                     const readOnly = palletDone || orderDone;
 
                     return (
@@ -230,8 +242,11 @@ export default function BaseProducts() {
                         ].join(" ")}
                       >
                         {/* Imagen del producto */}
-                        <div className="w-12 h-12 flex-shrink-0 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200">
-                          <ProductImage src={item.image_url} alt={item.description} />
+                        <div className="w-12 h-12 shrink-0 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200">
+                          <ProductImage
+                            src={item.image_url}
+                            alt={item.description}
+                          />
                         </div>
 
                         {/* Descripción */}
@@ -246,14 +261,14 @@ export default function BaseProducts() {
 
                         {/* Stepper o valor fijo */}
                         {readOnly ? (
-                          <div className="flex-shrink-0 text-center min-w-[52px]">
+                          <div className="shrink-0 text-center min-w-[52px]">
                             <p className="text-xl font-bold text-gray-800 leading-none">
                               {cur}
                             </p>
                             <p className="text-[10px] text-gray-400">unid.</p>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             {/* − */}
                             <button
                               onClick={() => dec(item.id)}
@@ -269,7 +284,9 @@ export default function BaseProducts() {
                               inputMode="numeric"
                               value={cur === 0 ? "" : cur}
                               placeholder="0"
-                              onChange={(e) => handleInput(item, e.target.value)}
+                              onChange={(e) =>
+                                handleInput(item, e.target.value)
+                              }
                               onFocus={(e) => e.target.select()}
                               className="w-12 text-center text-sm font-bold border rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-gray-300"
                             />
