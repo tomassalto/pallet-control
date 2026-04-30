@@ -6,8 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
-use App\Services\TicketOcrService;
+use App\Jobs\ProcessTicketOcr;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Helpers\ImageConverter;
@@ -52,12 +53,6 @@ class OrderTicketController extends Controller
     // POST /orders/{order}/tickets/{ticket}/photos
     public function storePhoto(Request $request, Order $order, OrderTicket $ticket)
     {
-        // En hosting tipo Render el OCR puede tardar más que el max_execution_time
-        // por defecto del request y terminar como 500 genérico.
-        $ocrHttpTimeout = max(30, (int) env('OCR_HTTP_TIMEOUT', 180));
-        @ini_set('max_execution_time', (string) $ocrHttpTimeout);
-        @set_time_limit($ocrHttpTimeout);
-
         try {
             // Verificar que el ticket pertenece al pedido
             if ($ticket->order_id !== $order->id) {
@@ -101,31 +96,13 @@ class OrderTicketController extends Controller
                 orderId: $order->id,
             );
 
-            // ── OCR sincrónico (bloqueante) ────────────────────────────────────
-            // No devolvemos éxito hasta terminar el análisis completo.
-            // Si OCR falla, devolvemos error y revertimos la foto creada.
-            try {
-                $processed = app(TicketOcrService::class)->processPhoto($photo);
-            } catch (\Throwable $e) {
-                Log::error('OrderTicketController OCR: excepción durante procesamiento.', [
-                    'photo_id' => $photo->id,
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString(),
-                ]);
-                $processed = false;
-                $ocrException = $e->getMessage();
-            }
-
-            if (! $processed) {
-                Storage::disk('public')->delete($photo->path);
-                $photo->delete();
-
-                return response()->json([
-                    // Mensaje intencionalmente explícito para debug en frontend.
-                    'message' => 'OCR_UPLOAD_FAILED::No se pudo analizar la foto del ticket.',
-                    'detail' => $ocrException ?? 'OCR devolvió resultado nulo/fallido.',
-                ], 422);
-            }
+            // ── OCR asíncrono (post-respuesta) ────────────────────────────────
+            // El análisis OCR puede tardar 30-180 segundos con múltiples variantes
+            // de imagen y configuraciones de Tesseract. Ejecutarlo de forma
+            // bloqueante agota max_execution_time en entornos como Render.
+            // Bus::dispatchAfterResponse() envía la respuesta HTTP primero y
+            // luego ejecuta el job en el mismo proceso — sin necesitar queue worker.
+            Bus::dispatchAfterResponse(new ProcessTicketOcr($photo->id));
 
             return response()->json([
                 'photo' => $photo->fresh(),
@@ -140,8 +117,8 @@ class OrderTicketController extends Controller
             ]);
 
             return response()->json([
-                // "Feo y burdo" para ver exactamente dónde rompe en producción.
-                'message' => 'STORE_PHOTO_500::' . $e->getMessage(),
+                'message' => 'Error al subir la foto del ticket.',
+                'detail'  => $e->getMessage(),
             ], 500);
         }
     }

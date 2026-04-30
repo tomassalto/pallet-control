@@ -108,12 +108,9 @@ class TicketOcrService
         $variants = [];
 
         $recipes = [
-            ['label' => 'scaled', 'gray' => false, 'contrast' => false, 'sharp' => false, 'rotate' => 0],
             ['label' => 'gray', 'gray' => true, 'contrast' => false, 'sharp' => false, 'rotate' => 0],
-            ['label' => 'contrast', 'gray' => true, 'contrast' => true, 'sharp' => false, 'rotate' => 0],
             ['label' => 'sharp', 'gray' => true, 'contrast' => true, 'sharp' => true, 'rotate' => 0],
             ['label' => 'rot90_sharp', 'gray' => true, 'contrast' => true, 'sharp' => true, 'rotate' => 90],
-            ['label' => 'rot270_sharp', 'gray' => true, 'contrast' => true, 'sharp' => true, 'rotate' => 270],
         ];
 
         foreach ($recipes as $recipe) {
@@ -216,8 +213,6 @@ class TicketOcrService
         $configs = [
             ['psm' => 6,  'whitelist' => true],
             ['psm' => 11, 'whitelist' => true],
-            ['psm' => 12, 'whitelist' => true],
-            ['psm' => 6,  'whitelist' => false],
         ];
 
         $merged = ['img_w' => 0, 'img_h' => 0, 'eans' => []];
