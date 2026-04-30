@@ -178,6 +178,9 @@ class PublicPalletController extends Controller
                         'ocr_processed'     => $photo->ocr_processed_at !== null,
                         'highlight_count'   => count($highlights),
                         'highlights'        => $highlights,
+                        // debug: EANs crudos detectados por Tesseract (se puede quitar en producción)
+                        'ocr_eans_detected' => $photo->ocr_data ? array_column($photo->ocr_data['eans'] ?? [], 'ean') : [],
+                        'pallet_eans'       => array_keys($palletEanMap),
                     ];
                 })->values();
 

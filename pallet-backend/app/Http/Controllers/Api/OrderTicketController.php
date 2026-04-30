@@ -6,8 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
-use App\Services\TicketOcrService;
+use App\Jobs\ProcessTicketOcr;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Helpers\ImageConverter;
@@ -104,14 +105,11 @@ class OrderTicketController extends Controller
             orderId: $order->id,
         );
 
-        // ── OCR: intentar extraer EANs automáticamente ────────────────────
-        // Se ejecuta en background después de enviar la respuesta HTTP.
-        // Si Tesseract no está instalado, simplemente no hace nada.
-        try {
-            app(TicketOcrService::class)->processPhoto($photo->fresh());
-        } catch (\Throwable $e) {
-            Log::warning('TicketOcrService: error al procesar foto.', ['error' => $e->getMessage()]);
-        }
+        // ── OCR: extraer EANs después de enviar la respuesta HTTP ─────────
+        // Bus::dispatchAfterResponse() corre el job en el mismo proceso pero
+        // DESPUÉS de que el servidor ya envió la respuesta al cliente.
+        // No requiere queue worker ni cambios en QUEUE_CONNECTION.
+        Bus::dispatchAfterResponse(new ProcessTicketOcr($photo->id));
 
         return response()->json([
             'photo' => $photo->fresh(),
