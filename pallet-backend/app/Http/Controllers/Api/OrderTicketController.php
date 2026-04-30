@@ -6,9 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
-use App\Jobs\ProcessTicketOcr;
+use App\Services\TicketOcrService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Helpers\ImageConverter;
@@ -105,11 +104,26 @@ class OrderTicketController extends Controller
             orderId: $order->id,
         );
 
-        // ── OCR: extraer EANs después de enviar la respuesta HTTP ─────────
-        // Bus::dispatchAfterResponse() corre el job en el mismo proceso pero
-        // DESPUÉS de que el servidor ya envió la respuesta al cliente.
-        // No requiere queue worker ni cambios en QUEUE_CONNECTION.
-        Bus::dispatchAfterResponse(new ProcessTicketOcr($photo->id));
+        // ── OCR: procesar después de responder sin depender de queue worker ─
+        // En producción (Render) no siempre hay worker activo, y los jobs pueden
+        // quedar en cola con estado "procesando" indefinido en frontend.
+        $photoId = $photo->id;
+        app()->terminating(function () use ($photoId) {
+            try {
+                $photo = OrderTicketPhoto::find($photoId);
+                if (! $photo) {
+                    Log::warning("OrderTicketController OCR: foto {$photoId} no encontrada.");
+                    return;
+                }
+
+                app(TicketOcrService::class)->processPhoto($photo);
+            } catch (\Throwable $e) {
+                Log::error('OrderTicketController OCR: fallo al procesar ticket.', [
+                    'photo_id' => $photoId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
 
         return response()->json([
             'photo' => $photo->fresh(),
