@@ -70,9 +70,9 @@ class OrderTicketController extends Controller
             $path = ImageConverter::convertToWebP(
                 $file,
                 "orders/{$order->id}/tickets/{$ticket->id}",
-                85,
-                4000,
-                4000
+                95,
+                6000,
+                6000
             );
         } catch (\Exception $e) {
             Log::error('Error al convertir imagen a WebP:', [

@@ -66,32 +66,6 @@ class PublicPalletController extends Controller
             }
         }
 
-        // ── Mapa EAN → info del pallet (para OCR matching) ───────────────
-        // Agrupa por EAN acumulando cantidades de todos los pedidos/bases.
-        $palletEanMap = [];
-        foreach ($palletItemsMap as $data) {
-            $item    = $data['item'];
-            $ean     = $item->ean;
-            $orderId = $item->order_id;
-            $order   = $pallet->orders->firstWhere('id', $orderId);
-
-            if (! $ean) continue;
-
-            if (! isset($palletEanMap[$ean])) {
-                $palletEanMap[$ean] = [
-                    'description' => $item->description,
-                    'total_qty'   => 0,
-                    'orders'      => [],
-                ];
-            }
-
-            $palletEanMap[$ean]['total_qty'] += $data['qty'];
-            $palletEanMap[$ean]['orders'][]   = [
-                'code' => $order?->code ?? "#{$orderId}",
-                'qty'  => $data['qty'],
-            ];
-        }
-
         // Agrupar por pedido para la sección de orders
         $orderMap = [];
         foreach ($palletItemsMap as $data) {
@@ -120,6 +94,50 @@ class PublicPalletController extends Controller
             usort($o['items'], fn ($a, $b) => strcmp($a['description'], $b['description']));
         }
         $orders = array_values($orderMap);
+
+        // ── Mapa EAN → info del pallet (para OCR matching) ───────────────
+        // Se construye desde los mismos productos renderizados en Pallet View.
+        $palletEanMap = [];
+        $orderScopedEanMaps = [];
+        foreach ($orders as $orderData) {
+            foreach ($orderData['items'] as $item) {
+                $ean = $item['ean'] ?? null;
+                if (! $ean) {
+                    continue;
+                }
+
+                if (! isset($palletEanMap[$ean])) {
+                    $palletEanMap[$ean] = [
+                        'description' => $item['description'],
+                        'total_qty' => 0,
+                        'orders' => [],
+                    ];
+                }
+
+                $palletEanMap[$ean]['total_qty'] += (int) ($item['qty'] ?? 0);
+                $palletEanMap[$ean]['orders'][] = [
+                    'code' => $orderData['code'],
+                    'qty' => (int) ($item['qty'] ?? 0),
+                ];
+
+                $orderId = (int) $orderData['id'];
+                if (! isset($orderScopedEanMaps[$orderId])) {
+                    $orderScopedEanMaps[$orderId] = [];
+                }
+                if (! isset($orderScopedEanMaps[$orderId][$ean])) {
+                    $orderScopedEanMaps[$orderId][$ean] = [
+                        'description' => $item['description'],
+                        'total_qty' => 0,
+                        'orders' => [],
+                    ];
+                }
+                $orderScopedEanMaps[$orderId][$ean]['total_qty'] += (int) ($item['qty'] ?? 0);
+                $orderScopedEanMaps[$orderId][$ean]['orders'][] = [
+                    'code' => $orderData['code'],
+                    'qty' => (int) ($item['qty'] ?? 0),
+                ];
+            }
+        }
 
         // ── Bases: fotos + ítems agrupados por pedido ─────────────────────
         $bases = $pallet->bases->map(function ($base) use ($images) {
@@ -161,14 +179,16 @@ class PublicPalletController extends Controller
         foreach ($pallet->orders as $order) {
             if ($order->tickets->isEmpty()) continue;
 
-            $ticketList = $order->tickets->map(function ($ticket) use ($palletEanMap) {
-                $photos = $ticket->photos->map(function ($photo) use ($palletEanMap) {
+            $orderScopedMap = $orderScopedEanMaps[$order->id] ?? $palletEanMap;
+
+            $ticketList = $order->tickets->map(function ($ticket) use ($orderScopedMap) {
+                $photos = $ticket->photos->map(function ($photo) use ($orderScopedMap) {
                     $highlights = [];
 
                     if ($photo->ocr_processed_at && $photo->ocr_data) {
                         $highlights = TicketOcrService::buildHighlights(
                             $photo->ocr_data,
-                            $palletEanMap
+                            $orderScopedMap
                         );
                     }
 
@@ -178,9 +198,6 @@ class PublicPalletController extends Controller
                         'ocr_processed'     => $photo->ocr_processed_at !== null,
                         'highlight_count'   => count($highlights),
                         'highlights'        => $highlights,
-                        // debug: EANs crudos detectados por Tesseract (se puede quitar en producción)
-                        'ocr_eans_detected' => $photo->ocr_data ? array_column($photo->ocr_data['eans'] ?? [], 'ean') : [],
-                        'pallet_eans'       => array_keys($palletEanMap),
                     ];
                 })->values();
 

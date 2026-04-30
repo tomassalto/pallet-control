@@ -143,7 +143,7 @@ class PhotoUploadService
         ]);
 
         $path = ImageConverter::convertToWebP(
-            $data['photo'], "orders/{$order->id}/tickets/{$ticket->id}", 85, 4000, 4000
+            $data['photo'], "orders/{$order->id}/tickets/{$ticket->id}", 95, 6000, 6000
         );
 
         $photo = OrderTicketPhoto::create([

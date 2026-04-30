@@ -19,6 +19,8 @@
 /storage/*.key
 /storage/pail
 /vendor
+/.venv-ocr
+__pycache__/
 /public/app
 /database/database.sqlite
 /storage/app/public
