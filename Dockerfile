@@ -6,6 +6,7 @@ RUN apk add --no-cache \
     libpng-dev oniguruma-dev libxml2-dev \
     freetype-dev libjpeg-turbo-dev libwebp-dev \
     postgresql-dev \
+    tesseract-ocr tesseract-ocr-data-eng \
     nodejs npm && \
     docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp && \
     docker-php-ext-install pdo pdo_pgsql mbstring exif bcmath gd intl pcntl
