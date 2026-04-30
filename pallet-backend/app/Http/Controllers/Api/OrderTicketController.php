@@ -52,20 +52,20 @@ class OrderTicketController extends Controller
     // POST /orders/{order}/tickets/{ticket}/photos
     public function storePhoto(Request $request, Order $order, OrderTicket $ticket)
     {
-        // Verificar que el ticket pertenece al pedido
-        if ($ticket->order_id !== $order->id) {
-            return response()->json(['message' => 'Ticket no encontrado'], 404);
-        }
-
-        $data = $request->validate([
-            'photo' => ['required', 'file', 'mimes:jpeg,jpg,png,webp', 'max:20480'], // 20MB
-            'note' => ['nullable', 'string', 'max:1000'],
-        ]);
-
-        $file = $data['photo'];
-
-        // Convertir a WebP
         try {
+            // Verificar que el ticket pertenece al pedido
+            if ($ticket->order_id !== $order->id) {
+                return response()->json(['message' => 'Ticket no encontrado'], 404);
+            }
+
+            $data = $request->validate([
+                'photo' => ['required', 'file', 'mimes:jpeg,jpg,png,webp', 'max:20480'], // 20MB
+                'note' => ['nullable', 'string', 'max:1000'],
+            ]);
+
+            $file = $data['photo'];
+
+            // Convertir a WebP
             $path = ImageConverter::convertToWebP(
                 $file,
                 "orders/{$order->id}/tickets/{$ticket->id}",
@@ -73,63 +73,71 @@ class OrderTicketController extends Controller
                 6000,
                 6000
             );
-        } catch (\Exception $e) {
-            Log::error('Error al convertir imagen a WebP:', [
+
+            // Obtener el siguiente índice de orden
+            $maxIndex = $ticket->photos()->max('order_index') ?? -1;
+            $nextIndex = $maxIndex + 1;
+
+            $photo = OrderTicketPhoto::create([
+                'ticket_id' => $ticket->id,
+                'path' => $path,
+                'original_name' => $file->getClientOriginalName(),
+                'note' => $data['note'] ?? null,
+                'order_index' => $nextIndex,
+            ]);
+
+            ActivityLogger::log(
+                action: 'order_ticket_photo_uploaded',
+                entityType: 'order_ticket_photo',
+                entityId: $photo->id,
+                description: "Foto agregada al ticket del pedido '{$order->code}': {$file->getClientOriginalName()}",
+                newValues: ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()],
+                orderId: $order->id,
+            );
+
+            // ── OCR sincrónico (bloqueante) ────────────────────────────────────
+            // No devolvemos éxito hasta terminar el análisis completo.
+            // Si OCR falla, devolvemos error y revertimos la foto creada.
+            try {
+                $processed = app(TicketOcrService::class)->processPhoto($photo);
+            } catch (\Throwable $e) {
+                Log::error('OrderTicketController OCR: excepción durante procesamiento.', [
+                    'photo_id' => $photo->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                $processed = false;
+                $ocrException = $e->getMessage();
+            }
+
+            if (! $processed) {
+                Storage::disk('public')->delete($photo->path);
+                $photo->delete();
+
+                return response()->json([
+                    // Mensaje intencionalmente explícito para debug en frontend.
+                    'message' => 'OCR_UPLOAD_FAILED::No se pudo analizar la foto del ticket.',
+                    'detail' => $ocrException ?? 'OCR devolvió resultado nulo/fallido.',
+                ], 422);
+            }
+
+            return response()->json([
+                'photo' => $photo->fresh(),
+                'url' => '/storage/' . $path,
+            ], 201);
+        } catch (\Throwable $e) {
+            Log::error('OrderTicketController storePhoto: excepción no controlada.', [
+                'order_id' => $order->id ?? null,
+                'ticket_id' => $ticket->id ?? null,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            return response()->json([
-                'message' => 'Error al procesar la imagen: ' . $e->getMessage(),
-            ], 422);
-        }
-
-        // Obtener el siguiente índice de orden
-        $maxIndex = $ticket->photos()->max('order_index') ?? -1;
-        $nextIndex = $maxIndex + 1;
-
-        $photo = OrderTicketPhoto::create([
-            'ticket_id' => $ticket->id,
-            'path' => $path,
-            'original_name' => $file->getClientOriginalName(),
-            'note' => $data['note'] ?? null,
-            'order_index' => $nextIndex,
-        ]);
-
-        ActivityLogger::log(
-            action: 'order_ticket_photo_uploaded',
-            entityType: 'order_ticket_photo',
-            entityId: $photo->id,
-            description: "Foto agregada al ticket del pedido '{$order->code}': {$file->getClientOriginalName()}",
-            newValues: ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()],
-            orderId: $order->id,
-        );
-
-        // ── OCR sincrónico (bloqueante) ────────────────────────────────────
-        // No devolvemos éxito hasta terminar el análisis completo.
-        // Si OCR falla, devolvemos error y revertimos la foto creada.
-        try {
-            $processed = app(TicketOcrService::class)->processPhoto($photo);
-        } catch (\Throwable $e) {
-            Log::error('OrderTicketController OCR: excepción durante procesamiento.', [
-                'photo_id' => $photo->id,
-                'error' => $e->getMessage(),
-            ]);
-            $processed = false;
-        }
-
-        if (! $processed) {
-            Storage::disk('public')->delete($photo->path);
-            $photo->delete();
 
             return response()->json([
-                'message' => 'No se pudo analizar la foto del ticket (OCR falló o no está disponible).',
-            ], 422);
+                // "Feo y burdo" para ver exactamente dónde rompe en producción.
+                'message' => 'STORE_PHOTO_500::' . $e->getMessage(),
+            ], 500);
         }
-
-        return response()->json([
-            'photo' => $photo->fresh(),
-            'url' => '/storage/' . $path,
-        ], 201);
     }
 
     // DELETE /orders/{order}/tickets/{ticket}
