@@ -104,26 +104,27 @@ class OrderTicketController extends Controller
             orderId: $order->id,
         );
 
-        // ── OCR: procesar después de responder sin depender de queue worker ─
-        // En producción (Render) no siempre hay worker activo, y los jobs pueden
-        // quedar en cola con estado "procesando" indefinido en frontend.
-        $photoId = $photo->id;
-        app()->terminating(function () use ($photoId) {
-            try {
-                $photo = OrderTicketPhoto::find($photoId);
-                if (! $photo) {
-                    Log::warning("OrderTicketController OCR: foto {$photoId} no encontrada.");
-                    return;
-                }
+        // ── OCR sincrónico (bloqueante) ────────────────────────────────────
+        // No devolvemos éxito hasta terminar el análisis completo.
+        // Si OCR falla, devolvemos error y revertimos la foto creada.
+        try {
+            $processed = app(TicketOcrService::class)->processPhoto($photo);
+        } catch (\Throwable $e) {
+            Log::error('OrderTicketController OCR: excepción durante procesamiento.', [
+                'photo_id' => $photo->id,
+                'error' => $e->getMessage(),
+            ]);
+            $processed = false;
+        }
 
-                app(TicketOcrService::class)->processPhoto($photo);
-            } catch (\Throwable $e) {
-                Log::error('OrderTicketController OCR: fallo al procesar ticket.', [
-                    'photo_id' => $photoId,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        });
+        if (! $processed) {
+            Storage::disk('public')->delete($photo->path);
+            $photo->delete();
+
+            return response()->json([
+                'message' => 'No se pudo analizar la foto del ticket (OCR falló o no está disponible).',
+            ], 422);
+        }
 
         return response()->json([
             'photo' => $photo->fresh(),
