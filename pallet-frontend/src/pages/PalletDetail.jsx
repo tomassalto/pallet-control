@@ -492,6 +492,15 @@ export default function PalletDetail() {
               Creado el {formatDate(pallet.created_at)}
             </span>
           )}
+          <a
+            href={`/pallet-view/${pallet.code}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          >
+            <ExternalLinkIcon />
+            Vista pública
+          </a>
         </div>
       </div>
 
@@ -534,6 +543,24 @@ export default function PalletDetail() {
             sublabel="Registro de actividad"
             to={`/pallet/${palletId}/history`}
           />
+          <a
+            href={`/pallet-view/${pallet.code}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-colors"
+          >
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm bg-blue-600">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              </svg>
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Vista pública</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">Ver como cliente vía QR</p>
+            </div>
+            <ExternalLinkIcon />
+          </a>
 
           {pallet.status === "done" && (
             <button onClick={handleReopen} className={BTN_GREEN}>

@@ -35,7 +35,15 @@ export default function Home() {
     load();
   }, []);
 
-  if (loading) return <PageSpinner />;
+  if (loading)
+    return (
+      <div
+        className="flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 min-h-screen
+                        max-w-xl sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl"
+      >
+        <PageSpinner />
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-8 justify-center min-h-[calc(100dvh-7rem)] py-8 w-full">
@@ -79,7 +87,11 @@ export default function Home() {
             strokeWidth={2.5}
             stroke="currentColor"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 5l7 7-7 7"
+            />
           </svg>
         </Link>
       )}

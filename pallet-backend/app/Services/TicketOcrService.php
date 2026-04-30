@@ -53,16 +53,44 @@ class TicketOcrService
      *   ]
      * ]
      */
+    /**
+     * Detecta la ruta del ejecutable de Tesseract.
+     * Prioridad: env TESSERACT_PATH → tesseract en PATH → rutas conocidas de Windows.
+     */
+    private function tesseractBin(): string
+    {
+        // Variable de entorno configurable en .env
+        if ($envPath = env('TESSERACT_PATH')) {
+            return $envPath;
+        }
+
+        // Rutas conocidas en Windows (cuando PHP no hereda el PATH del usuario)
+        $windowsPaths = [
+            'C:\\Program Files\\Tesseract-OCR\\tesseract.exe',
+            'C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe',
+        ];
+        foreach ($windowsPaths as $p) {
+            if (file_exists($p)) return $p;
+        }
+
+        // Asumir que está en el PATH (Linux / Docker / Railway / Render)
+        return 'tesseract';
+    }
+
     public function extractEans(string $imagePath): ?array
     {
         // Archivo temporal para la salida de Tesseract
         $tmpBase = tempnam(sys_get_temp_dir(), 'pallet_ocr_');
 
         try {
+            $bin = $this->tesseractBin();
+
             // Ejecutar Tesseract con salida hOCR
             // PSM 6: bloque de texto uniforme (ideal para tickets/facturas)
+            // Nota: escapeshellarg() en el bin maneja rutas con espacios en Windows
             $cmd = sprintf(
-                'tesseract %s %s hocr --psm 6 2>&1',
+                '%s %s %s --psm 6 hocr 2>&1',
+                escapeshellarg($bin),
                 escapeshellarg($imagePath),
                 escapeshellarg($tmpBase)
             );
