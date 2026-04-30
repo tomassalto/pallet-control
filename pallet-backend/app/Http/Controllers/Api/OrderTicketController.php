@@ -52,6 +52,12 @@ class OrderTicketController extends Controller
     // POST /orders/{order}/tickets/{ticket}/photos
     public function storePhoto(Request $request, Order $order, OrderTicket $ticket)
     {
+        // En hosting tipo Render el OCR puede tardar más que el max_execution_time
+        // por defecto del request y terminar como 500 genérico.
+        $ocrHttpTimeout = max(30, (int) env('OCR_HTTP_TIMEOUT', 180));
+        @ini_set('max_execution_time', (string) $ocrHttpTimeout);
+        @set_time_limit($ocrHttpTimeout);
+
         try {
             // Verificar que el ticket pertenece al pedido
             if ($ticket->order_id !== $order->id) {

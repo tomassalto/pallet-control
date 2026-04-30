@@ -1698,6 +1698,7 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
   const [saving, setSaving] = useState(false);
   const [ticketId, setTicketId] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadDebugError, setUploadDebugError] = useState("");
 
   async function handleCreateTicket(e) {
     e.preventDefault();
@@ -1730,6 +1731,7 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
     }
 
     setUploading(true);
+    setUploadDebugError("");
     try {
       const form = new FormData();
       form.append("photo", file);
@@ -1738,9 +1740,25 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
 
       toastSuccess("Foto agregada");
     } catch (e) {
-      toastError(
-        e.response?.data?.message || e.message || "Error subiendo foto",
-      );
+      const status = e?.response?.status;
+      const data = e?.response?.data;
+      const message =
+        data?.message || data?.error || e?.message || "Error subiendo foto";
+      const detail =
+        data?.detail || data?.exception || data?.trace || null;
+      const rawPayload = data ? JSON.stringify(data, null, 2) : null;
+
+      const debugText = [
+        `HTTP ${status ?? "?"}`,
+        `message: ${message}`,
+        detail ? `detail: ${detail}` : null,
+        rawPayload ? `payload:\n${rawPayload}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      setUploadDebugError(debugText);
+      toastError(message);
     } finally {
       setUploading(false);
       e.target.value = ""; // Reset input
@@ -1814,6 +1832,13 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
             <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
               ✓ Ticket creado. Agregá fotos del ticket (podés agregar varias).
             </div>
+
+            {uploadDebugError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800 whitespace-pre-wrap wrap-break-word">
+                <div className="font-semibold mb-1">Error crudo de subida/OCR</div>
+                {uploadDebugError}
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium mb-2">
