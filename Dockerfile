@@ -7,6 +7,7 @@ RUN apk add --no-cache \
     freetype-dev libjpeg-turbo-dev libwebp-dev \
     postgresql-dev \
     tesseract-ocr tesseract-ocr-data-eng \
+    supervisor \
     nodejs npm && \
     docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp && \
     docker-php-ext-install pdo pdo_pgsql mbstring exif bcmath gd intl pcntl
@@ -30,13 +31,15 @@ RUN cd pallet-backend && composer install --no-dev --no-scripts --no-autoloader 
 # Permisos de storage
 RUN chown -R www-data:www-data pallet-backend/storage pallet-backend/bootstrap/cache
 
+COPY supervisord.conf /etc/supervisord.conf
+
 EXPOSE 8000
 
-# Al iniciar: descubrir paquetes, cachear config, migrar y levantar servidor
+# Al iniciar: preparar Laravel y arrancar supervisord (web + queue worker)
 CMD sh -c "cd pallet-backend && \
     php artisan package:discover --ansi && \
     php artisan config:cache && \
     php artisan route:cache && \
     php artisan migrate --force && \
     php artisan storage:link && \
-    php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
+    PORT=${PORT:-8000} supervisord -c /etc/supervisord.conf"
