@@ -8,7 +8,6 @@ use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
 use App\Jobs\ProcessTicketOcr;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Helpers\ImageConverter;
@@ -96,13 +95,9 @@ class OrderTicketController extends Controller
                 orderId: $order->id,
             );
 
-            // ── OCR asíncrono (post-respuesta) ────────────────────────────────
-            // El análisis OCR puede tardar 30-180 segundos con múltiples variantes
-            // de imagen y configuraciones de Tesseract. Ejecutarlo de forma
-            // bloqueante agota max_execution_time en entornos como Render.
-            // Bus::dispatchAfterResponse() envía la respuesta HTTP primero y
-            // luego ejecuta el job en el mismo proceso — sin necesitar queue worker.
-            Bus::dispatchAfterResponse(new ProcessTicketOcr($photo->id));
+            // Despacha el job a la cola de base de datos (insert instantáneo).
+            // El worker separado (supervisord) lo procesa en background.
+            ProcessTicketOcr::dispatch($photo->id);
 
             return response()->json([
                 'photo' => $photo->fresh(),

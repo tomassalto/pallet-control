@@ -18,14 +18,23 @@ async function apiFetch(path, options = {}) {
     ...(options.headers || {}),
   };
 
-  // Para FormData, no establecer timeout (las fotos pueden tardar más)
+  // 30 segundos para subidas de archivos, 15 para el resto
+  const timeoutMs = options.body instanceof FormData ? 30_000 : 15_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   const fetchOptions = {
     ...options,
     headers,
-    ...(options.body instanceof FormData ? { signal: null } : {}), // Sin timeout para FormData
+    signal: controller.signal,
   };
 
-  const res = await fetch(`${API_BASE}${path}`, fetchOptions);
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, fetchOptions);
+  } finally {
+    clearTimeout(timer);
+  }
 
   const data = await res.json().catch(() => null);
 
