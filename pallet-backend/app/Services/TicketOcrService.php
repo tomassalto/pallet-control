@@ -145,15 +145,23 @@ class TicketOcrService
             return [['label' => 'original', 'path' => $imagePath, 'temporary' => false]];
         }
 
-        // Target 1500px en el lado más largo para mantener buena resolución OCR
-        // sin generar imágenes excesivamente grandes (3000 causaba ~46MB en Render).
-        $targetLong = 1500;
-        $scale = ($w >= $targetLong || $h >= $targetLong)
-            ? 1
-            : max(2, (int) ceil($targetLong / max($w, $h)));
-        $log("Escala aplicada: {$scale}x → " . ($w * $scale) . "×" . ($h * $scale) . " px");
+        // Política de escala:
+        // - Si la imagen ya mide 400-2000px en el lado largo → sin escala (Tesseract la lee directo)
+        // - Si es muy pequeña (< 400px) → escalar hasta ~800px
+        // - Si es muy grande (> 2000px) → reducir a 1500px
+        // Escalas agresivas (6×) generaban imágenes de ~46MB que tardaban 25s por llamada.
+        $longSide = max($w, $h);
+        if ($longSide >= 2000) {
+            $scale = (int) floor(1500 / $longSide);
+            $scale = max(1, $scale);
+        } elseif ($longSide < 400) {
+            $scale = max(2, (int) ceil(800 / $longSide));
+        } else {
+            $scale = 1; // tamaño ya adecuado para Tesseract
+        }
         $newW = $w * $scale;
         $newH = $h * $scale;
+        $log("Escala aplicada: {$scale}x → {$newW}×{$newH} px (lado largo original: {$longSide}px)");
         $variants = [];
 
         $recipes = [
@@ -308,17 +316,24 @@ class TicketOcrService
                         $elapsed = round(microtime(true) - $t0, 1);
                         $hocrFile = $tmpBase . '.hocr';
 
-                        $log("  Exit code: {$returnCode} | tiempo: {$elapsed}s | hocr existe: " . (file_exists($hocrFile) ? 'SÍ' : 'NO'));
-                        if ($returnCode === 124) {
-                            $log("  TIMEOUT: Tesseract tardó más de 25s y fue terminado.");
+                        $hocrSize = file_exists($hocrFile) ? filesize($hocrFile) : 0;
+                        $log("  Exit code: {$returnCode} | tiempo: {$elapsed}s | hocr existe: " . (file_exists($hocrFile) ? 'SÍ' : 'NO') . " | hocr size: {$hocrSize} bytes");
+                        if ($returnCode === 124 || $returnCode === 15) {
+                            $log("  TIMEOUT: Tesseract terminado por timeout (exit={$returnCode}, BusyBox usa 15, GNU usa 124).");
                         }
                         if ($output) {
                             $log("  Output Tesseract: " . implode(' | ', array_slice($output, 0, 5)));
                         }
 
-                        if ($returnCode !== 0 || ! file_exists($hocrFile)) {
-                            $log("  → SKIP: Tesseract falló o no generó hocr.");
+                        // BusyBox timeout (Alpine/Docker) mata con SIGTERM → exit 15, no 124.
+                        // Tesseract puede escribir el hocr antes de ser terminado → usarlo igual.
+                        // Solo descartamos si el archivo no existe o está vacío (< 200 bytes).
+                        if ($hocrSize < 200) {
+                            $log("  → SKIP: hocr vacío o muy pequeño ({$hocrSize} bytes).");
                             continue;
+                        }
+                        if ($returnCode !== 0) {
+                            $log("  WARN: exit code {$returnCode} pero hocr válido ({$hocrSize} bytes). Usando resultado de todos modos.");
                         }
 
                         $ranAny = true;
