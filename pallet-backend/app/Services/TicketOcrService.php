@@ -145,7 +145,12 @@ class TicketOcrService
             return [['label' => 'original', 'path' => $imagePath, 'temporary' => false]];
         }
 
-        $scale = ($w >= 2000 || $h >= 2000) ? 1 : max(2, (int) ceil(3000 / max($w, $h)));
+        // Target 1500px en el lado más largo para mantener buena resolución OCR
+        // sin generar imágenes excesivamente grandes (3000 causaba ~46MB en Render).
+        $targetLong = 1500;
+        $scale = ($w >= $targetLong || $h >= $targetLong)
+            ? 1
+            : max(2, (int) ceil($targetLong / max($w, $h)));
         $log("Escala aplicada: {$scale}x → " . ($w * $scale) . "×" . ($h * $scale) . " px");
         $newW = $w * $scale;
         $newH = $h * $scale;
@@ -280,8 +285,14 @@ class TicketOcrService
                             ? ' -c tessedit_char_whitelist=0123456789'
                             : '';
 
+                        // En Linux añadimos 'timeout 25' para evitar que Tesseract
+                        // bloquee el worker indefinidamente en imágenes grandes.
+                        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+                        $timeoutPrefix = $isWindows ? '' : 'timeout 25 ';
+
                         $cmd = sprintf(
-                            '%s %s %s --psm %d --oem 1%s hocr 2>&1',
+                            '%s%s %s %s --psm %d --oem 1%s hocr 2>&1',
+                            $timeoutPrefix,
                             escapeshellarg($bin),
                             escapeshellarg($variant['path']),
                             escapeshellarg($tmpBase),
@@ -290,13 +301,17 @@ class TicketOcrService
                         );
 
                         $log("  Ejecutando: variante={$variant['label']} psm={$ocrConfig['psm']} whitelist=" . ($ocrConfig['whitelist'] ? 'sí' : 'no'));
-                        $log("  CMD: {$cmd}");
 
+                        $t0 = microtime(true);
                         $output = [];
                         exec($cmd, $output, $returnCode);
+                        $elapsed = round(microtime(true) - $t0, 1);
                         $hocrFile = $tmpBase . '.hocr';
 
-                        $log("  Exit code: {$returnCode} | hocr existe: " . (file_exists($hocrFile) ? 'SÍ' : 'NO'));
+                        $log("  Exit code: {$returnCode} | tiempo: {$elapsed}s | hocr existe: " . (file_exists($hocrFile) ? 'SÍ' : 'NO'));
+                        if ($returnCode === 124) {
+                            $log("  TIMEOUT: Tesseract tardó más de 25s y fue terminado.");
+                        }
                         if ($output) {
                             $log("  Output Tesseract: " . implode(' | ', array_slice($output, 0, 5)));
                         }
