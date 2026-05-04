@@ -892,7 +892,7 @@ export default function OrderDetail() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <p className={SEC_LABEL}>Ticket del pedido</p>
-          {tickets.length === 0 && order?.status !== "done" && (
+          {order?.status !== "done" && (
             <button
               onClick={() => setOpenAddTicket(true)}
               className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
@@ -1410,6 +1410,94 @@ export default function OrderDetail() {
   );
 }
 
+// ── Helper OCR components ─────────────────────────────────────────────────
+
+/** Badge de estado OCR por foto */
+function OcrBadge({ photo }) {
+  if (photo.ocr_processed_at) {
+    return (
+      <span className="inline-flex items-center bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+        ✓ Escaneado
+      </span>
+    );
+  }
+  if (photo.ocr_log) {
+    return (
+      <span className="inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+        <span className="animate-pulse">●</span> Procesando…
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
+      Sin escanear
+    </span>
+  );
+}
+
+/** Terminal de logs OCR reutilizable */
+function OcrTerminal({ log, done, eansCount, photoId }) {
+  const logEndRef = useRef(null);
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [log]);
+
+  if (!log) return null;
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-mono font-semibold text-gray-500 uppercase tracking-wider">
+          OCR Log{photoId ? ` (foto #${photoId})` : ""}
+        </span>
+        {!done ? (
+          <span className="flex items-center gap-1 text-xs text-amber-600">
+            <span className="animate-pulse">●</span> procesando…
+          </span>
+        ) : eansCount !== null ? (
+          <span
+            className={`text-xs font-semibold ${eansCount > 0 ? "text-green-600" : "text-red-500"}`}
+          >
+            {eansCount > 0
+              ? `✓ ${eansCount} EAN(s) encontrado(s)`
+              : "✗ Sin coincidencias"}
+          </span>
+        ) : null}
+      </div>
+      <div className="bg-gray-950 rounded-lg p-3 h-48 overflow-y-auto font-mono text-xs leading-relaxed">
+        {log.split("\n").map((line, i) => {
+          const isError =
+            line.includes("[ERROR]") || line.includes("ERROR:");
+          const isOk =
+            line.includes("→ EAN:") ||
+            line.includes("OK") ||
+            line.includes("completado");
+          const isWarn =
+            line.includes("WARN") ||
+            line.includes("fallback") ||
+            line.includes("falló");
+          return (
+            <div
+              key={i}
+              className={
+                isError
+                  ? "text-red-400"
+                  : isOk
+                    ? "text-green-400"
+                    : isWarn
+                      ? "text-yellow-400"
+                      : "text-gray-300"
+              }
+            >
+              {line || " "}
+            </div>
+          );
+        })}
+        <div ref={logEndRef} />
+      </div>
+    </div>
+  );
+}
+
 // Componente para mostrar un ticket
 function TicketCard({ ticket, orderId, onUpdate }) {
   const [expanded, setExpanded] = useState(false);
@@ -1417,6 +1505,13 @@ function TicketCard({ ticket, orderId, onUpdate }) {
   const [deleting, setDeleting] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [confirmDeleteTicket, setConfirmDeleteTicket] = useState(false);
+
+  // Modal de escaneo: null | { photo, step:'confirm'|'scanning', log, done, eansCount }
+  const [scanModal, setScanModal] = useState(null);
+  const pollRef = useRef(null);
+
+  // Cleanup polling al desmontar
+  useEffect(() => () => clearInterval(pollRef.current), []);
 
   function getPhotoUrl(photo) {
     if (photo.url) {
@@ -1452,23 +1547,18 @@ function TicketCard({ ticket, orderId, onUpdate }) {
       );
     } finally {
       setUploading(false);
-      e.target.value = ""; // Reset input
+      e.target.value = "";
     }
   }
 
   async function handleDeletePhoto(photoId) {
     if (!window.confirm("¿Eliminar esta foto?")) return;
-
     try {
-      await apiDelete(
-        `/orders/${orderId}/tickets/${ticket.id}/photos/${photoId}`,
-      );
+      await apiDelete(`/orders/${orderId}/tickets/${ticket.id}/photos/${photoId}`);
       toastSuccess("Foto eliminada");
       onUpdate();
     } catch (e) {
-      toastError(
-        e.response?.data?.message || e.message || "Error eliminando foto",
-      );
+      toastError(e.response?.data?.message || e.message || "Error eliminando foto");
     }
   }
 
@@ -1480,13 +1570,54 @@ function TicketCard({ ticket, orderId, onUpdate }) {
       setConfirmDeleteTicket(false);
       onUpdate();
     } catch (e) {
-      toastError(
-        e.response?.data?.message || e.message || "Error eliminando ticket",
-      );
+      toastError(e.response?.data?.message || e.message || "Error eliminando ticket");
     } finally {
       setDeleting(false);
     }
   }
+
+  function openScanModal(photo) {
+    setScanModal({ photo, step: "confirm", log: "", done: false, eansCount: null });
+  }
+
+  async function confirmScan() {
+    if (!scanModal) return;
+    const photo = scanModal.photo;
+    setScanModal((prev) => prev && { ...prev, step: "scanning", log: "Iniciando escaneo OCR…" });
+    try {
+      await apiPost(
+        `/orders/${orderId}/tickets/${ticket.id}/photos/${photo.id}/trigger-ocr`,
+      );
+    } catch (e) {
+      const msg = e?.response?.data?.message || e.message || "Error al iniciar OCR";
+      setScanModal((prev) => prev && { ...prev, log: `[ERROR] ${msg}`, done: true });
+      return;
+    }
+    clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const data = await apiGet(
+          `/orders/${orderId}/tickets/${ticket.id}/photos/${photo.id}/ocr-status`,
+        );
+        if (data.ocr_log) setScanModal((prev) => prev && { ...prev, log: data.ocr_log });
+        if (data.ocr_processed_at !== null) {
+          clearInterval(pollRef.current);
+          setScanModal((prev) => prev && { ...prev, done: true, eansCount: data.ocr_eans_count });
+          onUpdate();
+        }
+      } catch {
+        // ignorar errores de polling
+      }
+    }, 2000);
+  }
+
+  function closeScanModal() {
+    clearInterval(pollRef.current);
+    setScanModal(null);
+  }
+
+  const totalPhotos = ticket.photos?.length ?? 0;
+  const scannedCount = ticket.photos?.filter((p) => p.ocr_processed_at).length ?? 0;
 
   return (
     <div className="relative bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-2xl overflow-hidden shadow-sm">
@@ -1505,14 +1636,19 @@ function TicketCard({ ticket, orderId, onUpdate }) {
                 {ticket.note}
               </p>
             )}
+            {totalPhotos > 0 && (
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                {scannedCount}/{totalPhotos} foto{totalPhotos !== 1 ? "s" : ""}{" "}
+                escaneada{totalPhotos !== 1 ? "s" : ""}
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
             {/* Contador de fotos */}
-            {(ticket.photos?.length || 0) > 0 && (
+            {totalPhotos > 0 && (
               <span className="text-[11px] bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full font-semibold">
-                {ticket.photos.length} foto
-                {ticket.photos.length !== 1 ? "s" : ""}
+                {totalPhotos} foto{totalPhotos !== 1 ? "s" : ""}
               </span>
             )}
             {/* Toggle ver fotos */}
@@ -1537,48 +1673,63 @@ function TicketCard({ ticket, orderId, onUpdate }) {
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
             {ticket.photos?.map((photo) => {
               const photoUrl = getPhotoUrl(photo);
+              const isUnscanned = !photo.ocr_processed_at && !photo.ocr_log;
               return (
                 <div
                   key={photo.id}
-                  className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-150"
+                  className="flex flex-col rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-150"
                 >
-                  <button
-                    onClick={() => setSelectedPhoto(photo)}
-                    className="w-full h-full"
-                  >
-                    <img
-                      src={photoUrl}
-                      alt={`Foto ${photo.id}`}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                        e.target.nextSibling.style.display = "flex";
+                  <div className="relative aspect-square">
+                    <button
+                      onClick={() => setSelectedPhoto(photo)}
+                      className="w-full h-full"
+                    >
+                      <img
+                        src={photoUrl}
+                        alt={`Foto ${photo.id}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          e.target.nextSibling.style.display = "flex";
+                        }}
+                      />
+                      <div className="hidden w-full h-full items-center justify-center text-xs text-gray-500 dark:text-gray-400">
+                        Error cargando
+                      </div>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeletePhoto(photo.id);
                       }}
-                    />
-                    <div className="hidden w-full h-full items-center justify-center text-xs text-gray-500 dark:text-gray-400">
-                      Error cargando
+                      className="absolute top-1.5 right-1.5 bg-black/50 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10 transition-colors"
+                    >
+                      ✕
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent text-white text-[10px] px-2 py-1.5">
+                      {new Date(photo.created_at).toLocaleDateString(undefined, {
+                        dateStyle: "short",
+                      })}
                     </div>
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeletePhoto(photo.id);
-                    }}
-                    className="absolute top-1.5 right-1.5 bg-black/50 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10 transition-colors"
-                  >
-                    ✕
-                  </button>
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent text-white text-[10px] px-2 py-1.5">
-                    {new Date(photo.created_at).toLocaleDateString(undefined, {
-                      dateStyle: "short",
-                    })}
+                  </div>
+                  {/* Franja OCR */}
+                  <div className="px-2 py-1.5 bg-white dark:bg-gray-800 flex items-center justify-between gap-1 border-t border-gray-100 dark:border-gray-700">
+                    <OcrBadge photo={photo} />
+                    {isUnscanned && (
+                      <button
+                        onClick={() => openScanModal(photo)}
+                        className="shrink-0 text-[10px] px-2 py-0.5 rounded-md bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors"
+                      >
+                        Escanear
+                      </button>
+                    )}
                   </div>
                 </div>
               );
             })}
 
             {/* Celda para subir foto */}
-            <label className="relative aspect-square rounded-xl overflow-hidden border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/40 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/40 hover:border-gray-400 active:scale-[0.98] transition-colors">
+            <label className="rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/40 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/40 hover:border-gray-400 active:scale-[0.98] transition-colors min-h-[110px]">
               <input
                 type="file"
                 accept="image/*"
@@ -1687,6 +1838,77 @@ function TicketCard({ ticket, orderId, onUpdate }) {
           </div>
         </>
       )}
+
+      {/* ── Modal escanear foto con OCR ─────────────────────────── */}
+      {scanModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div
+            className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg text-gray-900 dark:text-white">
+                Escanear ticket con OCR
+              </h3>
+              {(scanModal.done || scanModal.step === "confirm") && (
+                <button
+                  onClick={closeScanModal}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xl"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {scanModal.step === "confirm" ? (
+              <>
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4 space-y-1.5">
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                    ⚠ Esto consume un crédito de Azure Computer Vision
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                    Cada escaneo realiza una llamada a la API de Azure (plan
+                    gratuito: 5.000/mes). Asegurate de que el pallet esté
+                    organizado antes de escanear. Una vez escaneada, una foto no
+                    puede volver a escanearse.
+                  </p>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={closeScanModal}
+                    className="flex-1 rounded-xl py-3 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={confirmScan}
+                    className="flex-1 rounded-xl py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
+                  >
+                    Sí, escanear
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <OcrTerminal
+                  log={scanModal.log}
+                  done={scanModal.done}
+                  eansCount={scanModal.eansCount}
+                  photoId={scanModal.photo?.id}
+                />
+                {scanModal.done && (
+                  <button
+                    onClick={closeScanModal}
+                    className="w-full rounded-xl py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-semibold hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1699,44 +1921,15 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
   const [ticketId, setTicketId] = useState(null);
   const [uploading, setUploading] = useState(false);
 
-  // Estado del OCR: foto actual siendo procesada y su log en vivo
-  const [ocrPhotoId, setOcrPhotoId] = useState(null);
-  const [ocrLog, setOcrLog] = useState("");
-  const [ocrDone, setOcrDone] = useState(false);
-  const [ocrEans, setOcrEans] = useState(null);
+  // Lista de fotos subidas (cada una con su botón escanear)
+  const [uploadedPhotos, setUploadedPhotos] = useState([]);
+
+  // Estado de escaneo: null | { photoId, step:'confirm'|'scanning', log, done, eansCount }
+  const [scanState, setScanState] = useState(null);
   const pollRef = useRef(null);
-  const logEndRef = useRef(null);
 
-  // Scroll automático al fondo del log cuando hay nuevas líneas
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [ocrLog]);
-
-  // Limpieza del poll al desmontar
+  // Cleanup polling al desmontar
   useEffect(() => () => clearInterval(pollRef.current), []);
-
-  function startOcrPolling(photoId) {
-    setOcrPhotoId(photoId);
-    setOcrLog("Foto subida. Esperando inicio de OCR...");
-    setOcrDone(false);
-    setOcrEans(null);
-
-    pollRef.current = setInterval(async () => {
-      try {
-        const data = await apiGet(
-          `/orders/${orderId}/tickets/${ticketId}/photos/${photoId}/ocr-status`,
-        );
-        if (data.ocr_log) setOcrLog(data.ocr_log);
-        if (data.ocr_processed_at !== null) {
-          clearInterval(pollRef.current);
-          setOcrDone(true);
-          setOcrEans(data.ocr_eans_count);
-        }
-      } catch {
-        // silenciar errores de poll — no interrumpir la UI
-      }
-    }, 2000);
-  }
 
   async function handleCreateTicket(e) {
     e.preventDefault();
@@ -1763,14 +1956,7 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!ticketId) { toastError("Primero creá el ticket"); return; }
-
-    clearInterval(pollRef.current);
-    setOcrLog("");
-    setOcrDone(false);
-    setOcrEans(null);
-    setOcrPhotoId(null);
     setUploading(true);
-
     try {
       const form = new FormData();
       form.append("photo", file);
@@ -1778,26 +1964,65 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
         `/orders/${orderId}/tickets/${ticketId}/photos`,
         form,
       );
-      toastSuccess("Foto subida. Procesando OCR...");
-      // Arranca el polling con el id de la foto recién creada
-      startOcrPolling(res.photo.id);
+      toastSuccess("Foto subida correctamente");
+      setUploadedPhotos((prev) => [...prev, res.photo]);
     } catch (err) {
-      const status = err?.response?.status;
-      const data = err?.response?.data;
-      const msg = data?.message || err?.message || "Error subiendo foto";
-      const detail = data?.detail || null;
-      const logLines = [
-        `[ERROR] HTTP ${status ?? "?"}`,
-        `[ERROR] ${msg}`,
-        detail ? `[ERROR] detail: ${detail}` : null,
-      ].filter(Boolean).join("\n");
-      setOcrLog(logLines);
-      setOcrDone(true);
-      toastError(msg);
+      toastError(err?.response?.data?.message || err?.message || "Error subiendo foto");
     } finally {
       setUploading(false);
       e.target.value = "";
     }
+  }
+
+  function openScanConfirm(photoId) {
+    clearInterval(pollRef.current);
+    setScanState({ photoId, step: "confirm", log: "", done: false, eansCount: null });
+  }
+
+  async function startScan() {
+    if (!scanState) return;
+    const { photoId } = scanState;
+    setScanState((prev) =>
+      prev && { ...prev, step: "scanning", log: "Iniciando escaneo OCR…" },
+    );
+    try {
+      await apiPost(
+        `/orders/${orderId}/tickets/${ticketId}/photos/${photoId}/trigger-ocr`,
+      );
+    } catch (e) {
+      const msg = e?.response?.data?.message || e.message || "Error al iniciar OCR";
+      setScanState((prev) => prev && { ...prev, log: `[ERROR] ${msg}`, done: true });
+      return;
+    }
+    clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const data = await apiGet(
+          `/orders/${orderId}/tickets/${ticketId}/photos/${photoId}/ocr-status`,
+        );
+        if (data.ocr_log) setScanState((prev) => prev && { ...prev, log: data.ocr_log });
+        if (data.ocr_processed_at !== null) {
+          clearInterval(pollRef.current);
+          setScanState((prev) =>
+            prev && { ...prev, done: true, eansCount: data.ocr_eans_count },
+          );
+          setUploadedPhotos((prev) =>
+            prev.map((p) =>
+              p.id === photoId
+                ? { ...p, ocr_processed_at: data.ocr_processed_at }
+                : p,
+            ),
+          );
+        }
+      } catch {
+        // silenciar errores de polling
+      }
+    }, 2000);
+  }
+
+  function closeScanState() {
+    clearInterval(pollRef.current);
+    setScanState(null);
   }
 
   function handleFinish() {
@@ -1807,16 +2032,24 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[92vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 max-w-lg w-full max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Agregar ticket</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-xl">✕</button>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Agregar ticket
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xl"
+          >
+            ✕
+          </button>
         </div>
 
         {!ticketId ? (
+          /* ── Paso 1: crear ticket ──────────────────────────── */
           <form onSubmit={handleCreateTicket} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
                 Código del ticket <span className="text-red-500">*</span>
               </label>
               <input
@@ -1824,42 +2057,92 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 required
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border rounded-lg px-3 py-2 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
                 placeholder="Ej: R-12345"
                 autoFocus
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Nota (opcional)</label>
+              <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                Nota (opcional)
+              </label>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border rounded-lg px-3 py-2 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
                 rows={2}
                 placeholder="Notas adicionales..."
               />
             </div>
             <div className="flex gap-2">
-              <button type="button" onClick={onClose} className="flex-1 border rounded-lg py-2 text-sm">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 border rounded-lg py-2 text-sm dark:border-gray-600 dark:text-gray-300"
+              >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={saving || !code.trim()}
-                className="flex-1 bg-black text-white rounded-lg py-2 text-sm disabled:opacity-40"
+                className="flex-1 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg py-2 text-sm disabled:opacity-40"
               >
                 {saving ? "Creando..." : "Crear ticket"}
               </button>
             </div>
           </form>
         ) : (
+          /* ── Paso 2: subir fotos + escanear ───────────────── */
           <div className="space-y-4">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
-              ✓ Ticket creado. Subí una foto del ticket para analizar con OCR.
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700/50 rounded-lg p-3 text-sm text-green-800 dark:text-green-300">
+              ✓ Ticket{" "}
+              <span className="font-semibold">{code}</span> creado. Subí una
+              foto y escaneá con OCR cuando el pallet esté listo.
             </div>
 
+            {/* Lista de fotos subidas */}
+            {uploadedPhotos.length > 0 && (
+              <div className="space-y-2">
+                {uploadedPhotos.map((photo) => {
+                  const alreadyScanned = !!photo.ocr_processed_at;
+                  return (
+                    <div
+                      key={photo.id}
+                      className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 gap-2"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg">🖼</span>
+                        <span className="text-sm text-gray-700 dark:text-gray-300 font-mono truncate">
+                          Foto #{photo.id}
+                        </span>
+                        {alreadyScanned && (
+                          <span className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded-full font-semibold shrink-0">
+                            ✓ Escaneada
+                          </span>
+                        )}
+                      </div>
+                      {!alreadyScanned && (
+                        <button
+                          onClick={() => openScanConfirm(photo.id)}
+                          className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors"
+                        >
+                          Escanear con OCR
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Zona de subida */}
-            <label className={`block w-full border-2 border-dashed rounded-lg p-4 text-center transition-colors ${uploading ? "border-gray-200 cursor-not-allowed" : "border-gray-300 cursor-pointer hover:bg-gray-50"}`}>
+            <label
+              className={`block w-full border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+                uploading
+                  ? "border-gray-200 cursor-not-allowed"
+                  : "border-gray-300 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-400"
+              }`}
+            >
               <input
                 type="file"
                 accept="image/*"
@@ -1870,63 +2153,27 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
               {uploading ? (
                 <div className="flex flex-col items-center gap-1">
                   <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-gray-500" />
-                  <span className="text-sm text-gray-500">Subiendo foto...</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Subiendo foto...
+                  </span>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-1">
                   <span className="text-3xl">📷</span>
-                  <span className="text-sm text-gray-600">Tocar para agregar foto</span>
-                  <span className="text-xs text-gray-400">Podés agregar varias</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    Tocar para agregar foto
+                  </span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                    Podés agregar varias
+                  </span>
                 </div>
               )}
             </label>
 
-            {/* ── Terminal de logs OCR ─────────────────────────────── */}
-            {ocrLog !== "" && (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-mono font-semibold text-gray-500 uppercase tracking-wider">
-                    OCR Log {ocrPhotoId ? `(foto #${ocrPhotoId})` : ""}
-                  </span>
-                  {!ocrDone && (
-                    <span className="flex items-center gap-1 text-xs text-amber-600">
-                      <span className="animate-pulse">●</span> procesando...
-                    </span>
-                  )}
-                  {ocrDone && ocrEans !== null && (
-                    <span className={`text-xs font-semibold ${ocrEans > 0 ? "text-green-600" : "text-red-500"}`}>
-                      {ocrEans > 0 ? `✓ ${ocrEans} EAN(s) encontrado(s)` : "✗ Sin coincidencias"}
-                    </span>
-                  )}
-                </div>
-                <div className="bg-gray-950 rounded-lg p-3 h-64 overflow-y-auto font-mono text-xs leading-relaxed">
-                  {ocrLog.split("\n").map((line, i) => {
-                    const isError = line.includes("[ERROR]") || line.includes("ERROR:");
-                    const isOk = line.includes("→ EAN:") || line.includes("OK") || line.includes("completado");
-                    const isWarn = line.includes("WARN") || line.includes("fallback") || line.includes("falló");
-                    return (
-                      <div
-                        key={i}
-                        className={
-                          isError ? "text-red-400" :
-                          isOk    ? "text-green-400" :
-                          isWarn  ? "text-yellow-400" :
-                                    "text-gray-300"
-                        }
-                      >
-                        {line || " "}
-                      </div>
-                    );
-                  })}
-                  <div ref={logEndRef} />
-                </div>
-              </div>
-            )}
-
             <div className="flex gap-2 pt-1">
               <button
                 onClick={handleFinish}
-                className="flex-1 bg-black text-white rounded-lg py-2 text-sm"
+                className="flex-1 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg py-2.5 text-sm font-semibold"
               >
                 Listo
               </button>
@@ -1934,6 +2181,77 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
           </div>
         )}
       </div>
+
+      {/* ── Modal de escaneo OCR ─────────────────────────────────── */}
+      {scanState && (
+        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
+          <div
+            className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg text-gray-900 dark:text-white">
+                Escanear con OCR
+              </h3>
+              {(scanState.done || scanState.step === "confirm") && (
+                <button
+                  onClick={closeScanState}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-xl"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {scanState.step === "confirm" ? (
+              <>
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 rounded-xl p-4 space-y-1.5">
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                    ⚠ Esto consume un crédito de Azure Computer Vision
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                    Cada escaneo realiza una llamada a la API de Azure (plan
+                    gratuito: 5.000/mes). Asegurate de que el pallet esté
+                    organizado antes de escanear. Una vez escaneada, una foto no
+                    puede volver a escanearse.
+                  </p>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={closeScanState}
+                    className="flex-1 rounded-xl py-3 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={startScan}
+                    className="flex-1 rounded-xl py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
+                  >
+                    Sí, escanear
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <OcrTerminal
+                  log={scanState.log}
+                  done={scanState.done}
+                  eansCount={scanState.eansCount}
+                  photoId={scanState.photoId}
+                />
+                {scanState.done && (
+                  <button
+                    onClick={closeScanState}
+                    className="w-full rounded-xl py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-semibold hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -182,24 +182,31 @@ class PublicPalletController extends Controller
             $orderScopedMap = $orderScopedEanMaps[$order->id] ?? $palletEanMap;
 
             $ticketList = $order->tickets->map(function ($ticket) use ($orderScopedMap) {
-                $photos = $ticket->photos->map(function ($photo) use ($orderScopedMap) {
-                    $highlights = [];
+                // Solo incluir fotos que ya fueron escaneadas con OCR.
+                // Fotos sin escanear no se muestran en la vista pública.
+                $photos = $ticket->photos
+                    ->filter(fn ($photo) => $photo->ocr_processed_at !== null)
+                    ->map(function ($photo) use ($orderScopedMap) {
+                        $highlights = [];
+                        if ($photo->ocr_data) {
+                            $highlights = TicketOcrService::buildHighlights(
+                                $photo->ocr_data,
+                                $orderScopedMap
+                            );
+                        }
+                        return [
+                            'id'              => $photo->id,
+                            'url'             => $photo->url,
+                            'ocr_processed'   => true,
+                            'highlight_count' => count($highlights),
+                            'highlights'      => $highlights,
+                        ];
+                    })->values();
 
-                    if ($photo->ocr_processed_at && $photo->ocr_data) {
-                        $highlights = TicketOcrService::buildHighlights(
-                            $photo->ocr_data,
-                            $orderScopedMap
-                        );
-                    }
-
-                    return [
-                        'id'                => $photo->id,
-                        'url'               => $photo->url,
-                        'ocr_processed'     => $photo->ocr_processed_at !== null,
-                        'highlight_count'   => count($highlights),
-                        'highlights'        => $highlights,
-                    ];
-                })->values();
+                // No incluir tickets sin fotos escaneadas
+                if ($photos->isEmpty()) {
+                    return null;
+                }
 
                 return [
                     'id'     => $ticket->id,
@@ -207,7 +214,12 @@ class PublicPalletController extends Controller
                     'note'   => $ticket->note,
                     'photos' => $photos,
                 ];
-            })->values();
+            })->filter()->values(); // filter() elimina los null
+
+            // No incluir secciones de pedidos sin tickets con fotos escaneadas
+            if ($ticketList->isEmpty()) {
+                continue;
+            }
 
             $ticketsByOrder[] = [
                 'order_id'   => $order->id,

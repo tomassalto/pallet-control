@@ -95,9 +95,8 @@ class OrderTicketController extends Controller
                 orderId: $order->id,
             );
 
-            // Despacha el job a la cola de base de datos (insert instantáneo).
-            // El worker separado (supervisord) lo procesa en background.
-            ProcessTicketOcr::dispatch($photo->id);
+            // NO despacha OCR automáticamente — el usuario lo dispara
+            // manualmente desde el frontend con el botón "Escanear ticket".
 
             return response()->json([
                 'photo' => $photo->fresh(),
@@ -162,6 +161,36 @@ class OrderTicketController extends Controller
         );
 
         return response()->json(['message' => 'Ticket eliminado'], 200);
+    }
+
+    // POST /orders/{order}/tickets/{ticket}/photos/{photo}/trigger-ocr
+    // El usuario confirma manualmente que quiere escanear (consume 1 request de Azure).
+    public function triggerOcr(Order $order, OrderTicket $ticket, OrderTicketPhoto $photo)
+    {
+        if ($ticket->order_id !== $order->id || $photo->ticket_id !== $ticket->id) {
+            return response()->json(['message' => 'No encontrado'], 404);
+        }
+
+        if ($photo->ocr_processed_at !== null) {
+            return response()->json(['message' => 'Esta foto ya fue escaneada anteriormente.'], 409);
+        }
+
+        // Marcar inmediatamente como "encolado" para que el frontend
+        // pueda distinguir "nunca iniciado" de "en proceso".
+        $photo->ocr_log = '[' . date('H:i:s') . '] Escaneo encolado. Iniciando en breve…';
+        $photo->saveQuietly();
+
+        ProcessTicketOcr::dispatch($photo->id);
+
+        ActivityLogger::log(
+            action: 'order_ticket_ocr_triggered',
+            entityType: 'order_ticket_photo',
+            entityId: $photo->id,
+            description: "OCR disparado manualmente para foto del ticket del pedido '{$order->code}'",
+            orderId: $order->id,
+        );
+
+        return response()->json(['message' => 'OCR iniciado', 'photo' => $photo->fresh()]);
     }
 
     // DELETE /orders/{order}/tickets/{ticket}/photos/{photo}

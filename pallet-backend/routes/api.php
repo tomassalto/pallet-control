@@ -82,6 +82,7 @@ Route::prefix('v1')->group(function () {
             Route::delete('/orders/{order}/tickets/{ticket}', [OrderTicketController::class, 'destroy']);
             Route::post('/orders/{order}/tickets/{ticket}/photos', [OrderTicketController::class, 'storePhoto']);
             Route::get('/orders/{order}/tickets/{ticket}/photos/{photo}/ocr-status', [OrderTicketController::class, 'photoOcrStatus']);
+            Route::post('/orders/{order}/tickets/{ticket}/photos/{photo}/trigger-ocr', [OrderTicketController::class, 'triggerOcr']);
             Route::delete('/orders/{order}/tickets/{ticket}/photos/{photo}', [OrderTicketController::class, 'destroyPhoto']);
 
             // Pallets

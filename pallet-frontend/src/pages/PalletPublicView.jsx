@@ -300,7 +300,6 @@ function TicketPhotoHighlight({ photo }) {
   const [imgLoaded, setImgLoaded] = useState(false);
 
   const hasHighlights = photo.highlights?.length > 0;
-  const isProcessed = photo.ocr_processed;
 
   return (
     <div className="space-y-2">
@@ -376,11 +375,7 @@ function TicketPhotoHighlight({ photo }) {
 
         {/* Badge de estado OCR */}
         <div className="absolute top-2 right-2">
-          {!isProcessed ? (
-            <span className="text-[10px] bg-amber-500/90 text-white font-semibold px-2 py-1 rounded-full">
-              Procesando…
-            </span>
-          ) : hasHighlights ? (
+          {hasHighlights ? (
             <span className="text-[10px] bg-green-500/90 text-white font-semibold px-2 py-1 rounded-full">
               {photo.highlight_count} producto
               {photo.highlight_count !== 1 ? "s" : ""} detectado
