@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
@@ -1698,24 +1698,62 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
   const [saving, setSaving] = useState(false);
   const [ticketId, setTicketId] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadDebugError, setUploadDebugError] = useState("");
+
+  // Estado del OCR: foto actual siendo procesada y su log en vivo
+  const [ocrPhotoId, setOcrPhotoId] = useState(null);
+  const [ocrLog, setOcrLog] = useState("");
+  const [ocrDone, setOcrDone] = useState(false);
+  const [ocrEans, setOcrEans] = useState(null);
+  const pollRef = useRef(null);
+  const logEndRef = useRef(null);
+
+  // Scroll automático al fondo del log cuando hay nuevas líneas
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [ocrLog]);
+
+  // Limpieza del poll al desmontar
+  useEffect(() => () => clearInterval(pollRef.current), []);
+
+  function startOcrPolling(photoId) {
+    setOcrPhotoId(photoId);
+    setOcrLog("Foto subida. Esperando inicio de OCR...");
+    setOcrDone(false);
+    setOcrEans(null);
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const data = await apiGet(
+          `/orders/${orderId}/tickets/${ticketId}/photos/${photoId}/ocr-status`,
+        );
+        if (data.ocr_log) setOcrLog(data.ocr_log);
+        if (data.ocr_processed_at !== null) {
+          clearInterval(pollRef.current);
+          setOcrDone(true);
+          setOcrEans(data.ocr_eans_count);
+        }
+      } catch {
+        // silenciar errores de poll — no interrumpir la UI
+      }
+    }, 2000);
+  }
 
   async function handleCreateTicket(e) {
     e.preventDefault();
+    if (!code.trim()) {
+      toastError("El código del ticket es obligatorio");
+      return;
+    }
     setSaving(true);
-
     try {
       const data = await apiPost(`/orders/${orderId}/tickets`, {
-        code: code || null,
+        code: code.trim(),
         note: note || null,
       });
-
       setTicketId(data.id);
       toastSuccess("Ticket creado. Ahora podés agregar fotos.");
     } catch (e) {
-      toastError(
-        e.response?.data?.message || e.message || "Error creando ticket",
-      );
+      toastError(e.response?.data?.message || e.message || "Error creando ticket");
     } finally {
       setSaving(false);
     }
@@ -1724,104 +1762,91 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
   async function handleUploadPhoto(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!ticketId) { toastError("Primero creá el ticket"); return; }
 
-    if (!ticketId) {
-      toastError("Primero creá el ticket");
-      return;
-    }
-
+    clearInterval(pollRef.current);
+    setOcrLog("");
+    setOcrDone(false);
+    setOcrEans(null);
+    setOcrPhotoId(null);
     setUploading(true);
-    setUploadDebugError("");
+
     try {
       const form = new FormData();
       form.append("photo", file);
-
-      await apiPost(`/orders/${orderId}/tickets/${ticketId}/photos`, form);
-
-      toastSuccess("Foto agregada");
-    } catch (e) {
-      const status = e?.response?.status;
-      const data = e?.response?.data;
-      const message =
-        data?.message || data?.error || e?.message || "Error subiendo foto";
-      const detail =
-        data?.detail || data?.exception || data?.trace || null;
-      const rawPayload = data ? JSON.stringify(data, null, 2) : null;
-
-      const debugText = [
-        `HTTP ${status ?? "?"}`,
-        `message: ${message}`,
-        detail ? `detail: ${detail}` : null,
-        rawPayload ? `payload:\n${rawPayload}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n");
-
-      setUploadDebugError(debugText);
-      toastError(message);
+      const res = await apiPost(
+        `/orders/${orderId}/tickets/${ticketId}/photos`,
+        form,
+      );
+      toastSuccess("Foto subida. Procesando OCR...");
+      // Arranca el polling con el id de la foto recién creada
+      startOcrPolling(res.photo.id);
+    } catch (err) {
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      const msg = data?.message || err?.message || "Error subiendo foto";
+      const detail = data?.detail || null;
+      const logLines = [
+        `[ERROR] HTTP ${status ?? "?"}`,
+        `[ERROR] ${msg}`,
+        detail ? `[ERROR] detail: ${detail}` : null,
+      ].filter(Boolean).join("\n");
+      setOcrLog(logLines);
+      setOcrDone(true);
+      toastError(msg);
     } finally {
       setUploading(false);
-      e.target.value = ""; // Reset input
+      e.target.value = "";
     }
   }
 
   function handleFinish() {
+    clearInterval(pollRef.current);
     onSuccess();
   }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl p-6 max-w-lg w-full max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">Agregar ticket</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            ✕
-          </button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-xl">✕</button>
         </div>
 
         {!ticketId ? (
           <form onSubmit={handleCreateTicket} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">
-                Código del ticket (opcional)
+                Código del ticket <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
+                required
                 className="w-full border rounded-lg px-3 py-2"
-                placeholder="Ej: TKT-12345"
+                placeholder="Ej: R-12345"
+                autoFocus
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Nota (opcional)
-              </label>
+              <label className="block text-sm font-medium mb-1">Nota (opcional)</label>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 className="w-full border rounded-lg px-3 py-2"
-                rows={3}
+                rows={2}
                 placeholder="Notas adicionales..."
               />
             </div>
-
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 border rounded-lg py-2 text-sm"
-              >
+              <button type="button" onClick={onClose} className="flex-1 border rounded-lg py-2 text-sm">
                 Cancelar
               </button>
               <button
                 type="submit"
-                disabled={saving}
-                className="flex-1 bg-black text-white rounded-lg py-2 text-sm disabled:opacity-50"
+                disabled={saving || !code.trim()}
+                className="flex-1 bg-black text-white rounded-lg py-2 text-sm disabled:opacity-40"
               >
                 {saving ? "Creando..." : "Crear ticket"}
               </button>
@@ -1830,66 +1855,80 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
         ) : (
           <div className="space-y-4">
             <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
-              ✓ Ticket creado. Agregá fotos del ticket (podés agregar varias).
+              ✓ Ticket creado. Subí una foto del ticket para analizar con OCR.
             </div>
 
-            {uploadDebugError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800 whitespace-pre-wrap wrap-break-word">
-                <div className="font-semibold mb-1">Error crudo de subida/OCR</div>
-                {uploadDebugError}
+            {/* Zona de subida */}
+            <label className={`block w-full border-2 border-dashed rounded-lg p-4 text-center transition-colors ${uploading ? "border-gray-200 cursor-not-allowed" : "border-gray-300 cursor-pointer hover:bg-gray-50"}`}>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleUploadPhoto}
+                disabled={uploading}
+              />
+              {uploading ? (
+                <div className="flex flex-col items-center gap-1">
+                  <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-gray-500" />
+                  <span className="text-sm text-gray-500">Subiendo foto...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-3xl">📷</span>
+                  <span className="text-sm text-gray-600">Tocar para agregar foto</span>
+                  <span className="text-xs text-gray-400">Podés agregar varias</span>
+                </div>
+              )}
+            </label>
+
+            {/* ── Terminal de logs OCR ─────────────────────────────── */}
+            {ocrLog !== "" && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-mono font-semibold text-gray-500 uppercase tracking-wider">
+                    OCR Log {ocrPhotoId ? `(foto #${ocrPhotoId})` : ""}
+                  </span>
+                  {!ocrDone && (
+                    <span className="flex items-center gap-1 text-xs text-amber-600">
+                      <span className="animate-pulse">●</span> procesando...
+                    </span>
+                  )}
+                  {ocrDone && ocrEans !== null && (
+                    <span className={`text-xs font-semibold ${ocrEans > 0 ? "text-green-600" : "text-red-500"}`}>
+                      {ocrEans > 0 ? `✓ ${ocrEans} EAN(s) encontrado(s)` : "✗ Sin coincidencias"}
+                    </span>
+                  )}
+                </div>
+                <div className="bg-gray-950 rounded-lg p-3 h-64 overflow-y-auto font-mono text-xs leading-relaxed">
+                  {ocrLog.split("\n").map((line, i) => {
+                    const isError = line.includes("[ERROR]") || line.includes("ERROR:");
+                    const isOk = line.includes("→ EAN:") || line.includes("OK") || line.includes("completado");
+                    const isWarn = line.includes("WARN") || line.includes("fallback") || line.includes("falló");
+                    return (
+                      <div
+                        key={i}
+                        className={
+                          isError ? "text-red-400" :
+                          isOk    ? "text-green-400" :
+                          isWarn  ? "text-yellow-400" :
+                                    "text-gray-300"
+                        }
+                      >
+                        {line || " "}
+                      </div>
+                    );
+                  })}
+                  <div ref={logEndRef} />
+                </div>
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Agregar foto del ticket
-              </label>
-              <label className="block w-full border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleUploadPhoto}
-                  disabled={uploading}
-                />
-                {uploading ? (
-                  <div className="flex flex-col items-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600 mb-2"></div>
-                    <div className="text-sm text-gray-500">Subiendo...</div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-12 w-12 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M12 4v16m8-8H4"
-                      />
-                    </svg>
-                    <div className="mt-2 text-sm text-gray-600">
-                      Tocar para agregar foto
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      Podés agregar varias fotos
-                    </div>
-                  </div>
-                )}
-              </label>
-            </div>
-
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-1">
               <button
                 onClick={handleFinish}
                 className="flex-1 bg-black text-white rounded-lg py-2 text-sm"
               >
-                Finalizar
+                Listo
               </button>
             </div>
           </div>

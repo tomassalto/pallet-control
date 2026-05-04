@@ -27,13 +27,13 @@ class OrderTicketController extends Controller
     public function store(Request $request, Order $order)
     {
         $data = $request->validate([
-            'code' => ['nullable', 'string', 'max:255'],
+            'code' => ['required', 'string', 'max:255'],
             'note' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $ticket = OrderTicket::create([
             'order_id' => $order->id,
-            'code' => $data['code'] ?? null,
+            'code' => $data['code'],
             'note' => $data['note'] ?? null,
         ]);
 
@@ -116,6 +116,22 @@ class OrderTicketController extends Controller
                 'detail'  => $e->getMessage(),
             ], 500);
         }
+    }
+
+    // GET /orders/{order}/tickets/{ticket}/photos/{photo}/ocr-status
+    // Devuelve el estado actual del OCR para polling del frontend.
+    public function photoOcrStatus(Order $order, OrderTicket $ticket, OrderTicketPhoto $photo)
+    {
+        if ($ticket->order_id !== $order->id || $photo->ticket_id !== $ticket->id) {
+            return response()->json(['message' => 'No encontrado'], 404);
+        }
+
+        return response()->json([
+            'id'               => $photo->id,
+            'ocr_processed_at' => $photo->ocr_processed_at,
+            'ocr_log'          => $photo->ocr_log,
+            'ocr_eans_count'   => count(($photo->ocr_data['eans'] ?? [])),
+        ]);
     }
 
     // DELETE /orders/{order}/tickets/{ticket}

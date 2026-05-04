@@ -15,6 +15,7 @@ class OrderTicketPhoto extends Model
         'order_index',
         'ocr_data',
         'ocr_processed_at',
+        'ocr_log',
     ];
 
     protected $appends = ['url'];

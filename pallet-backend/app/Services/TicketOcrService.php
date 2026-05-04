@@ -22,21 +22,62 @@ class TicketOcrService
      * Retorna true si se procesó correctamente, false si Tesseract no está disponible
      * o la imagen no pudo procesarse.
      */
-    public function processPhoto(OrderTicketPhoto $photo): bool
+    /**
+     * Procesa una foto de ticket: ejecuta OCR y guarda el resultado en el modelo.
+     * $logCallback recibe cada línea de log en tiempo real (para mostrar en UI).
+     */
+    public function processPhoto(OrderTicketPhoto $photo, ?callable $logCallback = null): bool
     {
+        $log = function (string $msg) use ($photo, $logCallback): void {
+            $line = '[' . date('H:i:s') . '] ' . $msg;
+            Log::info('OCR LOG | ' . $msg);
+            // Append al ocr_log en BD para que el frontend pueda hacer polling
+            $current = $photo->getRawOriginal('ocr_log') ?? '';
+            $photo->ocr_log = $current === '' ? $line : $current . "\n" . $line;
+            $photo->saveQuietly();
+            if ($logCallback) {
+                $logCallback($line);
+            }
+        };
+
         $imagePath = Storage::disk('public')->path($photo->path);
 
+        $log("Iniciando OCR para foto #{$photo->id} — {$photo->original_name}");
+        $log("Ruta: {$imagePath}");
+        $log("Existe: " . (file_exists($imagePath) ? 'SÍ' : 'NO'));
+
         if (! file_exists($imagePath)) {
-            Log::warning("TicketOcrService: imagen no encontrada: {$photo->path}");
+            $log("ERROR: imagen no encontrada en disco. Abortando.");
+            $photo->update(['ocr_processed_at' => now()]);
             return false;
         }
 
-        $result = $this->extractEans($imagePath);
+        $log("Tamaño: " . number_format(filesize($imagePath) / 1024, 1) . " KB");
+        $log("Proveedor OCR: " . strtoupper((string) env('OCR_PROVIDER', 'tesseract')));
 
+        $result = $this->extractEans($imagePath, $log);
+
+        if ($result === null) {
+            $log("RESULTADO: OCR devolvió null (Tesseract/PaddleOCR no disponible o falló).");
+        } else {
+            $eanCount = count($result['eans'] ?? []);
+            $log("RESULTADO: OCR completado. EANs con checksum válido encontrados: {$eanCount}");
+            if ($eanCount > 0) {
+                foreach ($result['eans'] as $e) {
+                    $log("  → EAN: {$e['ean']} | fuente: " . ($e['source'] ?? '?'));
+                }
+            } else {
+                $log("  No se encontraron EANs válidos. Los highlights NO aparecerán.");
+            }
+        }
+
+        $log("Guardando resultado en BD...");
         $photo->update([
-            'ocr_data'         => $result,   // null si Tesseract falló, array si procesó
+            'ocr_data'         => $result,
             'ocr_processed_at' => now(),
+            'ocr_log'          => $photo->ocr_log,
         ]);
+        $log("Listo.");
 
         return $result !== null;
     }
@@ -79,17 +120,18 @@ class TicketOcrService
         return 'tesseract';
     }
 
-    private function prepareImageVariantsForOcr(string $imagePath): array
+    private function prepareImageVariantsForOcr(string $imagePath, ?callable $log = null): array
     {
+        $log ??= static fn (string $msg) => Log::info('OCR | ' . $msg);
+
         $info = @getimagesize($imagePath);
         if (! $info) {
+            $log("WARN: getimagesize falló para '{$imagePath}'. Usando imagen original sin preprocesar.");
             return [['label' => 'original', 'path' => $imagePath, 'temporary' => false]];
         }
 
         [$w, $h, $type] = $info;
-        if (config('app.debug')) {
-            Log::info('TicketOcrService: preparando variantes OCR', ['w' => $w, 'h' => $h]);
-        }
+        $log("Imagen original: {$w}×{$h} px | tipo IMAGETYPE={$type}");
 
         $src = match ($type) {
             IMAGETYPE_JPEG => @imagecreatefromjpeg($imagePath),
@@ -99,10 +141,12 @@ class TicketOcrService
         };
 
         if (! $src) {
+            $log("WARN: No se pudo crear recurso GD (tipo {$type} no soportado o imagen corrupta). Usando original.");
             return [['label' => 'original', 'path' => $imagePath, 'temporary' => false]];
         }
 
         $scale = ($w >= 2000 || $h >= 2000) ? 1 : max(2, (int) ceil(3000 / max($w, $h)));
+        $log("Escala aplicada: {$scale}x → " . ($w * $scale) . "×" . ($h * $scale) . " px");
         $newW = $w * $scale;
         $newH = $h * $scale;
         $variants = [];
@@ -143,17 +187,15 @@ class TicketOcrService
 
             $tmpBase = tempnam(sys_get_temp_dir(), 'pallet_ocr_img_');
             if ($tmpBase === false) {
+                $log("WARN: no se pudo crear temp para variante {$label}.");
                 imagedestroy($dst);
                 continue;
             }
 
             @unlink($tmpBase);
             $tmpPng = $tmpBase . '.png';
-            imagepng($dst, $tmpPng, 0);
-
-            if ($label === 'sharp' && config('app.debug')) {
-                imagepng($dst, storage_path('logs/ocr_debug_scaled.png'), 0);
-            }
+            $pngOk = imagepng($dst, $tmpPng, 0);
+            $log("  Variante '{$label}' guardada en: {$tmpPng} | ok=" . ($pngOk ? 'sí' : 'NO'));
 
             imagedestroy($dst);
 
@@ -166,50 +208,55 @@ class TicketOcrService
 
         imagedestroy($src);
 
-        if (config('app.debug')) {
-            Log::info('TicketOcrService: variantes OCR listas', [
-                'scale' => $scale,
-                'new_w' => $newW,
-                'new_h' => $newH,
-                'variants' => array_column($variants, 'label'),
-            ]);
-        }
+        $log("Variantes generadas: " . count($variants));
 
         return $variants ?: [['label' => 'original', 'path' => $imagePath, 'temporary' => false]];
     }
 
-    public function extractEans(string $imagePath): ?array
+    public function extractEans(string $imagePath, ?callable $log = null): ?array
     {
+        $log ??= static fn (string $msg) => Log::info('OCR | ' . $msg);
         $provider = strtolower((string) env('OCR_PROVIDER', 'tesseract'));
 
         if ($provider === 'paddle') {
-            $result = $this->extractEansWithPaddle($imagePath);
+            $log("Usando PaddleOCR como proveedor principal.");
+            $result = $this->extractEansWithPaddle($imagePath, $log);
             if ($result !== null) {
                 return $result;
             }
 
             if (filter_var(env('OCR_FALLBACK_TESSERACT', true), FILTER_VALIDATE_BOOL)) {
-                Log::warning('TicketOcrService: PaddleOCR falló, usando Tesseract como fallback.');
-                return $this->extractEansWithTesseract($imagePath);
+                $log("PaddleOCR falló → usando Tesseract como fallback.");
+                return $this->extractEansWithTesseract($imagePath, $log);
             }
 
+            $log("PaddleOCR falló y OCR_FALLBACK_TESSERACT=false. Sin resultado.");
             return null;
         }
 
-        return $this->extractEansWithTesseract($imagePath);
+        $log("Usando Tesseract como proveedor.");
+        return $this->extractEansWithTesseract($imagePath, $log);
     }
 
-    private function extractEansWithTesseract(string $imagePath): ?array
+    private function extractEansWithTesseract(string $imagePath, ?callable $log = null): ?array
     {
-        if (config('app.debug')) {
-            Log::info('TicketOcrService: iniciando OCR', [
-                'image' => $imagePath,
-                'exists' => file_exists($imagePath),
-                'size'  => file_exists($imagePath) ? filesize($imagePath) : 0,
-            ]);
-        }
+        $log ??= static fn (string $msg) => Log::info('OCR | ' . $msg);
 
-        $variants = $this->prepareImageVariantsForOcr($imagePath);
+        $bin = $this->tesseractBin();
+        $log("Tesseract binario: {$bin}");
+
+        // Verificar que tesseract está disponible
+        exec(escapeshellarg($bin) . ' --version 2>&1', $verOut, $verCode);
+        $verStr = implode(' ', array_slice($verOut, 0, 1));
+        if ($verCode !== 0) {
+            $log("ERROR: Tesseract no responde (exit {$verCode}). Output: " . implode(' ', $verOut));
+            return null;
+        }
+        $log("Tesseract version: {$verStr}");
+
+        $variants = $this->prepareImageVariantsForOcr($imagePath, $log);
+        $log("Variantes preparadas: " . implode(', ', array_column($variants, 'label')));
+
         $configs = [
             ['psm' => 6,  'whitelist' => true],
             ['psm' => 11, 'whitelist' => true],
@@ -220,20 +267,16 @@ class TicketOcrService
         $ranAny = false;
 
         try {
-            $bin = $this->tesseractBin();
-            if (config('app.debug')) {
-                Log::info('TicketOcrService: Tesseract bin detectado', ['bin' => $bin]);
-            }
-
             foreach ($variants as $variant) {
-                foreach ($configs as $config) {
+                foreach ($configs as $ocrConfig) {
                     $tmpBase = tempnam(sys_get_temp_dir(), 'pallet_ocr_');
                     if ($tmpBase === false) {
+                        $log("ERROR: no se pudo crear archivo temporal.");
                         continue;
                     }
 
                     try {
-                        $extra = $config['whitelist']
+                        $extra = $ocrConfig['whitelist']
                             ? ' -c tessedit_char_whitelist=0123456789'
                             : '';
 
@@ -242,38 +285,30 @@ class TicketOcrService
                             escapeshellarg($bin),
                             escapeshellarg($variant['path']),
                             escapeshellarg($tmpBase),
-                            $config['psm'],
+                            $ocrConfig['psm'],
                             $extra
                         );
 
-                        if (config('app.debug')) {
-                            Log::info('TicketOcrService: ejecutando comando', [
-                                'cmd' => $cmd,
-                                'variant' => $variant['label'],
-                                'psm' => $config['psm'],
-                                'whitelist' => $config['whitelist'],
-                            ]);
-                        }
+                        $log("  Ejecutando: variante={$variant['label']} psm={$ocrConfig['psm']} whitelist=" . ($ocrConfig['whitelist'] ? 'sí' : 'no'));
+                        $log("  CMD: {$cmd}");
 
+                        $output = [];
                         exec($cmd, $output, $returnCode);
                         $hocrFile = $tmpBase . '.hocr';
 
-                        if (config('app.debug')) {
-                            Log::info('TicketOcrService: resultado exec', [
-                                'code' => $returnCode,
-                                'hocr_exists' => file_exists($hocrFile),
-                                'variant' => $variant['label'],
-                                'psm' => $config['psm'],
-                                'output' => implode("\n", $output),
-                            ]);
+                        $log("  Exit code: {$returnCode} | hocr existe: " . (file_exists($hocrFile) ? 'SÍ' : 'NO'));
+                        if ($output) {
+                            $log("  Output Tesseract: " . implode(' | ', array_slice($output, 0, 5)));
                         }
 
                         if ($returnCode !== 0 || ! file_exists($hocrFile)) {
+                            $log("  → SKIP: Tesseract falló o no generó hocr.");
                             continue;
                         }
 
                         $ranAny = true;
                         $parsed = $this->parseHocr(file_get_contents($hocrFile));
+                        $log("  → hocr parseado: img={$parsed['img_w']}×{$parsed['img_h']} EANs={" . count($parsed['eans']) . "}");
 
                         if ($merged['img_w'] === 0 && $parsed['img_w'] > 0) {
                             $merged['img_w'] = $parsed['img_w'];
@@ -285,11 +320,11 @@ class TicketOcrService
                             if (isset($seen[$key])) {
                                 continue;
                             }
-
                             $seen[$key] = true;
                             $ean['ocr_variant'] = $variant['label'];
-                            $ean['ocr_psm'] = $config['psm'];
+                            $ean['ocr_psm'] = $ocrConfig['psm'];
                             $merged['eans'][] = $ean;
+                            $log("  → EAN nuevo: {$ean['ean']} (variante={$variant['label']})");
                         }
                     } finally {
                         @unlink($tmpBase);
@@ -306,22 +341,18 @@ class TicketOcrService
         }
 
         if (! $ranAny) {
-            Log::warning('TicketOcrService: Tesseract no disponible o falló en todas las variantes.');
+            $log("ERROR CRÍTICO: Tesseract no corrió ninguna variante exitosamente.");
             return null;
         }
 
-        if (config('app.debug')) {
-            Log::info('TicketOcrService: OCR fusionado', [
-                'eans' => array_column($merged['eans'], 'ean'),
-                'count' => count($merged['eans']),
-            ]);
-        }
-
+        $log("Tesseract finalizado. Total EANs únicos: " . count($merged['eans']));
         return $merged;
     }
 
-    private function extractEansWithPaddle(string $imagePath): ?array
+    private function extractEansWithPaddle(string $imagePath, ?callable $log = null): ?array
     {
+        $log ??= static fn (string $msg) => Log::info('OCR | ' . $msg);
+
         $script = (string) env(
             'PADDLE_OCR_SCRIPT',
             base_path('scripts/paddle_ocr_ticket.py')
@@ -330,8 +361,12 @@ class TicketOcrService
         $lang = (string) env('PADDLE_OCR_LANG', 'en');
         $timeout = max(10, (int) env('OCR_PROCESS_TIMEOUT', 120));
 
+        $log("PaddleOCR — python: {$python}");
+        $log("PaddleOCR — script: {$script}");
+        $log("PaddleOCR — script existe: " . (is_file($script) ? 'SÍ' : 'NO'));
+
         if (! is_file($script)) {
-            Log::warning('TicketOcrService: script PaddleOCR no encontrado.', ['script' => $script]);
+            $log("ERROR: script PaddleOCR no encontrado en '{$script}'. No se puede usar PaddleOCR.");
             return null;
         }
 
@@ -343,12 +378,7 @@ class TicketOcrService
             escapeshellarg($lang)
         );
 
-        if (config('app.debug')) {
-            Log::info('TicketOcrService: ejecutando PaddleOCR', [
-                'cmd' => $cmd,
-                'image' => $imagePath,
-            ]);
-        }
+        $log("PaddleOCR CMD: {$cmd}");
 
         $started = microtime(true);
         $descriptorSpec = [
@@ -356,11 +386,13 @@ class TicketOcrService
             2 => ['pipe', 'w'],
         ];
 
+        $log("Iniciando proc_open PaddleOCR...");
         $process = proc_open($cmd, $descriptorSpec, $pipes);
         if (! is_resource($process)) {
-            Log::warning('TicketOcrService: no se pudo iniciar PaddleOCR.');
+            $log("ERROR: proc_open falló (¿proc_open deshabilitado en PHP? ¿python no existe?).");
             return null;
         }
+        $log("Proceso PaddleOCR iniciado. Esperando resultado (timeout={$timeout}s)...");
 
         stream_set_blocking($pipes[1], false);
         stream_set_blocking($pipes[2], false);
@@ -393,8 +425,15 @@ class TicketOcrService
         fclose($pipes[2]);
         $exitCode = proc_close($process);
 
+        $elapsed = round(microtime(true) - $started, 2);
+        $log("PaddleOCR terminó en {$elapsed}s | exit_code={$exitCode} | timedOut=" . ($timedOut ? 'SÍ' : 'no'));
+        $log("stdout (" . strlen($stdout) . " bytes): " . mb_substr(trim($stdout), 0, 300));
+        if ($stderr) {
+            $log("stderr: " . mb_substr(trim($stderr), 0, 500));
+        }
+
         if ($timedOut) {
-            Log::warning('TicketOcrService: PaddleOCR excedió timeout.', ['timeout' => $timeout]);
+            $log("ERROR: PaddleOCR excedió timeout de {$timeout}s.");
             return null;
         }
 
@@ -409,6 +448,7 @@ class TicketOcrService
         }
 
         if ($exitCode !== 0 || ! is_array($payload) || ! ($payload['ok'] ?? false)) {
+            $log("ERROR: PaddleOCR payload inválido (exit={$exitCode}, ok=" . ($payload['ok'] ?? 'null') . ").");
             Log::warning('TicketOcrService: PaddleOCR falló.', [
                 'exit_code' => $exitCode,
                 'json_error' => json_last_error_msg(),
@@ -421,13 +461,11 @@ class TicketOcrService
         }
 
         $result = $this->parsePaddleLines($payload);
-
-        if (config('app.debug')) {
-            Log::info('TicketOcrService: PaddleOCR finalizado', [
-                'line_count' => count($payload['lines'] ?? []),
-                'ean_count' => count($result['eans']),
-                'eans' => array_column($result['eans'], 'ean'),
-            ]);
+        $lineCount = count($payload['lines'] ?? []);
+        $eanCount = count($result['eans']);
+        $log("PaddleOCR OK — líneas={$lineCount} EANs={$eanCount}");
+        foreach ($result['eans'] as $e) {
+            $log("  → EAN: {$e['ean']}");
         }
 
         return $result;
