@@ -231,6 +231,17 @@ class TicketOcrService
         $log ??= static fn (string $msg) => Log::info('OCR | ' . $msg);
         $provider = strtolower((string) env('OCR_PROVIDER', 'tesseract'));
 
+        if ($provider === 'azure') {
+            $log("Usando Azure Computer Vision como proveedor.");
+            $result = $this->extractEansWithAzure($imagePath, $log);
+            if ($result !== null) {
+                return $result;
+            }
+
+            $log("Azure Vision falló. Sin resultado.");
+            return null;
+        }
+
         if ($provider === 'paddle') {
             $log("Usando PaddleOCR como proveedor principal.");
             $result = $this->extractEansWithPaddle($imagePath, $log);
@@ -249,6 +260,153 @@ class TicketOcrService
 
         $log("Usando Tesseract como proveedor.");
         return $this->extractEansWithTesseract($imagePath, $log);
+    }
+
+    /**
+     * OCR usando Azure Computer Vision Image Analysis 4.0.
+     * Requiere: AZURE_VISION_ENDPOINT y AZURE_VISION_KEY en .env
+     * Free tier: 5.000 requests/mes sin cargo.
+     */
+    private function extractEansWithAzure(string $imagePath, ?callable $log = null): ?array
+    {
+        $log ??= static fn (string $msg) => Log::info('OCR | ' . $msg);
+
+        $endpoint = rtrim((string) env('AZURE_VISION_ENDPOINT', ''), '/');
+        $key      = (string) env('AZURE_VISION_KEY', '');
+
+        if (! $endpoint || ! $key) {
+            $log("ERROR: AZURE_VISION_ENDPOINT o AZURE_VISION_KEY no están configurados en .env");
+            return null;
+        }
+
+        $log("Azure endpoint: {$endpoint}");
+
+        // Leer imagen como binario
+        $imageData = @file_get_contents($imagePath);
+        if ($imageData === false) {
+            $log("ERROR: No se pudo leer el archivo de imagen.");
+            return null;
+        }
+
+        $kb = number_format(strlen($imageData) / 1024, 1);
+        $log("Imagen cargada: {$kb} KB");
+
+        // API: Image Analysis 4.0 — sincrónica, sin polling
+        $url = $endpoint . '/computervision/imageanalysis:analyze?api-version=2024-02-01&features=read';
+
+        $log("POST → {$url}");
+        $t0 = microtime(true);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $imageData,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_HTTPHEADER     => [
+                'Ocp-Apim-Subscription-Key: ' . $key,
+                'Content-Type: application/octet-stream',
+            ],
+        ]);
+
+        $response  = curl_exec($ch);
+        $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        $elapsed = round(microtime(true) - $t0, 2);
+        $log("Azure respondió en {$elapsed}s | HTTP {$httpCode}");
+
+        if ($curlError) {
+            $log("ERROR cURL: {$curlError}");
+            return null;
+        }
+
+        if ($httpCode !== 200) {
+            $log("ERROR HTTP {$httpCode}: " . mb_substr((string) $response, 0, 400));
+            return null;
+        }
+
+        $payload = json_decode((string) $response, true);
+        if (! is_array($payload)) {
+            $log("ERROR: respuesta JSON inválida.");
+            return null;
+        }
+
+        $imgW = (int) ($payload['metadata']['width']  ?? 0);
+        $imgH = (int) ($payload['metadata']['height'] ?? 0);
+        $log("Dimensiones imagen: {$imgW}×{$imgH} px");
+
+        // Extraer líneas con sus bounding boxes
+        $lines = [];
+        foreach ($payload['readResult']['blocks'] ?? [] as $block) {
+            foreach ($block['lines'] ?? [] as $line) {
+                $text    = (string) ($line['text'] ?? '');
+                $polygon = $line['boundingPolygon'] ?? [];
+
+                if ($text === '' || count($polygon) < 4) {
+                    continue;
+                }
+
+                // Convertir polígono a bbox rectangular
+                $xs   = array_column($polygon, 'x');
+                $ys   = array_column($polygon, 'y');
+                $bbox = [
+                    'left'   => (int) min($xs),
+                    'top'    => (int) min($ys),
+                    'right'  => (int) max($xs),
+                    'bottom' => (int) max($ys),
+                ];
+
+                $lines[] = [
+                    'text'       => $text,
+                    'bbox'       => $bbox,
+                    'polygon'    => $polygon,
+                    'confidence' => $line['words'][0]['confidence'] ?? null,
+                ];
+
+                $log("  Texto: '{$text}' @ [{$bbox['left']},{$bbox['top']}→{$bbox['right']},{$bbox['bottom']}]");
+            }
+        }
+
+        $log("Total líneas reconocidas: " . count($lines));
+
+        // Buscar EAN-13 válidos en cada línea
+        $eans = [];
+        $seen = [];
+
+        foreach ($lines as $line) {
+            $digits = preg_replace('/\D+/', '', $line['text']);
+            foreach ($this->validEanWindows($digits) as $ean) {
+                $bucketKey = $ean
+                    . '|' . (int) floor($line['bbox']['left'] / 20)
+                    . '|' . (int) floor($line['bbox']['top']  / 20);
+
+                if (isset($seen[$bucketKey])) {
+                    continue;
+                }
+                $seen[$bucketKey] = true;
+
+                $eans[] = [
+                    'ean'        => $ean,
+                    'bbox'       => $line['bbox'],
+                    'source'     => 'azure_line',
+                    'text'       => $line['text'],
+                    'confidence' => $line['confidence'] ?? null,
+                ];
+                $log("  → EAN válido: {$ean}");
+            }
+        }
+
+        $log("EANs con checksum válido: " . count($eans));
+
+        return [
+            'engine' => 'azure_vision',
+            'img_w'  => $imgW,
+            'img_h'  => $imgH,
+            'lines'  => $lines,
+            'eans'   => $eans,
+        ];
     }
 
     private function extractEansWithTesseract(string $imagePath, ?callable $log = null): ?array
