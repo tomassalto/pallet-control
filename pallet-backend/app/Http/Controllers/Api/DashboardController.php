@@ -37,7 +37,7 @@ class DashboardController extends Controller
             ->count();
 
         // Pendientes (PendingItems sin resolver)
-        $pendingCount = PendingItem::where('resolved', false)->count();
+        $pendingCount = PendingItem::where('status', 'pending')->count();
 
         // ── Último pedido abierto ─────────────────────────────────────────
         $lastOpenOrder = Order::where('status', '!=', 'done')
