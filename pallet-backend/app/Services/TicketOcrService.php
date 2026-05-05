@@ -40,7 +40,17 @@ class TicketOcrService
             }
         };
 
-        $imagePath = Storage::disk('public')->path($photo->path);
+        // Resolver path local — si el disco configurado no es local (e.g. R2),
+        // descargar a un archivo temporal para que el proceso OCR lo pueda leer.
+        $disk = config('filesystems.default', 'public');
+        $tempOcrFile = null;
+        if ($disk === 'public') {
+            $imagePath = Storage::disk('public')->path($photo->path);
+        } else {
+            $tempOcrFile = tempnam(sys_get_temp_dir(), 'ocr_');
+            file_put_contents($tempOcrFile, Storage::disk($disk)->get($photo->path));
+            $imagePath = $tempOcrFile;
+        }
 
         $log("Iniciando OCR para foto #{$photo->id} — {$photo->original_name}");
         $log("Ruta: {$imagePath}");
@@ -49,6 +59,7 @@ class TicketOcrService
         if (! file_exists($imagePath)) {
             $log("ERROR: imagen no encontrada en disco. Abortando.");
             $photo->update(['ocr_processed_at' => now()]);
+            if ($tempOcrFile && file_exists($tempOcrFile)) @unlink($tempOcrFile);
             return false;
         }
 
@@ -78,6 +89,11 @@ class TicketOcrService
             'ocr_log'          => $photo->ocr_log,
         ]);
         $log("Listo.");
+
+        // Limpiar archivo temporal si se creó para R2
+        if ($tempOcrFile && file_exists($tempOcrFile)) {
+            @unlink($tempOcrFile);
+        }
 
         return $result !== null;
     }

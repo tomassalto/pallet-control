@@ -15,7 +15,22 @@ class OrderController extends Controller
 {
     public function index(Request $request)
     {
-        $q = Order::with('customer')->orderByDesc('id');
+        $q = Order::with([
+                'customer',
+                'pallets:id,code,status',
+                'items' => fn ($q) => $q->select('id', 'order_id', 'description', 'qty', 'status', 'ean'),
+            ])
+            ->withCount(['items as total_items'])
+            ->addSelect(DB::raw(
+                '(SELECT COALESCE(SUM(qty),0) FROM order_items WHERE order_items.order_id = orders.id) as total_qty'
+            ))
+            ->addSelect(DB::raw(
+                '(SELECT COALESCE(SUM(pboi.qty),0)
+                  FROM pallet_base_order_items pboi
+                  JOIN order_items oi ON oi.id = pboi.order_item_id
+                  WHERE oi.order_id = orders.id) as assigned_qty'
+            ))
+            ->orderByDesc('id');
 
         if ($request->filled('status')) {
             $q->where('status', $request->string('status'));
@@ -30,12 +45,35 @@ class OrderController extends Controller
             $q->where('code', 'like', '%' . $request->string('search') . '%');
         }
 
-        // Respuesta simple sin paginar (para autocomplete)
+        // Fetch data
         if ($request->filled('limit')) {
-            return $q->limit($request->integer('limit'))->get();
+            $result = $q->limit($request->integer('limit'))->get();
+        } else {
+            $result = $q->paginate(20);
         }
 
-        return $q->paginate(20);
+        // Enriquecer items con image_url desde products (1 query extra para todos los EANs)
+        $collection = $result instanceof \Illuminate\Pagination\LengthAwarePaginator
+            ? $result->getCollection()
+            : $result;
+
+        $allEans = $collection
+            ->flatMap(fn ($o) => $o->items->pluck('ean'))
+            ->filter()->unique()->values()->all();
+
+        if (!empty($allEans)) {
+            $images = Product::whereIn('ean', $allEans)
+                ->whereNotNull('image_url')
+                ->pluck('image_url', 'ean');
+
+            foreach ($collection as $order) {
+                foreach ($order->items as $item) {
+                    $item->setAttribute('image_url', $images[$item->ean] ?? null);
+                }
+            }
+        }
+
+        return $result;
     }
 
     public function store(StoreOrderRequest $request)

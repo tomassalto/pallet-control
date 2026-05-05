@@ -87,7 +87,7 @@ class PhotoUploadService
         return [
             'ok'  => true,
             'msg' => "✅ Foto guardada en pallet *{$pallet->code}*",
-            'url' => '/storage/' . $path,
+            'url' => \Illuminate\Support\Facades\Storage::disk(config('filesystems.default', 'public'))->url($path),
         ];
     }
 
@@ -128,7 +128,7 @@ class PhotoUploadService
         return [
             'ok'  => true,
             'msg' => "✅ Foto guardada en base *{$baseName}* del pallet *{$pallet->code}*",
-            'url' => '/storage/' . $path,
+            'url' => \Illuminate\Support\Facades\Storage::disk(config('filesystems.default', 'public'))->url($path),
         ];
     }
 
@@ -166,7 +166,7 @@ class PhotoUploadService
         return [
             'ok'  => true,
             'msg' => "✅ Foto guardada en ticket del pedido *#{$order->code}*",
-            'url' => '/storage/' . $path,
+            'url' => \Illuminate\Support\Facades\Storage::disk(config('filesystems.default', 'public'))->url($path),
         ];
     }
 }

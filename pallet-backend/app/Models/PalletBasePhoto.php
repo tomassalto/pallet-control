@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class PalletBasePhoto extends Model
 {
@@ -19,7 +20,7 @@ class PalletBasePhoto extends Model
 
     public function getUrlAttribute(): string
     {
-        return '/storage/' . $this->path;
+        return Storage::disk(config('filesystems.default', 'public'))->url($this->path);
     }
 
     public function base(): BelongsTo

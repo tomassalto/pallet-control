@@ -40,7 +40,7 @@ class ImageConverter
             $path = trim($dir, '/') . '/' . $filename;
 
             $webpContent = $image->toWebp($quality)->toString();
-            Storage::disk('public')->put($path, $webpContent);
+            Storage::disk(config('filesystems.default', 'public'))->put($path, $webpContent);
 
             return $path;
         } finally {

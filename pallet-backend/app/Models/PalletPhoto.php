@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class PalletPhoto extends Model
 {
@@ -17,7 +18,7 @@ class PalletPhoto extends Model
 
     public function getUrlAttribute(): string
     {
-        return '/storage/' . $this->path;
+        return Storage::disk(config('filesystems.default', 'public'))->url($this->path);
     }
 
     public function pallet()

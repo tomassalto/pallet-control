@@ -18,7 +18,12 @@ class PalletController extends Controller
     public function index(Request $request)
     {
         $q = Pallet::select('id', 'code', 'status', 'note', 'created_at')
-            ->with('orders:id,code,status')
+            ->with([
+                'orders' => fn ($q) => $q->select('orders.id', 'orders.code', 'orders.status', 'orders.customer_id')
+                    ->with('customer:id,name'),
+                'photos',
+            ])
+            ->withCount('orders as orders_count')
             ->orderByDesc('id');
 
         if ($request->filled('status')) {
@@ -327,13 +332,13 @@ class PalletController extends Controller
 
         // Eliminar fotos del storage
         foreach ($pallet->photos as $photo) {
-            Storage::disk('public')->delete($photo->path);
+            Storage::disk(config('filesystems.default', 'public'))->delete($photo->path);
         }
 
         // Eliminar fotos de las bases
         foreach ($pallet->bases as $base) {
             foreach ($base->photos as $photo) {
-                Storage::disk('public')->delete($photo->path);
+                Storage::disk(config('filesystems.default', 'public'))->delete($photo->path);
             }
         }
 

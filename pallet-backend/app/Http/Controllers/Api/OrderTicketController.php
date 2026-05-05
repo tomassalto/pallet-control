@@ -100,7 +100,7 @@ class OrderTicketController extends Controller
 
             return response()->json([
                 'photo' => $photo->fresh(),
-                'url' => '/storage/' . $path,
+                'url' => $photo->fresh()->url,
             ], 201);
         } catch (\Throwable $e) {
             Log::error('OrderTicketController storePhoto: excepción no controlada.', [
@@ -146,7 +146,7 @@ class OrderTicketController extends Controller
 
         // Eliminar todas las fotos del ticket
         foreach ($ticket->photos as $photo) {
-            Storage::disk('public')->delete($photo->path);
+            Storage::disk(config('filesystems.default', 'public'))->delete($photo->path);
         }
 
         $ticket->delete();
@@ -209,7 +209,7 @@ class OrderTicketController extends Controller
         $photoPath = $photo->path;
         $photoName = $photo->original_name;
 
-        Storage::disk('public')->delete($photoPath);
+        Storage::disk(config('filesystems.default', 'public'))->delete($photoPath);
         $photo->delete();
 
         ActivityLogger::log(

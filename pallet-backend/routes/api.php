@@ -85,13 +85,13 @@ Route::prefix('v1')->group(function () {
             Route::post('/orders/{order}/tickets/{ticket}/photos/{photo}/trigger-ocr', [OrderTicketController::class, 'triggerOcr']);
             Route::delete('/orders/{order}/tickets/{ticket}/photos/{photo}', [OrderTicketController::class, 'destroyPhoto']);
 
-            // Pallets
+            // Pallets - IMPORTANTE: rutas específicas antes de las dinámicas
             Route::get('/pallets', [PalletController::class, 'index']);
             Route::post('/pallets', [PalletController::class, 'store']);
+            Route::get('/pallets/last-open', [PalletController::class, 'lastOpen']);
             Route::get('/pallets/{pallet}', [PalletController::class, 'show']);
             Route::patch('/pallets/{pallet}', [PalletController::class, 'updateStatus']);
             Route::delete('/pallets/{pallet}', [PalletController::class, 'destroy']);
-            Route::get('/pallets/last-open', [PalletController::class, 'lastOpen']);
             Route::get('/pallets/{pallet}/activity-logs', [PalletController::class, 'activityLogs']);
             Route::get('/pallets/{pallet}/can-finalize', [PalletController::class, 'canFinalize']);
             Route::post('/pallets/{pallet}/finalize', [PalletController::class, 'finalize']);

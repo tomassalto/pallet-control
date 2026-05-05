@@ -55,7 +55,7 @@ class PalletPhotoController extends Controller
 
         return response()->json([
             'photo' => $photo,
-            'url' => '/storage/' . $path,
+            'url' => $photo->url,
         ], 201);
     }
 
@@ -70,7 +70,7 @@ class PalletPhotoController extends Controller
         $photoName = $photo->original_name;
 
         // Eliminar archivo del storage
-        Storage::disk('public')->delete($photoPath);
+        Storage::disk(config('filesystems.default', 'public'))->delete($photoPath);
         $photo->delete();
 
         \App\Helpers\ActivityLogger::log(
