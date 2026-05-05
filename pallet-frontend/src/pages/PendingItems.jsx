@@ -366,7 +366,8 @@ function CreateModal({ onClose, onCreated }) {
                 !order ||
                 !selectedItem ||
                 !qty ||
-                (selectedQtyMax > 0 && (Number(qty) < 1 || Number(qty) > selectedQtyMax))
+                (selectedQtyMax > 0 &&
+                  (Number(qty) < 1 || Number(qty) > selectedQtyMax))
               }
               className="flex-1 py-3 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm hover:bg-gray-700 dark:hover:bg-gray-100 disabled:opacity-40 transition-colors"
             >
@@ -588,7 +589,7 @@ export default function PendingItems() {
   return (
     <div className="space-y-6 py-2">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <BackButton to="/" />
@@ -600,25 +601,27 @@ export default function PendingItems() {
             Productos que quedaron con faltantes en una entrega
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2.5}
-            stroke="currentColor"
+        <div className="flex items-center justify-end">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 4.5v15m7.5-7.5h-15"
-            />
-          </svg>
-          <span className="hidden sm:inline">Nuevo</span>
-        </button>
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 4.5v15m7.5-7.5h-15"
+              />
+            </svg>
+            <span className="hidden sm:inline">Nuevo</span>
+          </button>
+        </div>
       </div>
 
       {/* Alerta si hay pendientes */}

@@ -236,7 +236,7 @@ export default function SidebarLayout({ title = "Pallet Control", children }) {
       ══════════════════════════════════════════════════ */}
       <main className="pt-14 lg:pl-64 min-h-screen flex flex-col">
         <div
-          className="flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 min-h-screen
+          className="flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-screen
                         max-w-xl sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl"
         >
           {/* Pending role banner */}

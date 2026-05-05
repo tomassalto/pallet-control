@@ -956,13 +956,15 @@ export default function OrderDetail() {
               to={`/order/${orderId}/history`}
             />
             {order?.status === "open" && canFinalize && (
-              <button
+              <ActionItem
+                icon={Icons.Check}
+                iconBg="bg-green-500"
+                label={finalizing ? "Finalizando…" : "Finalizar pedido"}
+                sublabel="Todos los productos están distribuidos en bases"
                 onClick={handleFinalize}
                 disabled={finalizing}
-                className="w-full py-3.5 rounded-2xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold disabled:opacity-60 transition-colors mt-1"
-              >
-                {finalizing ? "Finalizando…" : "✓ Finalizar pedido"}
-              </button>
+                noChevron
+              />
             )}
           </div>
         ) : (
@@ -1465,8 +1467,7 @@ function OcrTerminal({ log, done, eansCount, photoId }) {
       </div>
       <div className="bg-gray-950 rounded-lg p-3 h-48 overflow-y-auto font-mono text-xs leading-relaxed">
         {log.split("\n").map((line, i) => {
-          const isError =
-            line.includes("[ERROR]") || line.includes("ERROR:");
+          const isError = line.includes("[ERROR]") || line.includes("ERROR:");
           const isOk =
             line.includes("→ EAN:") ||
             line.includes("OK") ||
@@ -1554,11 +1555,15 @@ function TicketCard({ ticket, orderId, onUpdate }) {
   async function handleDeletePhoto(photoId) {
     if (!window.confirm("¿Eliminar esta foto?")) return;
     try {
-      await apiDelete(`/orders/${orderId}/tickets/${ticket.id}/photos/${photoId}`);
+      await apiDelete(
+        `/orders/${orderId}/tickets/${ticket.id}/photos/${photoId}`,
+      );
       toastSuccess("Foto eliminada");
       onUpdate();
     } catch (e) {
-      toastError(e.response?.data?.message || e.message || "Error eliminando foto");
+      toastError(
+        e.response?.data?.message || e.message || "Error eliminando foto",
+      );
     }
   }
 
@@ -1570,27 +1575,41 @@ function TicketCard({ ticket, orderId, onUpdate }) {
       setConfirmDeleteTicket(false);
       onUpdate();
     } catch (e) {
-      toastError(e.response?.data?.message || e.message || "Error eliminando ticket");
+      toastError(
+        e.response?.data?.message || e.message || "Error eliminando ticket",
+      );
     } finally {
       setDeleting(false);
     }
   }
 
   function openScanModal(photo) {
-    setScanModal({ photo, step: "confirm", log: "", done: false, eansCount: null });
+    setScanModal({
+      photo,
+      step: "confirm",
+      log: "",
+      done: false,
+      eansCount: null,
+    });
   }
 
   async function confirmScan() {
     if (!scanModal) return;
     const photo = scanModal.photo;
-    setScanModal((prev) => prev && { ...prev, step: "scanning", log: "Iniciando escaneo OCR…" });
+    setScanModal(
+      (prev) =>
+        prev && { ...prev, step: "scanning", log: "Iniciando escaneo OCR…" },
+    );
     try {
       await apiPost(
         `/orders/${orderId}/tickets/${ticket.id}/photos/${photo.id}/trigger-ocr`,
       );
     } catch (e) {
-      const msg = e?.response?.data?.message || e.message || "Error al iniciar OCR";
-      setScanModal((prev) => prev && { ...prev, log: `[ERROR] ${msg}`, done: true });
+      const msg =
+        e?.response?.data?.message || e.message || "Error al iniciar OCR";
+      setScanModal(
+        (prev) => prev && { ...prev, log: `[ERROR] ${msg}`, done: true },
+      );
       return;
     }
     clearInterval(pollRef.current);
@@ -1599,10 +1618,14 @@ function TicketCard({ ticket, orderId, onUpdate }) {
         const data = await apiGet(
           `/orders/${orderId}/tickets/${ticket.id}/photos/${photo.id}/ocr-status`,
         );
-        if (data.ocr_log) setScanModal((prev) => prev && { ...prev, log: data.ocr_log });
+        if (data.ocr_log)
+          setScanModal((prev) => prev && { ...prev, log: data.ocr_log });
         if (data.ocr_processed_at !== null) {
           clearInterval(pollRef.current);
-          setScanModal((prev) => prev && { ...prev, done: true, eansCount: data.ocr_eans_count });
+          setScanModal(
+            (prev) =>
+              prev && { ...prev, done: true, eansCount: data.ocr_eans_count },
+          );
           onUpdate();
         }
       } catch {
@@ -1617,7 +1640,8 @@ function TicketCard({ ticket, orderId, onUpdate }) {
   }
 
   const totalPhotos = ticket.photos?.length ?? 0;
-  const scannedCount = ticket.photos?.filter((p) => p.ocr_processed_at).length ?? 0;
+  const scannedCount =
+    ticket.photos?.filter((p) => p.ocr_processed_at).length ?? 0;
 
   return (
     <div className="relative bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-2xl overflow-hidden shadow-sm">
@@ -1647,7 +1671,7 @@ function TicketCard({ ticket, orderId, onUpdate }) {
           <div className="flex items-center gap-1.5 shrink-0">
             {/* Contador de fotos */}
             {totalPhotos > 0 && (
-              <span className="text-[11px] bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full font-semibold">
+              <span className="text-xs px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full font-semibold">
                 {totalPhotos} foto{totalPhotos !== 1 ? "s" : ""}
               </span>
             )}
@@ -1707,9 +1731,12 @@ function TicketCard({ ticket, orderId, onUpdate }) {
                       ✕
                     </button>
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent text-white text-[10px] px-2 py-1.5">
-                      {new Date(photo.created_at).toLocaleDateString(undefined, {
-                        dateStyle: "short",
-                      })}
+                      {new Date(photo.created_at).toLocaleDateString(
+                        undefined,
+                        {
+                          dateStyle: "short",
+                        },
+                      )}
                     </div>
                   </div>
                   {/* Franja OCR */}
@@ -1946,7 +1973,9 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
       setTicketId(data.id);
       toastSuccess("Ticket creado. Ahora podés agregar fotos.");
     } catch (e) {
-      toastError(e.response?.data?.message || e.message || "Error creando ticket");
+      toastError(
+        e.response?.data?.message || e.message || "Error creando ticket",
+      );
     } finally {
       setSaving(false);
     }
@@ -1955,7 +1984,10 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
   async function handleUploadPhoto(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!ticketId) { toastError("Primero creá el ticket"); return; }
+    if (!ticketId) {
+      toastError("Primero creá el ticket");
+      return;
+    }
     setUploading(true);
     try {
       const form = new FormData();
@@ -1967,7 +1999,9 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
       toastSuccess("Foto subida correctamente");
       setUploadedPhotos((prev) => [...prev, res.photo]);
     } catch (err) {
-      toastError(err?.response?.data?.message || err?.message || "Error subiendo foto");
+      toastError(
+        err?.response?.data?.message || err?.message || "Error subiendo foto",
+      );
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -1976,22 +2010,32 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
 
   function openScanConfirm(photoId) {
     clearInterval(pollRef.current);
-    setScanState({ photoId, step: "confirm", log: "", done: false, eansCount: null });
+    setScanState({
+      photoId,
+      step: "confirm",
+      log: "",
+      done: false,
+      eansCount: null,
+    });
   }
 
   async function startScan() {
     if (!scanState) return;
     const { photoId } = scanState;
-    setScanState((prev) =>
-      prev && { ...prev, step: "scanning", log: "Iniciando escaneo OCR…" },
+    setScanState(
+      (prev) =>
+        prev && { ...prev, step: "scanning", log: "Iniciando escaneo OCR…" },
     );
     try {
       await apiPost(
         `/orders/${orderId}/tickets/${ticketId}/photos/${photoId}/trigger-ocr`,
       );
     } catch (e) {
-      const msg = e?.response?.data?.message || e.message || "Error al iniciar OCR";
-      setScanState((prev) => prev && { ...prev, log: `[ERROR] ${msg}`, done: true });
+      const msg =
+        e?.response?.data?.message || e.message || "Error al iniciar OCR";
+      setScanState(
+        (prev) => prev && { ...prev, log: `[ERROR] ${msg}`, done: true },
+      );
       return;
     }
     clearInterval(pollRef.current);
@@ -2000,11 +2044,13 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
         const data = await apiGet(
           `/orders/${orderId}/tickets/${ticketId}/photos/${photoId}/ocr-status`,
         );
-        if (data.ocr_log) setScanState((prev) => prev && { ...prev, log: data.ocr_log });
+        if (data.ocr_log)
+          setScanState((prev) => prev && { ...prev, log: data.ocr_log });
         if (data.ocr_processed_at !== null) {
           clearInterval(pollRef.current);
-          setScanState((prev) =>
-            prev && { ...prev, done: true, eansCount: data.ocr_eans_count },
+          setScanState(
+            (prev) =>
+              prev && { ...prev, done: true, eansCount: data.ocr_eans_count },
           );
           setUploadedPhotos((prev) =>
             prev.map((p) =>
@@ -2095,9 +2141,8 @@ function AddTicketModal({ orderId, onClose, onSuccess }) {
           /* ── Paso 2: subir fotos + escanear ───────────────── */
           <div className="space-y-4">
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700/50 rounded-lg p-3 text-sm text-green-800 dark:text-green-300">
-              ✓ Ticket{" "}
-              <span className="font-semibold">{code}</span> creado. Subí una
-              foto y escaneá con OCR cuando el pallet esté listo.
+              ✓ Ticket <span className="font-semibold">{code}</span> creado.
+              Subí una foto y escaneá con OCR cuando el pallet esté listo.
             </div>
 
             {/* Lista de fotos subidas */}
