@@ -8,6 +8,7 @@ use App\Helpers\TelegramNotifier;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Product;
+use App\Services\OrderService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -265,7 +266,6 @@ class OrderController extends Controller
             'order_ids.*' => ['integer'],
         ]);
 
-        // Misma lógica que canFinalize: distribución de unidades en bases
         $orders = Order::with(['items', 'pallets.bases.orderItems'])
             ->whereIn('id', $data['order_ids'])
             ->get()
@@ -274,27 +274,7 @@ class OrderController extends Controller
         $result = [];
         foreach ($data['order_ids'] as $id) {
             $order = $orders->get($id);
-
-            if (!$order || $order->items->isEmpty() || $order->pallets->isEmpty()) {
-                $result[$id] = false;
-                continue;
-            }
-
-            // Sumar unidades asignadas por ítem en todas las bases de todos los pallets
-            $assignedQtys = [];
-            foreach ($order->pallets as $pallet) {
-                foreach ($pallet->bases as $base) {
-                    foreach ($base->orderItems as $item) {
-                        if ($item->order_id === $order->id) {
-                            $assignedQtys[$item->id] = ($assignedQtys[$item->id] ?? 0) + $item->pivot->qty;
-                        }
-                    }
-                }
-            }
-
-            $result[$id] = $order->items->every(
-                fn($item) => ($assignedQtys[$item->id] ?? 0) >= $item->qty
-            );
+            $result[$id] = $order ? OrderService::canFinalize($order)['can'] : false;
         }
 
         return response()->json($result);
@@ -305,49 +285,9 @@ class OrderController extends Controller
     {
         $order->load(['items', 'pallets.bases.orderItems']);
 
-        // Debe tener al menos 1 producto
-        if ($order->items->isEmpty()) {
-            return response()->json([
-                'can_finalize' => false,
-                'reason' => 'El pedido no tiene productos',
-            ]);
-        }
+        ['can' => $can, 'reason' => $reason] = OrderService::canFinalize($order);
 
-        // Debe tener al menos 1 pallet asociado
-        if ($order->pallets->isEmpty()) {
-            return response()->json([
-                'can_finalize' => false,
-                'reason' => 'El pedido debe tener al menos 1 pallet asociado para finalizar',
-            ]);
-        }
-
-        // Calcular unidades asignadas por ítem a través de todas las bases de todos los pallets
-        $assignedQtys = [];
-        foreach ($order->pallets as $pallet) {
-            foreach ($pallet->bases as $base) {
-                foreach ($base->orderItems as $item) {
-                    if ($item->order_id === $order->id) {
-                        $assignedQtys[$item->id] = ($assignedQtys[$item->id] ?? 0) + $item->pivot->qty;
-                    }
-                }
-            }
-        }
-
-        // Todos los productos deben tener sus unidades completamente distribuidas
-        $allDistributed = $order->items->every(
-            fn($item) => ($assignedQtys[$item->id] ?? 0) >= $item->qty
-        );
-
-        if (!$allDistributed) {
-            return response()->json([
-                'can_finalize' => false,
-                'reason' => 'Todos los productos deben tener sus unidades distribuidas en bases de pallets',
-            ]);
-        }
-
-        return response()->json([
-            'can_finalize' => true,
-        ]);
+        return response()->json(['can_finalize' => $can, 'reason' => $reason]);
     }
 
     // POST /orders/{order}/finalize
@@ -355,39 +295,10 @@ class OrderController extends Controller
     {
         $order->load(['items', 'pallets.bases.orderItems']);
 
-        if ($order->items->isEmpty()) {
-            return response()->json([
-                'message' => 'El pedido no tiene productos',
-            ], 422);
-        }
+        ['can' => $can, 'reason' => $reason] = OrderService::canFinalize($order);
 
-        if ($order->pallets->isEmpty()) {
-            return response()->json([
-                'message' => 'El pedido debe tener al menos 1 pallet asociado para finalizar',
-            ], 422);
-        }
-
-        // Calcular unidades asignadas por ítem a través de todas las bases de todos los pallets
-        $assignedQtys = [];
-        foreach ($order->pallets as $pallet) {
-            foreach ($pallet->bases as $base) {
-                foreach ($base->orderItems as $item) {
-                    if ($item->order_id === $order->id) {
-                        $assignedQtys[$item->id] = ($assignedQtys[$item->id] ?? 0) + $item->pivot->qty;
-                    }
-                }
-            }
-        }
-
-        // Todos los productos deben tener sus unidades completamente distribuidas
-        $allDistributed = $order->items->every(
-            fn($item) => ($assignedQtys[$item->id] ?? 0) >= $item->qty
-        );
-
-        if (!$allDistributed) {
-            return response()->json([
-                'message' => 'Todos los productos deben tener sus unidades distribuidas en bases de pallets para finalizar el pedido',
-            ], 422);
+        if (! $can) {
+            return response()->json(['message' => $reason], 422);
         }
 
         $order->update(['status' => 'done']);

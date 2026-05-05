@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Pallet;
 use App\Models\Product;
+use App\Services\PalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -216,33 +217,12 @@ class PalletController extends Controller
     public function canFinalize(Pallet $pallet)
     {
         $pallet->load(['bases.photos', 'bases.orderItems']);
-        
-        $basesCount = $pallet->bases->count();
-        $totalPhotos = $pallet->bases->sum(function ($base) {
-            return $base->photos->count();
-        });
 
-        // Verificar que todas las bases tengan al menos 1 producto
-        $allBasesHaveProducts = $pallet->bases->every(function ($base) {
-            return $base->orderItems->count() >= 1;
-        });
-        $basesWithProducts = $pallet->bases->filter(function ($base) {
-            return $base->orderItems->count() >= 1;
-        })->count();
-
-        $canFinalize = $basesCount >= 2 && $totalPhotos >= 2 && $allBasesHaveProducts;
+        $check = PalletService::canFinalize($pallet);
 
         return response()->json([
-            'can_finalize' => $canFinalize,
-            'bases_count' => $basesCount,
-            'total_photos' => $totalPhotos,
-            'bases_with_products' => $basesWithProducts,
-            'all_bases_have_products' => $allBasesHaveProducts,
-            'requirements' => [
-                'bases' => ['required' => 2, 'current' => $basesCount],
-                'photos' => ['required' => 2, 'current' => $totalPhotos],
-                'bases_with_products' => ['required' => $basesCount, 'current' => $basesWithProducts],
-            ],
+            'can_finalize' => $check['can'],
+            ...$check['details'],
         ]);
     }
 
@@ -250,23 +230,13 @@ class PalletController extends Controller
     public function finalize(Pallet $pallet)
     {
         $pallet->load(['bases.photos', 'bases.orderItems']);
-        
-        $basesCount = $pallet->bases->count();
-        $totalPhotos = $pallet->bases->sum(function ($base) {
-            return $base->photos->count();
-        });
 
-        // Verificar que todas las bases tengan al menos 1 producto
-        $allBasesHaveProducts = $pallet->bases->every(function ($base) {
-            return $base->orderItems->count() >= 1;
-        });
+        $check = PalletService::canFinalize($pallet);
 
-        if ($basesCount < 2 || $totalPhotos < 2 || !$allBasesHaveProducts) {
+        if (! $check['can']) {
             return response()->json([
-                'message' => 'El pallet no cumple con los requisitos para finalizar. Se requieren al menos 2 bases, 2 fotos en total, y todas las bases deben tener al menos 1 producto asignado.',
-                'bases_count' => $basesCount,
-                'total_photos' => $totalPhotos,
-                'all_bases_have_products' => $allBasesHaveProducts,
+                'message' => $check['reason'],
+                ...$check['details'],
             ], 400);
         }
 
