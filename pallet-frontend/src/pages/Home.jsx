@@ -8,6 +8,23 @@ import { ActionItem, Icons } from "../ui/ActionList";
 const SEC_LABEL =
   "text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500";
 
+/* ── Stat card ───────────────────────────────────────────────────────────────── */
+function StatCard({ value, label, accent = "text-gray-900 dark:text-white", sublabel }) {
+  return (
+    <div className="flex flex-col gap-1 bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-2xl px-4 py-3.5 shadow-sm">
+      <span className={`text-2xl font-extrabold tabular-nums leading-none ${accent}`}>
+        {value}
+      </span>
+      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 leading-tight">
+        {label}
+      </span>
+      {sublabel && (
+        <span className="text-[10px] text-gray-400 dark:text-gray-500">{sublabel}</span>
+      )}
+    </div>
+  );
+}
+
 /* ── Mini-card para último pedido/pallet ────────────────────────────────────── */
 function LastCard({ to, accentColor = "bg-blue-500", label, code, chips = [], cta }) {
   return (
@@ -15,9 +32,7 @@ function LastCard({ to, accentColor = "bg-blue-500", label, code, chips = [], ct
       to={to}
       className="relative flex flex-col gap-2.5 bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] active:shadow-none transition-all duration-150 pl-5 pr-4 py-4"
     >
-      {/* Acento izquierdo */}
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${accentColor}`} />
-
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
@@ -27,10 +42,8 @@ function LastCard({ to, accentColor = "bg-blue-500", label, code, chips = [], ct
             {code}
           </p>
         </div>
-        {/* Pulso activo */}
         <div className={`shrink-0 w-2.5 h-2.5 rounded-full ${accentColor} animate-pulse mt-1`} />
       </div>
-
       {chips.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {chips.map((chip, i) => (
@@ -43,7 +56,6 @@ function LastCard({ to, accentColor = "bg-blue-500", label, code, chips = [], ct
           ))}
         </div>
       )}
-
       <div className="flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400">
         {cta}
         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
@@ -54,34 +66,88 @@ function LastCard({ to, accentColor = "bg-blue-500", label, code, chips = [], ct
   );
 }
 
+/* ── Orders by date ─────────────────────────────────────────────────────────── */
+function OrdersByDate({ rows }) {
+  if (!rows || rows.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <p className={SEC_LABEL}>Pedidos por fecha (últimos 30 días)</p>
+      <div className="bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-2xl overflow-hidden shadow-sm divide-y divide-gray-100 dark:divide-gray-700/40">
+        {rows.map((row) => {
+          const date = new Date(row.date + "T00:00:00");
+          const label = date.toLocaleDateString("es-AR", {
+            weekday: "short", day: "numeric", month: "short",
+          });
+          const pct = row.total > 0 ? Math.round((row.done / row.total) * 100) : 0;
+
+          return (
+            <Link
+              key={row.date}
+              to={`/orders?date_from=${row.date}&date_to=${row.date}`}
+              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/[0.03] transition-colors"
+            >
+              {/* Fecha */}
+              <div className="w-24 shrink-0">
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 capitalize">
+                  {label}
+                </span>
+              </div>
+
+              {/* Barra de progreso */}
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="h-1.5 w-full rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${pct === 100 ? "bg-green-500" : "bg-blue-500"}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Contador */}
+              <div className="shrink-0 text-right">
+                <span className={`text-xs font-bold tabular-nums ${pct === 100 ? "text-green-600 dark:text-green-400" : "text-gray-500 dark:text-gray-400"}`}>
+                  {row.done}/{row.total}
+                </span>
+              </div>
+
+              <svg className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ── Página ─────────────────────────────────────────────────────────────────── */
 export default function Home() {
   const { user } = useAuth();
   const canWrite = user?.role !== null && user?.role !== undefined;
-  const [loading, setLoading]           = useState(true);
-  const [lastOpenOrder, setLastOpenOrder] = useState(null);
-  const [lastOpenPallet, setLastOpenPallet] = useState(null);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [data, setData]       = useState(null);
 
   async function load() {
     setLoading(true);
     try {
-      const [orderData, summaryData, palletData] = await Promise.allSettled([
-        apiGet("/orders/last-open"),
-        apiGet("/pending-items/summary"),
-        apiGet("/pallets/last-open"),
-      ]);
-      setLastOpenOrder(orderData.value?.order   || null);
-      setPendingCount(summaryData.value?.pending_count ?? 0);
-      setLastOpenPallet(palletData.value?.pallet || null);
+      const res = await apiGet("/dashboard");
+      setData(res);
     } catch {
-      setLastOpenOrder(null);
+      setData(null);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => { load(); }, []);
+
+  const stats         = data?.stats ?? {};
+  const lastOrder     = data?.last_open_order ?? null;
+  const lastPallet    = data?.last_open_pallet ?? null;
+  const pendingCount  = data?.pending_count ?? 0;
+  const ordersByDate  = data?.orders_by_date ?? [];
 
   if (loading)
     return (
@@ -108,6 +174,36 @@ export default function Home() {
         </div>
       </div>
 
+      {/* ── Stats ────────────────────────────────────────────────────── */}
+      {data && (
+        <div className="space-y-2">
+          <p className={SEC_LABEL}>Estado actual</p>
+          <div className="grid grid-cols-2 gap-2">
+            <StatCard
+              value={stats.open_pallets ?? 0}
+              label="Pallets abiertos"
+              accent={stats.open_pallets > 0 ? "text-violet-600 dark:text-violet-400" : "text-gray-900 dark:text-white"}
+            />
+            <StatCard
+              value={stats.open_orders ?? 0}
+              label="Pedidos en curso"
+              accent={stats.open_orders > 0 ? "text-blue-600 dark:text-blue-400" : "text-gray-900 dark:text-white"}
+            />
+            <StatCard
+              value={stats.pending_units ?? 0}
+              label="Unidades sin distribuir"
+              accent={stats.pending_units > 0 ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}
+            />
+            <StatCard
+              value={stats.ocr_this_month ?? 0}
+              label="OCR este mes"
+              sublabel="de 5.000 gratis"
+              accent="text-gray-900 dark:text-white"
+            />
+          </div>
+        </div>
+      )}
+
       {/* ── Alerta pendientes ────────────────────────────────────────── */}
       {pendingCount > 0 && (
         <Link
@@ -130,27 +226,27 @@ export default function Home() {
       )}
 
       {/* ── Continuar donde lo dejaste ──────────────────────────────── */}
-      {(lastOpenOrder || lastOpenPallet) && (
+      {(lastOrder || lastPallet) && (
         <div className="space-y-2">
           <p className={SEC_LABEL}>Continuar donde lo dejaste</p>
           <div className="flex flex-col gap-2">
-            {lastOpenOrder && (
+            {lastOrder && (
               <LastCard
-                to={`/order/${lastOpenOrder.id}`}
+                to={`/order/${lastOrder.id}`}
                 accentColor="bg-blue-500"
                 label="Pedido en proceso"
-                code={`#${lastOpenOrder.code}`}
-                chips={lastOpenOrder.pallets?.map((p) => p.code) ?? []}
+                code={`#${lastOrder.code}`}
+                chips={lastOrder.pallets?.map((p) => p.code) ?? []}
                 cta="Abrir pedido"
               />
             )}
-            {lastOpenPallet && (
+            {lastPallet && (
               <LastCard
-                to={`/pallet/${lastOpenPallet.id}`}
+                to={`/pallet/${lastPallet.id}`}
                 accentColor="bg-violet-500"
                 label="Pallet en proceso"
-                code={lastOpenPallet.code}
-                chips={lastOpenPallet.orders?.map((o) => `#${o.code}`) ?? []}
+                code={lastPallet.code}
+                chips={lastPallet.orders?.map((o) => `#${o.code}`) ?? []}
                 cta="Abrir pallet"
               />
             )}
@@ -171,6 +267,10 @@ export default function Home() {
           />
         </div>
       )}
+
+      {/* ── Pedidos por fecha ─────────────────────────────────────────── */}
+      <OrdersByDate rows={ordersByDate} />
+
     </div>
   );
 }

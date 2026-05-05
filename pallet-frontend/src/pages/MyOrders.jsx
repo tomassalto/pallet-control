@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { apiGet, apiPost } from "../api/client";
 import { toastError, toastSuccess } from "../ui/toast";
 import Title from "../ui/Title";
@@ -245,7 +245,81 @@ function OrderCard({ o, dim = false, canFinalize = false, finalizing = false, on
 }
 
 /* ── Página ─────────────────────────────────────────────────────────────────── */
+/* ── Filtro de fecha ─────────────────────────────────────────────────────────── */
+function DateFilter({ dateFrom, dateTo, onChange }) {
+  const presets = [
+    { label: "Hoy",         from: today(),          to: today() },
+    { label: "Ayer",        from: daysAgo(1),        to: daysAgo(1) },
+    { label: "Esta semana", from: startOfWeek(),     to: today() },
+    { label: "Este mes",    from: startOfMonth(),    to: today() },
+  ];
+
+  const activePreset = presets.find((p) => p.from === dateFrom && p.to === dateTo);
+
+  return (
+    <div className="space-y-2">
+      {/* Chips de preset */}
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          onClick={() => onChange("", "")}
+          className={[
+            "px-3 py-1 rounded-xl text-xs font-semibold border transition-colors",
+            !dateFrom && !dateTo
+              ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-transparent"
+              : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700",
+          ].join(" ")}
+        >
+          Todos
+        </button>
+        {presets.map((p) => {
+          const active = p.from === dateFrom && p.to === dateTo;
+          return (
+            <button
+              key={p.label}
+              onClick={() => onChange(p.from, p.to)}
+              className={[
+                "px-3 py-1 rounded-xl text-xs font-semibold border transition-colors",
+                active
+                  ? "bg-blue-600 text-white border-transparent"
+                  : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700",
+              ].join(" ")}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Inputs de fecha custom (solo si no hay preset activo o querés rango propio) */}
+      {!activePreset && (dateFrom || dateTo) && (
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => onChange(e.target.value, dateTo)}
+            className="flex-1 text-xs border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+          />
+          <span className="text-xs text-gray-400">→</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => onChange(dateFrom, e.target.value)}
+            className="flex-1 text-xs border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function today()        { return new Date().toISOString().slice(0, 10); }
+function daysAgo(n)     { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); }
+function startOfWeek()  { const d = new Date(); d.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1)); return d.toISOString().slice(0, 10); }
+function startOfMonth() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
+
+/* ── Página ─────────────────────────────────────────────────────────────────── */
 export default function MyOrders() {
+  const [searchParams, setSearchParams]     = useSearchParams();
   const [loading, setLoading]               = useState(true);
   const [orders, setOrders]                 = useState([]);
   const [page, setPage]                     = useState(1);
@@ -253,10 +327,24 @@ export default function MyOrders() {
   const [canFinalizeMap, setCanFinalizeMap] = useState(new Map());
   const [finalizing, setFinalizing]         = useState(new Set());
 
-  async function load(nextPage = 1, { append = false } = {}) {
+  // Filtros de fecha desde URL params (para que el link desde home funcione)
+  const dateFrom = searchParams.get("date_from") ?? "";
+  const dateTo   = searchParams.get("date_to")   ?? "";
+
+  function handleDateChange(from, to) {
+    const params = {};
+    if (from) params.date_from = from;
+    if (to)   params.date_to   = to;
+    setSearchParams(params);
+  }
+
+  async function load(nextPage = 1, { append = false, from = dateFrom, to = dateTo } = {}) {
     setLoading(true);
     try {
-      const res  = await apiGet(`/orders?page=${nextPage}`);
+      let url = `/orders?page=${nextPage}`;
+      if (from) url += `&date_from=${from}`;
+      if (to)   url += `&date_to=${to}`;
+      const res  = await apiGet(url);
       const rows = Array.isArray(res) ? res : res.data || [];
       setOrders((prev) => (append ? [...prev, ...rows] : rows));
       const current = res.current_page ?? nextPage;
@@ -284,7 +372,8 @@ export default function MyOrders() {
     }
   }
 
-  useEffect(() => { load(1, { append: false }); }, []);
+  // Recargar cuando cambian los filtros de fecha
+  useEffect(() => { load(1, { append: false, from: dateFrom, to: dateTo }); }, [dateFrom, dateTo]);
 
   const { openOrders, completedOrders } = useMemo(() => ({
     openOrders:      orders.filter((o) => o.status !== "done"),
@@ -328,11 +417,13 @@ export default function MyOrders() {
         </p>
       </div>
 
+      <DateFilter dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
+
       {loading && orders.length === 0 ? (
         <PageSpinner />
       ) : orders.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-10">
-          Todavía no hay pedidos en el historial.
+          {dateFrom || dateTo ? "No hay pedidos para ese rango de fechas." : "Todavía no hay pedidos en el historial."}
         </p>
       ) : (
         <div className="space-y-6">

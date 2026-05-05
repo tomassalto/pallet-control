@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\PublicPalletController;
 use App\Http\Controllers\Api\TelegramBotController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\PendingItemController;
+use App\Http\Controllers\Api\DashboardController;
 
 Route::prefix('v1')->group(function () {
     // Ruta del bot de WhatsApp (sin auth Sanctum, usa X-Bot-Secret)
@@ -62,6 +63,9 @@ Route::prefix('v1')->group(function () {
         // ── Rutas con control de acceso por rol ───────────────────────────────
         // has.role: GET/HEAD libres para todos; POST/PATCH/DELETE requieren rol.
         Route::middleware('has.role')->group(function () {
+
+            // Dashboard
+            Route::get('/dashboard', [DashboardController::class, 'index']);
 
             // Customers
             Route::get('/customers', [CustomerController::class, 'index']);

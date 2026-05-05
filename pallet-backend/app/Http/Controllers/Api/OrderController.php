@@ -45,6 +45,14 @@ class OrderController extends Controller
             $q->where('code', 'like', '%' . $request->string('search') . '%');
         }
 
+        // Filtro por fecha de creación
+        if ($request->filled('date_from')) {
+            $q->whereDate('orders.created_at', '>=', $request->string('date_from'));
+        }
+        if ($request->filled('date_to')) {
+            $q->whereDate('orders.created_at', '<=', $request->string('date_to'));
+        }
+
         // Fetch data
         if ($request->filled('limit')) {
             $result = $q->limit($request->integer('limit'))->get();
