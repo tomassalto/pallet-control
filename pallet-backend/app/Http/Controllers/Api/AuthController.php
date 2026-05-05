@@ -12,13 +12,21 @@ class AuthController extends Controller
 {
     public function register(Request $request)
     {
+        $isFirst = User::count() === 0;
+
+        // Registro cerrado cuando REGISTRATION_ENABLED=false y ya existe al menos 1 usuario.
+        // El primer registro siempre se permite (crea el superadmin).
+        if (! $isFirst && ! env('REGISTRATION_ENABLED', true)) {
+            return response()->json([
+                'message' => 'El registro de nuevos usuarios está deshabilitado.',
+            ], 403);
+        }
+
         $data = $request->validate([
             'name'                  => ['required', 'string', 'max:255'],
             'email'                 => ['required', 'email', 'max:255', 'unique:users,email'],
             'password'              => ['required', 'string', 'min:6', 'confirmed'],
         ]);
-
-        $isFirst = User::count() === 0;
 
         // Todos los usuarios se auto-verifican al registrarse.
         // El control de acceso real es el sistema de roles (role = null = solo lectura).

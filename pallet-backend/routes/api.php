@@ -42,8 +42,13 @@ Route::prefix('v1')->group(function () {
     // Telegram webhook (sin auth Sanctum, valida X-Telegram-Bot-Api-Secret-Token)
     Route::post('/telegram/webhook', [TelegramBotController::class, 'webhook']);
 
-    Route::post('/auth/register', [AuthController::class, 'register']);
-    Route::post('/auth/login', [AuthController::class, 'login']);
+    // Registro: solo disponible si REGISTRATION_ENABLED=true (o si no hay usuarios aún)
+    Route::post('/auth/register', [AuthController::class, 'register'])
+        ->middleware('throttle:10,1');
+
+    // Login: máximo 10 intentos por minuto por IP
+    Route::post('/auth/login', [AuthController::class, 'login'])
+        ->middleware('throttle:10,1');
     Route::get('/auth/verify/{id}', [AuthController::class, 'verifyEmail'])
         ->name('verification.verify');
 
