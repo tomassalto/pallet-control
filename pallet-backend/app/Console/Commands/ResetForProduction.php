@@ -47,7 +47,9 @@ class ResetForProduction extends Command
         $this->warn('  Los productos NO serán eliminados.');
         $this->warn('');
 
-        if (! $this->confirm('¿Estás seguro? Esta acción no se puede deshacer.')) {
+        // En entornos no interactivos (ej: deploy en Render), --confirm es suficiente.
+        // En terminales interactivas se pide confirmación adicional.
+        if ($this->input->isInteractive() && ! $this->confirm('¿Estás seguro? Esta acción no se puede deshacer.')) {
             $this->info('Operación cancelada.');
             return 0;
         }
@@ -72,19 +74,18 @@ class ResetForProduction extends Command
         }
 
         // ── Truncar tablas ────────────────────────────────────────────────
+        // Las tablas están ordenadas respetando FK constraints (hijos primero),
+        // por eso no necesitamos deshabilitar checks — DELETE respeta el orden.
         $this->info('Truncando tablas...');
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
 
         foreach ($this->tables as $table) {
             try {
-                DB::table($table)->truncate();
+                DB::table($table)->delete();
                 $this->line("  ✓ {$table}");
             } catch (\Throwable $e) {
                 $this->warn("  ⚠ {$table}: " . $e->getMessage());
             }
         }
-
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
         // ── Resultado ─────────────────────────────────────────────────────
         $productCount = DB::table('products')->count();
