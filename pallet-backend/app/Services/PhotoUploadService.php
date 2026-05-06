@@ -36,6 +36,9 @@ class PhotoUploadService
 
     public function resolvePallet(array $data): Pallet
     {
+        if (!empty($data['pallet_id'])) {
+            return Pallet::findOrFail($data['pallet_id']);
+        }
         if (!empty($data['pallet_index'])) {
             return Pallet::where('status', 'open')
                 ->orderByDesc('id')
@@ -47,6 +50,9 @@ class PhotoUploadService
 
     public function resolveOrder(array $data): Order
     {
+        if (!empty($data['order_id'])) {
+            return Order::findOrFail($data['order_id']);
+        }
         if (!empty($data['order_index'])) {
             return Order::where('status', 'open')
                 ->orderByDesc('id')
