@@ -149,11 +149,18 @@ Route::prefix('v1')->group(function () {
 
         }); // end has.role
 
-        // Admin — gestión de usuarios (requiere rol admin o superadmin)
+        // Admin — gestión de usuarios y storage (requiere rol admin o superadmin)
         Route::middleware('admin')->prefix('admin')->group(function () {
             Route::get('/users', [UserController::class, 'index']);
             Route::patch('/users/{user}/role', [UserController::class, 'updateRole']);
             Route::post('/users/{user}/toggle-active', [UserController::class, 'toggleActive']);
+
+            // Storage cleanup
+            Route::get('/storage/stats',           [\App\Http\Controllers\Api\Admin\StorageController::class, 'stats']);
+            Route::get('/storage/pallets',         [\App\Http\Controllers\Api\Admin\StorageController::class, 'pallets']);
+            Route::get('/storage/orders',          [\App\Http\Controllers\Api\Admin\StorageController::class, 'orders']);
+            Route::delete('/storage/pallets/{id}', [\App\Http\Controllers\Api\Admin\StorageController::class, 'deletePallet']);
+            Route::delete('/storage/orders/{id}',  [\App\Http\Controllers\Api\Admin\StorageController::class, 'deleteOrder']);
         });
     });
 });

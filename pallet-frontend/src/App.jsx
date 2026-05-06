@@ -23,6 +23,7 @@ import OrderDetail from "./pages/OrderDetail";
 import OrderHistory from "./pages/OrderHistory";
 import AllLogs from "./pages/AllLogs";
 import AdminUsers from "./pages/AdminUsers";
+import AdminStorage from "./pages/AdminStorage";
 import PalletPublicView from "./pages/PalletPublicView";
 import PendingItems from "./pages/PendingItems";
 
@@ -69,6 +70,7 @@ export default function App() {
                 <Route path="/logs" element={<RequireAuth><AllLogs /></RequireAuth>} />
                 <Route path="/pending-items" element={<RequireAuth><PendingItems /></RequireAuth>} />
                 <Route path="/admin/users" element={<RequireAuth><AdminUsers /></RequireAuth>} />
+                <Route path="/admin/storage" element={<RequireAuth><AdminStorage /></RequireAuth>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </SidebarLayout>

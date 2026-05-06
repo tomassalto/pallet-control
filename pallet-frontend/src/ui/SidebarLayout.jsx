@@ -17,7 +17,8 @@ const NAV_ICON = {
   "/pending-items": "🚨",
   "/productos": "🔍",
   "/logs": "📋",
-  "/admin/users": "👥",
+  "/admin/users":    "👥",
+  "/admin/storage":  "🗑️",
 };
 
 export default function SidebarLayout({ title = "Pallet Control", children }) {
@@ -57,7 +58,7 @@ export default function SidebarLayout({ title = "Pallet Control", children }) {
       { to: "/productos", label: "Buscar producto" },
       { to: "/logs", label: "Logs" },
       ...(["admin", "superadmin"].includes(user?.role)
-        ? [{ to: "/admin/users", label: "Usuarios" }]
+        ? [{ to: "/admin/users", label: "Usuarios" }, { to: "/admin/storage", label: "Limpieza" }]
         : []),
     ],
     [user, isPending],
