@@ -37,11 +37,6 @@ EXPOSE 8000
 
 # Al iniciar: preparar Laravel y arrancar supervisord (web + queue worker)
 # Para resetear producción: setear RESET_ON_STARTUP=true en Render → deploy → borrar la variable → deploy.
-CMD sh -c "cd pallet-backend && \
-    php artisan package:discover --ansi && \
-    php artisan config:cache && \
-    php artisan route:cache && \
-    php artisan migrate --force && \
-    php artisan storage:link && \
-    if [ \"${RESET_ON_STARTUP}\" = \"true\" ]; then php artisan app:reset --confirm; fi && \
-    PORT=${PORT:-8000} supervisord -c /etc/supervisord.conf"
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+CMD ["/docker-entrypoint.sh"]
