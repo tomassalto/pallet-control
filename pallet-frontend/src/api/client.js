@@ -39,6 +39,12 @@ async function apiFetch(path, options = {}) {
   const data = await res.json().catch(() => null);
 
   if (!res.ok) {
+    // Token expirado o inválido → limpiar sesión y redirigir al login
+    if (res.status === 401) {
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+      return; // no llegar al throw — la navegación cancela todo
+    }
     const err = new Error(data?.message || `HTTP ${res.status}`);
     err.response = { status: res.status, data };
     throw err;

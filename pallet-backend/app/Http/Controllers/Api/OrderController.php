@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOrderRequest;
+use App\Helpers\ActivityLogger;
 use App\Helpers\TelegramNotifier;
+use App\Models\ActivityLog;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\Pallet;
 use App\Models\Product;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
@@ -104,7 +107,7 @@ class OrderController extends Controller
             'note' => $data['note'] ?? null,
         ]);
 
-        \App\Helpers\ActivityLogger::log(
+        ActivityLogger::log(
             action: 'order_created',
             entityType: 'order',
             entityId: $order->id,
@@ -166,10 +169,18 @@ class OrderController extends Controller
             ];
         });
 
+        // Precondición para el botón "Ver mapa": todas las unidades distribuidas Y 2+ pallets
+        $allDistributed = $itemsWithLocations->every(fn ($i) => $i['done_qty'] >= $i['qty']);
+        $distinctPalletIds = $itemsWithLocations
+            ->flatMap(fn ($i) => collect($i['locations'])->pluck('pallet_id'))
+            ->unique();
+        $highlightsReady = $allDistributed && $distinctPalletIds->count() >= 2;
+
         return response()->json([
-            'order'   => $order,
-            'pallets' => $order->pallets,
-            'items'   => $itemsWithLocations,
+            'order'           => $order,
+            'pallets'         => $order->pallets,
+            'items'           => $itemsWithLocations,
+            'highlights_ready' => $highlightsReady,
         ]);
     }
 
@@ -209,12 +220,12 @@ class OrderController extends Controller
             'pallet_id' => ['required', 'integer', 'exists:pallets,id'],
         ]);
 
-        $pallet = \App\Models\Pallet::findOrFail($data['pallet_id']);
+        $pallet = Pallet::findOrFail($data['pallet_id']);
 
         // Asociar el pedido al pallet
         $pallet->orders()->syncWithoutDetaching([$order->id]);
 
-        \App\Helpers\ActivityLogger::log(
+        ActivityLogger::log(
             action: 'order_assigned',
             entityType: 'order',
             entityId: $order->id,
@@ -236,7 +247,7 @@ class OrderController extends Controller
     // GET /orders/{order}/activity-logs
     public function activityLogs(Order $order)
     {
-        $logs = \App\Models\ActivityLog::where('order_id', $order->id)
+        $logs = ActivityLog::where('order_id', $order->id)
             ->with('user:id,name')
             ->orderByDesc('created_at')
             ->limit(200)
@@ -303,7 +314,7 @@ class OrderController extends Controller
 
         $order->update(['status' => 'done']);
 
-        \App\Helpers\ActivityLogger::log(
+        ActivityLogger::log(
             action: 'order_finalized',
             entityType: 'order',
             entityId: $order->id,
@@ -322,7 +333,7 @@ class OrderController extends Controller
     }
 
     // DELETE /orders/{order}/detach-pallet/{pallet}
-    public function detachPallet(Order $order, \App\Models\Pallet $pallet)
+    public function detachPallet(Order $order, Pallet $pallet)
     {
         // Verificar que el pallet esté asociado al pedido
         if (!$order->pallets()->where('pallets.id', $pallet->id)->exists()) {
@@ -348,7 +359,7 @@ class OrderController extends Controller
         // Desvincular el pallet
         $order->pallets()->detach($pallet->id);
 
-        \App\Helpers\ActivityLogger::log(
+        ActivityLogger::log(
             action: 'pallet_detached',
             entityType: 'order',
             entityId: $order->id,

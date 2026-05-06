@@ -19,11 +19,7 @@ class TicketOcrService
 
     /**
      * Procesa una foto de ticket: ejecuta OCR y guarda el resultado en el modelo.
-     * Retorna true si se procesó correctamente, false si Tesseract no está disponible
-     * o la imagen no pudo procesarse.
-     */
-    /**
-     * Procesa una foto de ticket: ejecuta OCR y guarda el resultado en el modelo.
+     * Retorna true si se procesó correctamente, false si Tesseract no está disponible.
      * $logCallback recibe cada línea de log en tiempo real (para mostrar en UI).
      */
     public function processPhoto(OrderTicketPhoto $photo, ?callable $logCallback = null): bool
@@ -64,7 +60,7 @@ class TicketOcrService
         }
 
         $log("Tamaño: " . number_format(filesize($imagePath) / 1024, 1) . " KB");
-        $log("Proveedor OCR: " . strtoupper((string) env('OCR_PROVIDER', 'tesseract')));
+        $log("Proveedor OCR: " . strtoupper((string) config('ocr.provider', 'tesseract')));
 
         $result = $this->extractEans($imagePath, $log);
 
@@ -119,7 +115,7 @@ class TicketOcrService
     private function tesseractBin(): string
     {
         // Variable de entorno configurable en .env
-        if ($envPath = env('TESSERACT_PATH')) {
+        if ($envPath = config('ocr.tesseract_path')) {
             return $envPath;
         }
 
@@ -245,7 +241,7 @@ class TicketOcrService
     public function extractEans(string $imagePath, ?callable $log = null): ?array
     {
         $log ??= static fn (string $msg) => Log::info('OCR | ' . $msg);
-        $provider = strtolower((string) env('OCR_PROVIDER', 'tesseract'));
+        $provider = strtolower((string) config('ocr.provider', 'tesseract'));
 
         if ($provider === 'azure') {
             $log("Usando Azure Computer Vision como proveedor.");
@@ -265,7 +261,7 @@ class TicketOcrService
                 return $result;
             }
 
-            if (filter_var(env('OCR_FALLBACK_TESSERACT', true), FILTER_VALIDATE_BOOL)) {
+            if (filter_var(config('ocr.fallback_tesseract', true), FILTER_VALIDATE_BOOL)) {
                 $log("PaddleOCR falló → usando Tesseract como fallback.");
                 return $this->extractEansWithTesseract($imagePath, $log);
             }
@@ -287,8 +283,8 @@ class TicketOcrService
     {
         $log ??= static fn (string $msg) => Log::info('OCR | ' . $msg);
 
-        $endpoint = rtrim((string) env('AZURE_VISION_ENDPOINT', ''), '/');
-        $key      = (string) env('AZURE_VISION_KEY', '');
+        $endpoint = rtrim((string) config('ocr.azure.endpoint', ''), '/');
+        $key      = (string) config('ocr.azure.key', '');
 
         if (! $endpoint || ! $key) {
             $log("ERROR: AZURE_VISION_ENDPOINT o AZURE_VISION_KEY no están configurados en .env");
@@ -557,13 +553,10 @@ class TicketOcrService
     {
         $log ??= static fn (string $msg) => Log::info('OCR | ' . $msg);
 
-        $script = (string) env(
-            'PADDLE_OCR_SCRIPT',
-            base_path('scripts/paddle_ocr_ticket.py')
-        );
-        $python = (string) env('OCR_PYTHON_BIN', 'python');
-        $lang = (string) env('PADDLE_OCR_LANG', 'en');
-        $timeout = max(10, (int) env('OCR_PROCESS_TIMEOUT', 120));
+        $script  = (string) config('ocr.paddle.script', base_path('scripts/paddle_ocr_ticket.py'));
+        $python  = (string) config('ocr.paddle.python_bin', 'python');
+        $lang    = (string) config('ocr.paddle.lang', 'en');
+        $timeout = max(10, (int) config('ocr.process_timeout', 120));
 
         $log("PaddleOCR — python: {$python}");
         $log("PaddleOCR — script: {$script}");
@@ -1125,15 +1118,18 @@ class TicketOcrService
      *
      * Retorna array de highlights listos para el frontend.
      */
-    public static function buildHighlights(array $ocrData, array $palletEanMap): array
+    /**
+     * Construye y deduplica el array crudo de detecciones a partir de ocr_data.
+     * Combina: EANs directos del OCR + ventanas raw de lines + detecciones guiadas.
+     * Usado internamente por buildHighlights y extractBestDetections.
+     */
+    private static function buildRawDetections(array $ocrData, array $expectedEans): array
     {
-        $bestHighlightByEan = [];
-        $palletEans = array_keys($palletEanMap);
         $detections = $ocrData['eans'] ?? [];
 
         // PaddleOCR puede leer mal 1-2 dígitos y romper checksum EAN-13.
         // Agregamos ventanas de 13 dígitos "crudas" desde lines para poder
-        // reconciliarlas luego contra los EANs reales del pallet.
+        // reconciliarlas luego contra los EANs esperados.
         foreach (($ocrData['lines'] ?? []) as $line) {
             $text = (string) ($line['text'] ?? '');
             $digits = preg_replace('/\D+/', '', $text);
@@ -1151,31 +1147,53 @@ class TicketOcrService
 
             foreach (self::allEanWindows($digits) as $candidate) {
                 $detections[] = [
-                    'ean' => $candidate,
-                    'bbox' => [
-                        'left' => (int) $bbox['left'],
-                        'top' => (int) $bbox['top'],
-                        'right' => (int) $bbox['right'],
+                    'ean'    => $candidate,
+                    'bbox'   => [
+                        'left'   => (int) $bbox['left'],
+                        'top'    => (int) $bbox['top'],
+                        'right'  => (int) $bbox['right'],
                         'bottom' => (int) $bbox['bottom'],
                     ],
                     'source' => 'line_raw',
-                    'text' => $text,
+                    'text'   => $text,
                 ];
             }
         }
 
-        // Matching guiado por EAN esperado del pedido/pallet:
-        // intenta encontrar cada EAN objetivo dentro de líneas OCR aunque
-        // falte/sobre algún dígito (Levenshtein sobre ventanas cercanas).
-        $guidedDetections = self::findGuidedExpectedEanDetections(
-            $ocrData['lines'] ?? [],
-            $palletEans
-        );
-        foreach ($guidedDetections as $guided) {
-            $detections[] = $guided;
+        // Matching guiado por EAN esperado: intenta encontrar cada EAN objetivo
+        // dentro de líneas OCR aunque falte/sobre algún dígito (Levenshtein).
+        $guided = self::findGuidedExpectedEanDetections($ocrData['lines'] ?? [], $expectedEans);
+        foreach ($guided as $g) {
+            $detections[] = $g;
         }
 
-        $detections = self::deduplicateDetections($detections);
+        return self::deduplicateDetections($detections);
+    }
+
+    /**
+     * Calcula el bbox expandido (overlay visual) a partir de la bbox raw del EAN.
+     * Mismo padding que usa buildHighlights.
+     */
+    private static function expandBbox(array $rawBbox, int $imgW, int $imgH): array
+    {
+        $eanHeight     = max(1, $rawBbox['bottom'] - $rawBbox['top']);
+        $eanWidth      = max(1, $rawBbox['right']  - $rawBbox['left']);
+        $verticalPad   = max(2, (int) round($eanHeight * 0.35));
+        $horizontalPad = max(2, (int) round(min(10, $eanWidth * 0.08)));
+
+        return [
+            'left'   => max(0,    $rawBbox['left']   - $horizontalPad),
+            'top'    => max(0,    $rawBbox['top']    - $verticalPad),
+            'right'  => min($imgW, $rawBbox['right']  + $horizontalPad),
+            'bottom' => min($imgH, $rawBbox['bottom'] + $verticalPad),
+        ];
+    }
+
+    public static function buildHighlights(array $ocrData, array $palletEanMap): array
+    {
+        $bestHighlightByEan = [];
+        $palletEans = array_keys($palletEanMap);
+        $detections = self::buildRawDetections($ocrData, $palletEans);
 
         foreach ($detections as $detected) {
             $detectedEan = (string) ($detected['ean'] ?? '');
@@ -1189,34 +1207,19 @@ class TicketOcrService
                 continue; // EAN no está en el pallet → no resaltar
             }
 
-            $palletInfo  = $palletEanMap[$ean];
-            $eanHeight   = max(1, $detected['bbox']['bottom'] - $detected['bbox']['top']);
-            $eanWidth    = max(1, $detected['bbox']['right'] - $detected['bbox']['left']);
-
-            // Overlay más chico y centrado en la línea detectada para evitar
-            // cuadros "gigantes" cuando el ticket es compacto.
-            $verticalPad = max(2, (int) round($eanHeight * 0.35));
-            $horizontalPad = max(2, (int) round(min(10, $eanWidth * 0.08)));
-            $expandedTop = max(0, $detected['bbox']['top'] - $verticalPad);
-            $expandedBottom = min($ocrData['img_h'], $detected['bbox']['bottom'] + $verticalPad);
+            $palletInfo = $palletEanMap[$ean];
 
             $highlight = [
-                'ean'          => $ean,
-                'detected_ean' => $detectedEan,
-                'description'  => $palletInfo['description'],
-                'qty_in_pallet'=> $palletInfo['total_qty'],
-                'orders'       => $palletInfo['orders'],
-                'img_w'        => $ocrData['img_w'],
-                'img_h'        => $ocrData['img_h'],
-                // Bbox original del EAN (para tooltip)
-                'ean_bbox'     => $detected['bbox'],
-                // Bbox expandido para el overlay visual
-                'bbox'         => [
-                    'left'   => max(0, $detected['bbox']['left'] - $horizontalPad),
-                    'top'    => $expandedTop,
-                    'right'  => min($ocrData['img_w'], $detected['bbox']['right'] + $horizontalPad),
-                    'bottom' => $expandedBottom,
-                ],
+                'ean'           => $ean,
+                'detected_ean'  => $detectedEan,
+                'description'   => $palletInfo['description'],
+                'qty_in_pallet' => $palletInfo['total_qty'],
+                'qty_order'     => $palletInfo['qty_order_total'] ?? $palletInfo['total_qty'],
+                'orders'        => $palletInfo['orders'],
+                'img_w'         => $ocrData['img_w'],
+                'img_h'         => $ocrData['img_h'],
+                'ean_bbox'      => $detected['bbox'],
+                'bbox'          => self::expandBbox($detected['bbox'], $ocrData['img_w'], $ocrData['img_h']),
             ];
 
             $score = self::highlightScore($detected, $detectedEan, $ean);
@@ -1233,6 +1236,58 @@ class TicketOcrService
             fn ($row) => $row['data'],
             $bestHighlightByEan
         ));
+    }
+
+    /**
+     * Extrae las mejores detecciones de EAN de un ocr_data y las retorna como
+     * mapa keyed por EAN resuelto: [ean => [detected_ean, bbox, ean_bbox, img_w, img_h]].
+     *
+     * A diferencia de buildHighlights, incluye TODOS los EANs detectados
+     * (incluso los que no están en $expectedEans) para que el llamador pueda
+     * clasificarlos como "not_in_order". El fuzzy-matching se guía por $expectedEans.
+     *
+     * @param array $ocrData      photo.ocr_data tal como se guarda en la DB
+     * @param array $expectedEans EANs del pedido (guían el fuzzy-matching)
+     * @return array              keyed by resolved EAN
+     */
+    public static function extractBestDetections(array $ocrData, array $expectedEans): array
+    {
+        $detections = self::buildRawDetections($ocrData, $expectedEans);
+        $imgW       = (int) ($ocrData['img_w'] ?? 1);
+        $imgH       = (int) ($ocrData['img_h'] ?? 1);
+        $bestByEan  = [];
+
+        foreach ($detections as $detected) {
+            $detectedEan = (string) ($detected['ean'] ?? '');
+            if ($detectedEan === '') {
+                continue;
+            }
+
+            $ean   = self::resolveDetectedEan($detectedEan, $expectedEans);
+            $score = self::highlightScore($detected, $detectedEan, $ean);
+
+            if (! isset($bestByEan[$ean]) || $score > $bestByEan[$ean]['score']) {
+                $bestByEan[$ean] = [
+                    'score'        => $score,
+                    'detected_ean' => $detectedEan,
+                    'ean_bbox'     => $detected['bbox'],
+                    'bbox'         => self::expandBbox($detected['bbox'], $imgW, $imgH),
+                    'img_w'        => $imgW,
+                    'img_h'        => $imgH,
+                ];
+            }
+        }
+
+        return array_map(
+            fn ($d) => [
+                'detected_ean' => $d['detected_ean'],
+                'ean_bbox'     => $d['ean_bbox'],
+                'bbox'         => $d['bbox'],
+                'img_w'        => $d['img_w'],
+                'img_h'        => $d['img_h'],
+            ],
+            $bestByEan
+        );
     }
 
     private static function highlightScore(array $detected, string $detectedEan, string $resolvedEan): int

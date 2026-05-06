@@ -32,9 +32,9 @@ TXT;
     // ─────────────────────────────────────────────────────
     public function webhook(Request $request)
     {
-        // Validar secret token de Telegram
+        // Validar secret token de Telegram (hash_equals evita timing attacks)
         $secret = config('services.telegram.webhook_secret');
-        if ($secret && $request->header('X-Telegram-Bot-Api-Secret-Token') !== $secret) {
+        if ($secret && !hash_equals((string) $secret, (string) $request->header('X-Telegram-Bot-Api-Secret-Token', ''))) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 

@@ -7,9 +7,11 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { apiGet, apiPost, apiDelete } from "../../api/client";
+import { apiPost, apiDelete } from "../../api/client";
+import { usePhotoOcr } from "../../hooks/usePhotoOcr";
 import { toastSuccess, toastError } from "../../ui/toast";
 import PhotoViewer from "../../ui/PhotoViewer";
+import HighlightOverlay from "./HighlightOverlay";
 
 // ── OCR Badge ────────────────────────────────────────────────────────────────
 
@@ -100,19 +102,22 @@ function OcrTerminal({ log, done, eansCount, photoId }) {
 
 // ── TicketCard ────────────────────────────────────────────────────────────────
 
-export function TicketCard({ ticket, orderId, onUpdate }) {
+export function TicketCard({ ticket, orderId, highlightsReady, onUpdate }) {
   const [expanded, setExpanded] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [confirmDeleteTicket, setConfirmDeleteTicket] = useState(false);
 
-  // Modal de escaneo: null | { photo, step:'confirm'|'scanning', log, done, eansCount }
-  const [scanModal, setScanModal] = useState(null);
-  const pollRef = useRef(null);
+  // Highlight overlay state: null | { photo }
+  const [highlightPhoto, setHighlightPhoto] = useState(null);
 
-  // Cleanup polling al desmontar
-  useEffect(() => () => clearInterval(pollRef.current), []);
+  // Modal de escaneo (estado gestionado por hook)
+  const { scanState: scanModal, openScan: openScanById, confirmScan, closeScan: closeScanModal } = usePhotoOcr({
+    orderId,
+    ticketId: ticket.id,
+    onDone:   onUpdate,
+  });
 
   function getPhotoUrl(photo) {
     if (photo.url) {
@@ -184,59 +189,7 @@ export function TicketCard({ ticket, orderId, onUpdate }) {
   }
 
   function openScanModal(photo) {
-    setScanModal({
-      photo,
-      step: "confirm",
-      log: "",
-      done: false,
-      eansCount: null,
-    });
-  }
-
-  async function confirmScan() {
-    if (!scanModal) return;
-    const photo = scanModal.photo;
-    setScanModal(
-      (prev) =>
-        prev && { ...prev, step: "scanning", log: "Iniciando escaneo OCR…" },
-    );
-    try {
-      await apiPost(
-        `/orders/${orderId}/tickets/${ticket.id}/photos/${photo.id}/trigger-ocr`,
-      );
-    } catch (e) {
-      const msg =
-        e?.response?.data?.message || e.message || "Error al iniciar OCR";
-      setScanModal(
-        (prev) => prev && { ...prev, log: `[ERROR] ${msg}`, done: true },
-      );
-      return;
-    }
-    clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      try {
-        const data = await apiGet(
-          `/orders/${orderId}/tickets/${ticket.id}/photos/${photo.id}/ocr-status`,
-        );
-        if (data.ocr_log)
-          setScanModal((prev) => prev && { ...prev, log: data.ocr_log });
-        if (data.ocr_processed_at !== null) {
-          clearInterval(pollRef.current);
-          setScanModal(
-            (prev) =>
-              prev && { ...prev, done: true, eansCount: data.ocr_eans_count },
-          );
-          onUpdate();
-        }
-      } catch {
-        // ignorar errores de polling
-      }
-    }, 2000);
-  }
-
-  function closeScanModal() {
-    clearInterval(pollRef.current);
-    setScanModal(null);
+    openScanById(photo.id);
   }
 
   const totalPhotos = ticket.photos?.length ?? 0;
@@ -340,14 +293,28 @@ export function TicketCard({ ticket, orderId, onUpdate }) {
                   {/* Franja OCR */}
                   <div className="px-2 py-1.5 bg-white dark:bg-gray-800 flex items-center justify-between gap-1 border-t border-gray-100 dark:border-gray-700">
                     <OcrBadge photo={photo} />
-                    {isUnscanned && (
-                      <button
-                        onClick={() => openScanModal(photo)}
-                        className="shrink-0 text-[10px] px-2 py-0.5 rounded-md bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors"
-                      >
-                        Escanear
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {/* Botón "Ver mapa" — visible solo cuando highlightsReady Y foto escaneada */}
+                      {highlightsReady && photo.ocr_processed_at && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setHighlightPhoto(photo);
+                          }}
+                          className="shrink-0 text-[10px] px-2 py-0.5 rounded-md bg-violet-600 text-white font-semibold hover:bg-violet-700 transition-colors"
+                        >
+                          🗺 Mapa
+                        </button>
+                      )}
+                      {isUnscanned && (
+                        <button
+                          onClick={() => openScanModal(photo)}
+                          className="shrink-0 text-[10px] px-2 py-0.5 rounded-md bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors"
+                        >
+                          Escanear
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -464,6 +431,15 @@ export function TicketCard({ ticket, orderId, onUpdate }) {
         </>
       )}
 
+      {/* ── Mapa de distribución (HighlightOverlay) ─────────────── */}
+      {highlightPhoto && (
+        <HighlightOverlay
+          photoUrl={getPhotoUrl(highlightPhoto)}
+          highlightsUrl={`/orders/${orderId}/tickets/${ticket.id}/photos/${highlightPhoto.id}/highlights`}
+          onClose={() => setHighlightPhoto(null)}
+        />
+      )}
+
       {/* ── Modal escanear foto con OCR ─────────────────────────── */}
       {scanModal && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
@@ -519,7 +495,7 @@ export function TicketCard({ ticket, orderId, onUpdate }) {
                   log={scanModal.log}
                   done={scanModal.done}
                   eansCount={scanModal.eansCount}
-                  photoId={scanModal.photo?.id}
+                  photoId={scanModal.photoId}
                 />
                 {scanModal.done && (
                   <button
@@ -550,12 +526,18 @@ export function AddTicketModal({ orderId, onClose, onSuccess }) {
   // Lista de fotos subidas (cada una con su botón escanear)
   const [uploadedPhotos, setUploadedPhotos] = useState([]);
 
-  // Estado de escaneo: null | { photoId, step:'confirm'|'scanning', log, done, eansCount }
-  const [scanState, setScanState] = useState(null);
-  const pollRef = useRef(null);
-
-  // Cleanup polling al desmontar
-  useEffect(() => () => clearInterval(pollRef.current), []);
+  // Estado de escaneo (gestionado por hook)
+  const { scanState, openScan: openScanConfirm, confirmScan: startScan, closeScan: closeScanState } = usePhotoOcr({
+    orderId,
+    ticketId,
+    onDone: (photoId, data) => {
+      setUploadedPhotos((prev) =>
+        prev.map((p) =>
+          p.id === photoId ? { ...p, ocr_processed_at: data.ocr_processed_at } : p,
+        ),
+      );
+    },
+  });
 
   async function handleCreateTicket(e) {
     e.preventDefault();
@@ -607,71 +589,8 @@ export function AddTicketModal({ orderId, onClose, onSuccess }) {
     }
   }
 
-  function openScanConfirm(photoId) {
-    clearInterval(pollRef.current);
-    setScanState({
-      photoId,
-      step: "confirm",
-      log: "",
-      done: false,
-      eansCount: null,
-    });
-  }
-
-  async function startScan() {
-    if (!scanState) return;
-    const { photoId } = scanState;
-    setScanState(
-      (prev) =>
-        prev && { ...prev, step: "scanning", log: "Iniciando escaneo OCR…" },
-    );
-    try {
-      await apiPost(
-        `/orders/${orderId}/tickets/${ticketId}/photos/${photoId}/trigger-ocr`,
-      );
-    } catch (e) {
-      const msg =
-        e?.response?.data?.message || e.message || "Error al iniciar OCR";
-      setScanState(
-        (prev) => prev && { ...prev, log: `[ERROR] ${msg}`, done: true },
-      );
-      return;
-    }
-    clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      try {
-        const data = await apiGet(
-          `/orders/${orderId}/tickets/${ticketId}/photos/${photoId}/ocr-status`,
-        );
-        if (data.ocr_log)
-          setScanState((prev) => prev && { ...prev, log: data.ocr_log });
-        if (data.ocr_processed_at !== null) {
-          clearInterval(pollRef.current);
-          setScanState(
-            (prev) =>
-              prev && { ...prev, done: true, eansCount: data.ocr_eans_count },
-          );
-          setUploadedPhotos((prev) =>
-            prev.map((p) =>
-              p.id === photoId
-                ? { ...p, ocr_processed_at: data.ocr_processed_at }
-                : p,
-            ),
-          );
-        }
-      } catch {
-        // silenciar errores de polling
-      }
-    }, 2000);
-  }
-
-  function closeScanState() {
-    clearInterval(pollRef.current);
-    setScanState(null);
-  }
-
   function handleFinish() {
-    clearInterval(pollRef.current);
+    closeScanState();
     onSuccess();
   }
 

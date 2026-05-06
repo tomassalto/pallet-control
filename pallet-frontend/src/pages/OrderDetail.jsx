@@ -40,6 +40,7 @@ export default function OrderDetail() {
   const [pallets, setPallets] = useState([]);
   const [items, setItems] = useState([]);
   const [tickets, setTickets] = useState([]);
+  const [highlightsReady, setHighlightsReady] = useState(false);
   const [error, setError] = useState("");
 
   const [tab, setTab] = useState("pending"); // pending | done | removed
@@ -110,6 +111,7 @@ export default function OrderDetail() {
       setPallets(data.pallets || []);
       setItems(data.items || []);
       setTickets(data.order?.tickets || []);
+      setHighlightsReady(data.highlights_ready ?? false);
 
       // Verificar si se puede finalizar el pedido
       if (data.order?.status === "open") {
@@ -543,6 +545,7 @@ export default function OrderDetail() {
                 key={ticket.id}
                 ticket={ticket}
                 orderId={orderId}
+                highlightsReady={highlightsReady}
                 onUpdate={load}
               />
             ))}

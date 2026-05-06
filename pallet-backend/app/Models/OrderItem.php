@@ -37,7 +37,8 @@ class OrderItem extends Model
 
     public function product()
     {
-        return $this->belongsTo(Product::class);
+        // OrderItem no tiene product_id; se relaciona por EAN (clave natural)
+        return $this->belongsTo(Product::class, 'ean', 'ean');
     }
 
     public function bases(): BelongsToMany

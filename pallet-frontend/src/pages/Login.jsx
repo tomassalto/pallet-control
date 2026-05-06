@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
-import { apiPost } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { toastSuccess, toastError } from "../ui/toast";
 import AuthLayout from "../ui/AuthLayout";
 import Spinner from "../ui/Spinner";
@@ -8,6 +8,7 @@ import Spinner from "../ui/Spinner";
 export default function Login() {
   const nav = useNavigate();
   const { search } = useLocation();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,8 +32,7 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await apiPost("/auth/login", { email, password });
-      localStorage.setItem("token", res.token);
+      await login(email, password);
       toastSuccess("Sesión iniciada");
       nav("/");
     } catch (err) {

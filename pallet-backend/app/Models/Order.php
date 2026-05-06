@@ -21,10 +21,6 @@ class Order extends Model
         return $this->belongsToMany(Pallet::class)->withTimestamps();
     }
 
-    public function movements(): HasMany
-    {
-        return $this->hasMany(Movement::class);
-    }
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);

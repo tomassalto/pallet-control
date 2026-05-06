@@ -6,7 +6,6 @@ use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PalletController;
 use App\Http\Controllers\Api\ProductController;
-use App\Http\Controllers\Api\MovementController;
 use App\Http\Controllers\Api\OrderImportController;
 use App\Http\Controllers\Api\OrderItemController;
 use App\Http\Controllers\Api\PalletPhotoController;
@@ -25,11 +24,9 @@ use App\Http\Controllers\Api\PendingItemController;
 use App\Http\Controllers\Api\DashboardController;
 
 Route::prefix('v1')->group(function () {
-    // Ruta del bot de WhatsApp (sin auth Sanctum, usa X-Bot-Secret)
-    Route::post('/bot/upload', [BotController::class, 'uploadPhoto']);
-
-    // Rutas del scraper de imágenes (sin auth Sanctum, usa X-Bot-Secret)
+    // Rutas autenticadas con X-Bot-Secret (WhatsApp bot + scraper de imágenes)
     Route::middleware('bot.secret')->group(function () {
+        Route::post('/bot/upload', [BotController::class, 'uploadPhoto']);
         Route::post('/scraper/images/bulk-update',  [ProductImageController::class, 'bulkUpdate']);
         Route::post('/scraper/images/check-existing', [ProductImageController::class, 'checkExisting']);
     });
@@ -91,7 +88,9 @@ Route::prefix('v1')->group(function () {
             Route::delete('/orders/{order}/tickets/{ticket}', [OrderTicketController::class, 'destroy']);
             Route::post('/orders/{order}/tickets/{ticket}/photos', [OrderTicketController::class, 'storePhoto']);
             Route::get('/orders/{order}/tickets/{ticket}/photos/{photo}/ocr-status', [OrderTicketController::class, 'photoOcrStatus']);
-            Route::post('/orders/{order}/tickets/{ticket}/photos/{photo}/trigger-ocr', [OrderTicketController::class, 'triggerOcr']);
+            Route::get('/orders/{order}/tickets/{ticket}/photos/{photo}/highlights', [OrderTicketController::class, 'photoHighlights']);
+            Route::post('/orders/{order}/tickets/{ticket}/photos/{photo}/trigger-ocr', [OrderTicketController::class, 'triggerOcr'])
+                ->middleware('throttle:10,1'); // máx 10 OCR por minuto por IP — Azure tiene costo por request
             Route::delete('/orders/{order}/tickets/{ticket}/photos/{photo}', [OrderTicketController::class, 'destroyPhoto']);
 
             // Pallets - IMPORTANTE: rutas específicas antes de las dinámicas
@@ -111,10 +110,6 @@ Route::prefix('v1')->group(function () {
 
             // Products
             Route::post('/products', [ProductController::class, 'store']);
-
-            // Movements
-            Route::get('/pallets/{pallet}/movements', [MovementController::class, 'index']);
-            Route::post('/pallets/{pallet}/movements', [MovementController::class, 'store']);
 
             Route::post('/orders/{order}/import', [OrderImportController::class, 'import']);
 

@@ -123,4 +123,10 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    | Registro de nuevos usuarios. En producción setear REGISTRATION_ENABLED=false
+    | para cerrar el registro público. El primer usuario siempre puede registrarse.
+    */
+    'registration_enabled' => env('REGISTRATION_ENABLED', true),
+
 ];

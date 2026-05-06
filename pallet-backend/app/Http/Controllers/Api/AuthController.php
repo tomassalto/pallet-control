@@ -16,7 +16,7 @@ class AuthController extends Controller
 
         // Registro cerrado cuando REGISTRATION_ENABLED=false y ya existe al menos 1 usuario.
         // El primer registro siempre se permite (crea el superadmin).
-        if (! $isFirst && ! env('REGISTRATION_ENABLED', true)) {
+        if (! $isFirst && ! config('app.registration_enabled')) {
             return response()->json([
                 'message' => 'El registro de nuevos usuarios está deshabilitado.',
             ], 403);

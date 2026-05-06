@@ -59,8 +59,9 @@ class PublicPalletController extends Controller
                     $palletItemsMap[$item->id]['qty'] += $item->pivot->qty;
                 } else {
                     $palletItemsMap[$item->id] = [
-                        'item' => $item,
-                        'qty'  => $item->pivot->qty,
+                        'item'      => $item,
+                        'qty'       => $item->pivot->qty,
+                        'qty_order' => $item->qty, // total pedido (no solo en pallet)
                     ];
                 }
             }
@@ -86,6 +87,7 @@ class PublicPalletController extends Controller
                 'ean'         => $orderItem->ean,
                 'description' => $orderItem->description,
                 'qty'         => $data['qty'],
+                'qty_order'   => $data['qty_order'],
                 'image_url'   => $images[$orderItem->ean] ?? null,
             ];
         }
@@ -108,16 +110,18 @@ class PublicPalletController extends Controller
 
                 if (! isset($palletEanMap[$ean])) {
                     $palletEanMap[$ean] = [
-                        'description' => $item['description'],
-                        'total_qty' => 0,
-                        'orders' => [],
+                        'description'    => $item['description'],
+                        'total_qty'      => 0,
+                        'qty_order_total'=> 0, // suma de qty_order de todos los pedidos
+                        'orders'         => [],
                     ];
                 }
 
-                $palletEanMap[$ean]['total_qty'] += (int) ($item['qty'] ?? 0);
+                $palletEanMap[$ean]['total_qty']       += (int) ($item['qty'] ?? 0);
+                $palletEanMap[$ean]['qty_order_total'] += (int) ($item['qty_order'] ?? $item['qty']);
                 $palletEanMap[$ean]['orders'][] = [
                     'code' => $orderData['code'],
-                    'qty' => (int) ($item['qty'] ?? 0),
+                    'qty'  => (int) ($item['qty'] ?? 0),
                 ];
 
                 $orderId = (int) $orderData['id'];
@@ -126,15 +130,17 @@ class PublicPalletController extends Controller
                 }
                 if (! isset($orderScopedEanMaps[$orderId][$ean])) {
                     $orderScopedEanMaps[$orderId][$ean] = [
-                        'description' => $item['description'],
-                        'total_qty' => 0,
-                        'orders' => [],
+                        'description'    => $item['description'],
+                        'total_qty'      => 0,
+                        'qty_order_total'=> 0,
+                        'orders'         => [],
                     ];
                 }
-                $orderScopedEanMaps[$orderId][$ean]['total_qty'] += (int) ($item['qty'] ?? 0);
+                $orderScopedEanMaps[$orderId][$ean]['total_qty']       += (int) ($item['qty'] ?? 0);
+                $orderScopedEanMaps[$orderId][$ean]['qty_order_total'] += (int) ($item['qty_order'] ?? $item['qty']);
                 $orderScopedEanMaps[$orderId][$ean]['orders'][] = [
                     'code' => $orderData['code'],
-                    'qty' => (int) ($item['qty'] ?? 0),
+                    'qty'  => (int) ($item['qty'] ?? 0),
                 ];
             }
         }

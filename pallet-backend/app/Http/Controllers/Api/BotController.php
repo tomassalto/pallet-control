@@ -18,11 +18,7 @@ class BotController extends Controller
      */
     public function uploadPhoto(Request $request)
     {
-        $secret = config('services.whatsapp_bot.secret');
-        if (empty($secret) || $request->header('X-Bot-Secret') !== $secret) {
-            return response()->json(['error' => 'Unauthorized'], 401);
-        }
-
+        // Autenticación delegada a BotSecretMiddleware (bot.secret)
         $data = $request->validate([
             'type'         => ['required', 'in:pallet,base,ticket'],
             'pallet_code'  => ['nullable', 'string', 'max:255'],

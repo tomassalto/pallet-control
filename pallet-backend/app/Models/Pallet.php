@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasMany; // usado por bases() y photos()
 
 class Pallet extends Model
 {
@@ -13,11 +13,6 @@ class Pallet extends Model
     public function orders(): BelongsToMany
     {
         return $this->belongsToMany(Order::class)->withTimestamps();
-    }
-
-    public function movements(): HasMany
-    {
-        return $this->hasMany(Movement::class);
     }
 
     public function photos()

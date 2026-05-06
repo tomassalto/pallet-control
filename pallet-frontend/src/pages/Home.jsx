@@ -4,6 +4,7 @@ import { apiGet } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { PageSpinner } from "../ui/Spinner";
 import { ActionItem, Icons } from "../ui/ActionList";
+import { toastError } from "../ui/toast";
 
 const SEC_LABEL =
   "text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500";
@@ -134,7 +135,8 @@ export default function Home() {
     try {
       const res = await apiGet("/dashboard");
       setData(res);
-    } catch {
+    } catch (e) {
+      toastError(e?.message || "No se pudo cargar el dashboard");
       setData(null);
     } finally {
       setLoading(false);

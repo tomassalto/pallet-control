@@ -351,7 +351,13 @@ function TicketPhotoHighlight({ photo }) {
                       {h.description}
                     </p>
                     <p className="text-green-400 font-bold">
-                      {h.qty_in_pallet} unid. en pallet
+                      {h.qty_in_pallet}
+                      {h.qty_order && h.qty_order > h.qty_in_pallet && (
+                        <span className="text-gray-400 font-normal">
+                          {" "}de {h.qty_order}
+                        </span>
+                      )}{" "}
+                      unid.
                     </p>
                     {h.orders?.length > 1 && (
                       <div className="mt-1 space-y-0.5 text-gray-300">
@@ -485,10 +491,12 @@ export default function PalletPublicView() {
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  // Dark mode: localStorage tiene prioridad; si no hay nada guardado, usa preferencia del sistema
+  // Dark mode: usa la misma clave "theme" que ThemeContext.
+  // Leer localStorage (no classList) porque los efectos de ThemeProvider
+  // corren después del paint y el classList puede no estar actualizado aún.
   const [isDark, setIsDark] = useState(() => {
     try {
-      const saved = localStorage.getItem("pallet-theme");
+      const saved = localStorage.getItem("theme");
       if (saved !== null) return saved === "dark";
     } catch {
       /* ignore */
@@ -499,7 +507,7 @@ export default function PalletPublicView() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
     try {
-      localStorage.setItem("pallet-theme", isDark ? "dark" : "light");
+      localStorage.setItem("theme", isDark ? "dark" : "light");
     } catch {
       /* ignore */
     }

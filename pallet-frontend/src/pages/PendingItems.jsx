@@ -556,25 +556,33 @@ export default function PendingItems() {
   }
 
   async function handleResolve(id) {
-    const updated = await apiPatch(`/pending-items/${id}`, {
-      status: "resolved",
-    });
-    setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
-    toastSuccess("Marcado como entregado");
+    try {
+      const updated = await apiPatch(`/pending-items/${id}`, { status: "resolved" });
+      setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
+      toastSuccess("Marcado como entregado");
+    } catch (e) {
+      toastError(e?.message || "No se pudo marcar como entregado");
+    }
   }
 
   async function handleReopen(id) {
-    const updated = await apiPatch(`/pending-items/${id}`, {
-      status: "pending",
-    });
-    setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
-    toastSuccess("Pendiente reabierto");
+    try {
+      const updated = await apiPatch(`/pending-items/${id}`, { status: "pending" });
+      setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
+      toastSuccess("Pendiente reabierto");
+    } catch (e) {
+      toastError(e?.message || "No se pudo reabrir el pendiente");
+    }
   }
 
   async function handleDelete(id) {
-    await apiDelete(`/pending-items/${id}`);
-    setItems((prev) => prev.filter((i) => i.id !== id));
-    toastSuccess("Pendiente eliminado");
+    try {
+      await apiDelete(`/pending-items/${id}`);
+      setItems((prev) => prev.filter((i) => i.id !== id));
+      toastSuccess("Pendiente eliminado");
+    } catch (e) {
+      toastError(e?.message || "No se pudo eliminar el pendiente");
+    }
   }
 
   function handleCreated(item) {

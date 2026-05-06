@@ -7,10 +7,11 @@ use App\Http\Requests\AdjustPalletBaseItemRequest;
 use App\Http\Requests\MigratePalletBaseRequest;
 use App\Http\Requests\StorePalletBaseRequest;
 use App\Helpers\ActivityLogger;
+use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Pallet;
 use App\Models\PalletBase;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class PalletBaseController extends Controller
@@ -34,27 +35,11 @@ class PalletBaseController extends Controller
 
         // Asociar items si se enviaron
         if (!empty($data['items'])) {
-            // Pre-fetch todo en 3 queries fijas — sin N+1 dentro del loop
             $pallet->loadMissing('orders');
             $requestedItemIds = collect($data['items'])->pluck('order_item_id');
 
-            $orderItemsMap = \App\Models\OrderItem::whereIn('id', $requestedItemIds)
-                ->get()->keyBy('id');
-
-            $orderIds = $orderItemsMap->pluck('order_id')->unique()->values();
-            $ordersMap = \App\Models\Order::whereIn('id', $orderIds)
-                ->get()->keyBy('id');
-
-            // Una sola query agrupa todas las cantidades ya asignadas en otras bases
-            $allocations = DB::table('pallet_base_order_items')
-                ->join('pallet_bases', 'pallet_bases.id', '=', 'pallet_base_order_items.base_id')
-                ->where('pallet_bases.pallet_id', $pallet->id)
-                ->where('pallet_bases.id', '!=', $base->id)
-                ->whereIn('pallet_base_order_items.order_item_id', $requestedItemIds)
-                ->groupBy('pallet_base_order_items.order_item_id')
-                ->selectRaw('pallet_base_order_items.order_item_id, SUM(pallet_base_order_items.qty) as total_qty')
-                ->get()
-                ->pluck('total_qty', 'order_item_id');
+            [$orderItemsMap, $ordersMap] = $this->fetchOrderData($requestedItemIds);
+            $allocations = $this->fetchAllocations($pallet, $base, $requestedItemIds);
 
             $itemsToSync = [];
             foreach ($data['items'] as $item) {
@@ -152,30 +137,13 @@ class PalletBaseController extends Controller
                 return [$item->id => ['qty' => $item->pivot->qty]];
             })->toArray();
 
-            // Pre-fetch todo en 3 queries — sin N+1 dentro de los loops
             $pallet->loadMissing('orders');
             $requestedItemIds = collect($data['items'])->pluck('order_item_id');
+            // Para el map necesitamos también los items existentes (para logs y validación)
             $allItemIds = $requestedItemIds->merge(array_keys($oldItems))->unique()->values();
 
-            $orderItemsMap = \App\Models\OrderItem::whereIn('id', $allItemIds)
-                ->get()->keyBy('id');
-
-            $orderIds = $orderItemsMap->pluck('order_id')->unique()->values();
-            $ordersMap = \App\Models\Order::whereIn('id', $orderIds)
-                ->get()->keyBy('id');
-
-            // Una sola query agrupa cantidades ya asignadas en otras bases (solo items solicitados)
-            $allocations = $requestedItemIds->isNotEmpty()
-                ? DB::table('pallet_base_order_items')
-                    ->join('pallet_bases', 'pallet_bases.id', '=', 'pallet_base_order_items.base_id')
-                    ->where('pallet_bases.pallet_id', $pallet->id)
-                    ->where('pallet_bases.id', '!=', $base->id)
-                    ->whereIn('pallet_base_order_items.order_item_id', $requestedItemIds)
-                    ->groupBy('pallet_base_order_items.order_item_id')
-                    ->selectRaw('pallet_base_order_items.order_item_id, SUM(pallet_base_order_items.qty) as total_qty')
-                    ->get()
-                    ->pluck('total_qty', 'order_item_id')
-                : collect();
+            [$orderItemsMap, $ordersMap] = $this->fetchOrderData($allItemIds);
+            $allocations = $this->fetchAllocations($pallet, $base, $requestedItemIds);
 
             // Incluir items existentes para no perderlos
             $itemsToSync = $oldItems;
@@ -460,5 +428,41 @@ class PalletBaseController extends Controller
         );
 
         return response()->json(['message' => 'Base eliminada'], 200);
+    }
+
+    // ── Helpers privados ──────────────────────────────────────────────────────
+
+    /**
+     * Devuelve un mapa [order_item_id => total_qty_asignada_en_otras_bases].
+     * Si $itemIds está vacío, retorna una colección vacía sin hacer query.
+     */
+    private function fetchAllocations(Pallet $pallet, PalletBase $base, Collection $itemIds): Collection
+    {
+        if ($itemIds->isEmpty()) {
+            return collect();
+        }
+
+        return DB::table('pallet_base_order_items')
+            ->join('pallet_bases', 'pallet_bases.id', '=', 'pallet_base_order_items.base_id')
+            ->where('pallet_bases.pallet_id', $pallet->id)
+            ->where('pallet_bases.id', '!=', $base->id)
+            ->whereIn('pallet_base_order_items.order_item_id', $itemIds)
+            ->groupBy('pallet_base_order_items.order_item_id')
+            ->selectRaw('pallet_base_order_items.order_item_id, SUM(pallet_base_order_items.qty) as total_qty')
+            ->get()
+            ->pluck('total_qty', 'order_item_id');
+    }
+
+    /**
+     * Pre-fetcha OrderItems y Orders en 2 queries fijas.
+     * Retorna [$orderItemsMap (keyBy id), $ordersMap (keyBy id)].
+     */
+    private function fetchOrderData(Collection $itemIds): array
+    {
+        $orderItemsMap = OrderItem::whereIn('id', $itemIds)->get()->keyBy('id');
+        $orderIds      = $orderItemsMap->pluck('order_id')->unique()->values();
+        $ordersMap     = Order::whereIn('id', $orderIds)->get()->keyBy('id');
+
+        return [$orderItemsMap, $ordersMap];
     }
 }

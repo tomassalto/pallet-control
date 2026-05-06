@@ -23,104 +23,26 @@ class PalletBasePhotoController extends Controller
                 return response()->json(['message' => 'Base no encontrada'], 404);
             }
 
-            // Log para diagnóstico
-            Log::info('PalletBasePhotoController@store: Request recibido', [
-                'has_file' => $request->hasFile('photo'),
-                'all_files' => array_keys($request->allFiles()),
-                'content_type' => $request->header('Content-Type'),
-                'content_length' => $request->header('Content-Length'),
-                'request_method' => $request->method(),
-                'request_keys' => array_keys($request->all()),
-            ]);
+            // Obtener el archivo — intentar campo 'photo' primero, luego primer archivo disponible
+            $file = $request->file('photo') ?? (($all = $request->allFiles()) ? reset($all) : null);
 
-            // Obtener el archivo - intentar múltiples métodos
-            $file = $request->file('photo');
-
-            // Si no se encuentra como archivo, verificar si está en allFiles()
             if (!$file) {
-                $allFiles = $request->allFiles();
-                if (!empty($allFiles)) {
-                    Log::info('PalletBasePhotoController@store: Archivo encontrado en allFiles', [
-                        'keys' => array_keys($allFiles),
-                    ]);
-                    // Intentar obtener el primer archivo si existe
-                    $file = reset($allFiles);
-                }
+                return response()->json(['message' => 'No se recibió ningún archivo'], 422);
             }
 
-            // Validar el archivo
-            if (!$file) {
-                Log::error('PalletBasePhotoController@store: No se pudo obtener el archivo', [
-                    'has_file' => $request->hasFile('photo'),
-                    'all_files' => array_keys($request->allFiles()),
-                    'content_type' => $request->header('Content-Type'),
-                    'content_length' => $request->header('Content-Length'),
-                    'request_all' => $request->all(),
-                ]);
-                return response()->json([
-                    'message' => 'No se recibió ningún archivo',
-                    'debug' => [
-                        'has_file' => $request->hasFile('photo'),
-                        'all_files' => array_keys($request->allFiles()),
-                        'content_type' => $request->header('Content-Type'),
-                        'content_length' => $request->header('Content-Length'),
-                    ]
-                ], 422);
-            }
-
-            // Verificar que el archivo es válido antes de la validación
             if (!$file->isValid()) {
-                Log::error('Archivo no válido antes de validación:', [
-                    'error' => $file->getError(),
-                    'error_message' => $file->getErrorMessage(),
-                    'pathname' => $file->getPathname(),
-                    'real_path' => $file->getRealPath(),
-                ]);
                 return response()->json([
                     'message' => 'El archivo no es válido: ' . $file->getErrorMessage(),
                     'error_code' => $file->getError(),
                 ], 422);
             }
 
-            // Validar el archivo (sin la regla 'image' que puede fallar con archivos temporales)
-            try {
-                $data = $request->validate([
-                    'photo' => [
-                        'required',
-                        'file',
-                        'mimes:jpeg,jpg,png,webp', // Validar por extensión en lugar de 'image'
-                        'max:20480', // 20MB
-                    ],
-                    'note' => ['nullable', 'string', 'max:1000'],
-                ]);
-            } catch (\Illuminate\Validation\ValidationException $e) {
-                Log::error('Error de validación al subir foto:', [
-                    'errors' => $e->errors(),
-                    'file_size' => $file->getSize(),
-                    'file_mime' => $file->getMimeType(),
-                    'file_name' => $file->getClientOriginalName(),
-                    'pathname' => $file->getPathname(),
-                    'real_path' => $file->getRealPath(),
-                ]);
-                return response()->json([
-                    'message' => 'Error de validación',
-                    'errors' => $e->errors(),
-                    'file_size' => $file->getSize(),
-                    'file_mime' => $file->getMimeType(),
-                ], 422);
-            }
+            $data = $request->validate([
+                'photo' => ['required', 'file', 'mimes:jpeg,jpg,png,webp', 'max:20480'],
+                'note'  => ['nullable', 'string', 'max:1000'],
+            ]);
 
             $file = $data['photo'];
-
-            // Log información del archivo
-            Log::info('Intentando subir foto:', [
-                'file_name' => $file->getClientOriginalName(),
-                'file_size' => $file->getSize(),
-                'file_mime' => $file->getMimeType(),
-                'pathname'  => $file->getPathname(),
-                'file_path' => $file->getRealPath(),
-                'is_valid' => $file->isValid(),
-            ]);
 
             // Convertir a WebP (solo se guarda WebP, no el original)
             try {
