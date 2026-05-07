@@ -25,6 +25,15 @@ RUN apk add --no-cache \
     docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp && \
     docker-php-ext-install pdo pdo_pgsql mbstring exif bcmath gd intl pcntl
 
+# PHP upload/memory limits
+RUN { \
+    echo "upload_max_filesize = 50M"; \
+    echo "post_max_size = 55M"; \
+    echo "memory_limit = 256M"; \
+    echo "max_execution_time = 120"; \
+    echo "max_input_time = 120"; \
+} > /usr/local/etc/php/conf.d/uploads.ini
+
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
