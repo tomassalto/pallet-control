@@ -45,14 +45,8 @@ class ResetForProduction extends Command
         $this->warn('  ⚠️  RESET DE PRODUCCIÓN');
         $this->warn('  Se borrarán TODOS los datos operativos.');
         $this->warn('  Los productos NO serán eliminados.');
+        $this->warn('  Ejecutando porque --confirm fue pasado explícitamente...');
         $this->warn('');
-
-        // En entornos no interactivos (ej: deploy en Render), --confirm es suficiente.
-        // En terminales interactivas se pide confirmación adicional.
-        if ($this->input->isInteractive() && ! $this->confirm('¿Estás seguro? Esta acción no se puede deshacer.')) {
-            $this->info('Operación cancelada.');
-            return 0;
-        }
 
         // ── Borrar archivos de storage ────────────────────────────────────
         $this->info('Borrando archivos de storage...');
