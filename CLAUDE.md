@@ -93,9 +93,15 @@ The bot also exposes an Express HTTP API on port 3001:
 ### Database
 
 - Local dev: SQLite (default in `.env.example`)
-- Production (Railway): PostgreSQL — set `DB_CONNECTION=pgsql` and `DATABASE_URL`
+- Production (OnRender): PostgreSQL — set `DB_CONNECTION=pgsql` and `DATABASE_URL`
 
 ### Deployment
 
-- **Railway**: uses `nixpacks.toml` (PHP 8.3 + Node 22). `PORT` env var is injected automatically.
-- **Docker**: `Dockerfile` at root builds frontend then backend in a single PHP 8.4-alpine image. On start it runs migrations, `storage:link`, and `php artisan serve`.
+- **OnRender**: Docker deployment using `Dockerfile` at repo root. Multi-stage build (Node 22 for frontend, PHP 8.4-alpine for runtime). `PORT` env var is injected automatically.
+- To reset production data: set `RESET_ON_STARTUP=true` env var in Render dashboard → redeploy → remove the var → redeploy.
+
+## Conventions
+
+- **Commit messages must always be in English.** Imperative mood, concise subject line, body optional.
+- Code comments and variable names can be in Spanish (existing codebase style).
+- Never commit markdown documentation files (*.md) unless explicitly asked.
