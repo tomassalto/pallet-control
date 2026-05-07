@@ -1,5 +1,6 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "../api/client";
 import { toastError, toastSuccess } from "../ui/toast";
 import Title from "../ui/Title";
@@ -319,13 +320,10 @@ function startOfMonth() { const d = new Date(); return `${d.getFullYear()}-${Str
 
 /* ── Página ─────────────────────────────────────────────────────────────────── */
 export default function MyOrders() {
-  const [searchParams, setSearchParams]     = useSearchParams();
-  const [loading, setLoading]               = useState(true);
-  const [orders, setOrders]                 = useState([]);
-  const [page, setPage]                     = useState(1);
-  const [hasMore, setHasMore]               = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [canFinalizeMap, setCanFinalizeMap] = useState(new Map());
   const [finalizing, setFinalizing]         = useState(new Set());
+  const queryClient = useQueryClient();
 
   // Filtros de fecha desde URL params (para que el link desde home funcione)
   const dateFrom = searchParams.get("date_from") ?? "";
@@ -338,42 +336,49 @@ export default function MyOrders() {
     setSearchParams(params);
   }
 
-  async function load(nextPage = 1, { append = false, from = dateFrom, to = dateTo } = {}) {
-    setLoading(true);
-    try {
-      let url = `/orders?page=${nextPage}`;
-      if (from) url += `&date_from=${from}`;
-      if (to)   url += `&date_to=${to}`;
-      const res  = await apiGet(url);
-      const rows = Array.isArray(res) ? res : res.data || [];
-      setOrders((prev) => (append ? [...prev, ...rows] : rows));
-      const current = res.current_page ?? nextPage;
-      const last    = res.last_page    ?? nextPage;
-      setPage(current);
-      setHasMore(current < last);
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  } = useInfiniteQuery({
+    queryKey: ["orders", { dateFrom, dateTo }],
+    queryFn: async ({ pageParam = 1 }) => {
+      let url = `/orders?page=${pageParam}`;
+      if (dateFrom) url += `&date_from=${dateFrom}`;
+      if (dateTo)   url += `&date_to=${dateTo}`;
+      const res = await apiGet(url);
 
-      const openRows = rows.filter((o) => o.status === "open");
-      if (openRows.length > 0) {
-        try {
-          const result = await apiPost("/orders/can-finalize-batch", {
-            order_ids: openRows.map((o) => o.id),
-          });
-          setCanFinalizeMap((prev) => {
-            const next = new Map(prev);
-            Object.entries(result).forEach(([id, val]) => next.set(Number(id), val));
-            return next;
-          });
-        } catch { /* silently ignore */ }
+      // Chequear qué pedidos abiertos se pueden finalizar
+      const rows = Array.isArray(res) ? res : (res.data ?? []);
+      const openIds = rows.filter((o) => o.status === "open").map((o) => o.id);
+      if (openIds.length > 0) {
+        apiPost("/orders/can-finalize-batch", { order_ids: openIds })
+          .then((result) => {
+            setCanFinalizeMap((prev) => {
+              const next = new Map(prev);
+              Object.entries(result).forEach(([id, val]) => next.set(Number(id), val));
+              return next;
+            });
+          })
+          .catch(() => {});
       }
-    } catch (e) {
-      toastError(e?.message || e?.response?.data?.message || "No se pudo cargar pedidos");
-    } finally {
-      setLoading(false);
-    }
-  }
 
-  // Recargar cuando cambian los filtros de fecha
-  useEffect(() => { load(1, { append: false, from: dateFrom, to: dateTo }); }, [dateFrom, dateTo]);
+      return res;
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      if (Array.isArray(lastPage)) return undefined;
+      const current = lastPage.current_page ?? 1;
+      const last = lastPage.last_page ?? 1;
+      return current < last ? current + 1 : undefined;
+    },
+  });
+
+  const orders = data?.pages.flatMap((page) =>
+    Array.isArray(page) ? page : (page.data ?? [])
+  ) ?? [];
 
   const { openOrders, completedOrders } = useMemo(() => ({
     openOrders:      orders.filter((o) => o.status !== "done"),
@@ -396,7 +401,8 @@ export default function MyOrders() {
       await apiPost(`/orders/${orderId}/finalize`);
       toastSuccess("Pedido finalizado correctamente");
       setCanFinalizeMap((prev) => { const n = new Map(prev); n.set(orderId, false); return n; });
-      load(1, { append: false });
+      // Invalidar caché para refrescar la lista
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
     } catch (e) {
       toastError(e?.response?.data?.message || "Error al finalizar pedido");
     } finally {
@@ -419,7 +425,7 @@ export default function MyOrders() {
 
       <DateFilter dateFrom={dateFrom} dateTo={dateTo} onChange={handleDateChange} />
 
-      {loading && orders.length === 0 ? (
+      {isLoading ? (
         <PageSpinner />
       ) : orders.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-10">
@@ -458,13 +464,13 @@ export default function MyOrders() {
         </div>
       )}
 
-      {hasMore && (
+      {hasNextPage && (
         <button
-          disabled={loading}
-          onClick={() => load(page + 1, { append: true })}
+          disabled={isFetchingNextPage}
+          onClick={() => fetchNextPage()}
           className="w-full rounded-xl py-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 transition-colors"
         >
-          {loading ? <InlineSpinner label="Cargando…" /> : "Cargar más"}
+          {isFetchingNextPage ? <InlineSpinner label="Cargando…" /> : "Cargar más"}
         </button>
       )}
     </div>

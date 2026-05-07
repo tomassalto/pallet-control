@@ -1,5 +1,6 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { apiGet } from "../api/client";
 import { toastError } from "../ui/toast";
 import Title from "../ui/Title";
@@ -253,33 +254,33 @@ function PalletCard({ p, dim = false }) {
 
 /* ── Página ─────────────────────────────────────────────────────────────────── */
 export default function MyPallets() {
-  const [loading, setLoading] = useState(true);
-  const [pallets, setPallets] = useState([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+    error,
+  } = useInfiniteQuery({
+    queryKey: ["pallets"],
+    queryFn: ({ pageParam = 1 }) => apiGet(`/pallets?page=${pageParam}`),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      if (Array.isArray(lastPage)) return undefined;
+      const current = lastPage.current_page ?? 1;
+      const last = lastPage.last_page ?? 1;
+      return current < last ? current + 1 : undefined;
+    },
+  });
 
-  async function load(nextPage = 1, { append = false } = {}) {
-    setLoading(true);
-    try {
-      const res = await apiGet(`/pallets?page=${nextPage}`);
-      const rows = Array.isArray(res) ? res : res.data || [];
-      setPallets((prev) => (append ? [...prev, ...rows] : rows));
-      const current = res.current_page ?? nextPage;
-      const last = res.last_page ?? nextPage;
-      setPage(current);
-      setHasMore(current < last);
-    } catch (e) {
-      toastError(
-        e?.message || e?.response?.data?.message || "No se pudo cargar pallets",
-      );
-    } finally {
-      setLoading(false);
-    }
+  if (isError) {
+    toastError(error?.message || "No se pudo cargar pallets");
   }
 
-  useEffect(() => {
-    load(1, { append: false });
-  }, []);
+  const pallets = data?.pages.flatMap((page) =>
+    Array.isArray(page) ? page : (page.data ?? [])
+  ) ?? [];
 
   const { openPallets, completedPallets } = useMemo(
     () => ({
@@ -302,7 +303,7 @@ export default function MyPallets() {
         </p>
       </div>
 
-      {loading && pallets.length === 0 ? (
+      {isLoading ? (
         <PageSpinner />
       ) : pallets.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-10">
@@ -341,13 +342,13 @@ export default function MyPallets() {
         </div>
       )}
 
-      {hasMore && (
+      {hasNextPage && (
         <button
-          disabled={loading}
-          onClick={() => load(page + 1, { append: true })}
+          disabled={isFetchingNextPage}
+          onClick={() => fetchNextPage()}
           className="w-full rounded-xl py-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 transition-colors"
         >
-          {loading ? <InlineSpinner label="Cargando…" /> : "Cargar más"}
+          {isFetchingNextPage ? <InlineSpinner label="Cargando…" /> : "Cargar más"}
         </button>
       )}
     </div>
