@@ -147,6 +147,7 @@ class PalletBaseController extends Controller
 
             // Incluir items existentes para no perderlos
             $itemsToSync = $oldItems;
+            $removedItemIds = [];
 
             foreach ($data['items'] as $item) {
                 // Verificar que el order_item pertenece a un pedido del pallet
@@ -165,6 +166,15 @@ class PalletBaseController extends Controller
                             ], 422);
                         }
                         // Si la cantidad no cambió, mantener el item sin modificar
+                        continue;
+                    }
+
+                    // qty=0 → retirar el producto de esta base
+                    if ($item['qty'] === 0) {
+                        if (isset($oldItems[$item['order_item_id']])) {
+                            $removedItemIds[] = $item['order_item_id'];
+                        }
+                        unset($itemsToSync[$item['order_item_id']]);
                         continue;
                     }
 
@@ -188,7 +198,7 @@ class PalletBaseController extends Controller
             }
             $base->orderItems()->sync($itemsToSync);
 
-            // Registrar logs — reusar $orderItemsMap (0 queries extra)
+            // Registrar logs de cambios de cantidad
             foreach ($itemsToSync as $orderItemId => $pivotData) {
                 $orderItem = $orderItemsMap->get($orderItemId);
                 if ($orderItem) {
@@ -204,6 +214,23 @@ class PalletBaseController extends Controller
                             newValues: ['base_id' => $base->id, 'qty' => $pivotData['qty']],
                         );
                     }
+                }
+            }
+
+            // Registrar logs de retiros (qty → 0)
+            foreach ($removedItemIds as $orderItemId) {
+                $orderItem = $orderItemsMap->get($orderItemId);
+                if ($orderItem) {
+                    $oldQty = $oldItems[$orderItemId]['qty'] ?? 0;
+                    ActivityLogger::log(
+                        action: 'item_removed_from_base',
+                        entityType: 'order_item',
+                        entityId: $orderItemId,
+                        description: "Producto '{$orderItem->description}' retirado de base '" . ($base->name ?? 'Sin nombre') . "' ({$oldQty} u.)",
+                        palletId: $pallet->id,
+                        oldValues: ['base_id' => $base->id, 'qty' => $oldQty],
+                        newValues: ['base_id' => $base->id, 'qty' => 0],
+                    );
                 }
             }
         }

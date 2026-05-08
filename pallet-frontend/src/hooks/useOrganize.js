@@ -67,7 +67,7 @@ export function useOrganize({ items, setPallets, load }) {
     });
     setOrganizeModal((prev) =>
       prev
-        ? { ...prev, step: "products", selectedBase: base, quantities: init }
+        ? { ...prev, step: "products", selectedBase: base, quantities: init, initQty: { ...init } }
         : null,
     );
   }
@@ -144,8 +144,11 @@ export function useOrganize({ items, setPallets, load }) {
 
   async function saveOrganize() {
     if (!organizeModal) return;
+    const init = organizeModal.initQty ?? {};
+    // Incluir qty=0 solo si el item tenía unidades previas en esta base (para retirarlo).
+    // Items nunca asignados con qty=0 se descartan — no hay nada que retirar.
     const payload = Object.entries(organizeModal.quantities)
-      .filter(([, q]) => q > 0)
+      .filter(([id, q]) => q > 0 || (init[id] ?? 0) > 0)
       .map(([id, q]) => ({ order_item_id: parseInt(id, 10), qty: q }));
     setOrganizeModal((prev) => (prev ? { ...prev, saving: true } : null));
     try {

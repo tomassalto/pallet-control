@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import RequireAuth from "./auth/RequireAuth";
 import SidebarLayout from "./ui/SidebarLayout";
+import ScrollToTop from "./ui/ScrollToTop";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useTheme } from "./context/ThemeContext";
@@ -36,6 +37,7 @@ export default function App() {
 
   return (
     <>
+      <ScrollToTop />
       {/* Toast global — disponible en auth y en app */}
       <ToastContainer
         position="top-center"
