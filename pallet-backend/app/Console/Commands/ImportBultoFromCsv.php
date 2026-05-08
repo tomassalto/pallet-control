@@ -17,8 +17,8 @@ class ImportBultoFromCsv extends Command
         $path = storage_path('app/' . $this->argument('file'));
 
         if (! file_exists($path)) {
-            $this->error("Archivo no encontrado: $path");
-            return self::FAILURE;
+            $this->warn("uxbulto.csv no encontrado en {$path} — se omite el import.");
+            return self::SUCCESS;
         }
 
         $handle = fopen($path, 'r');
