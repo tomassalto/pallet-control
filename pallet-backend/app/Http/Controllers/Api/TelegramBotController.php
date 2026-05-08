@@ -91,7 +91,12 @@ class TelegramBotController extends Controller
 
         $pallets = Pallet::where('status', 'open')
             ->orderByDesc('id')
-            ->with(['bases' => fn($q) => $q->orderBy('id'), 'orders.customer'])
+            ->with([
+                'bases'         => fn($q) => $q->orderBy('id'),
+                'bases.orderItems',   // para sumar unidades en pallet
+                'orders',
+                'orders.items',       // para sumar unidades totales del pedido
+            ])
             ->limit(4)
             ->get();
 
@@ -106,21 +111,49 @@ class TelegramBotController extends Controller
             return;
         }
 
+        $numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣'];
+        $lines   = ["📸 *Foto recibida* — ¿A dónde la mando?\n"];
         $buttons = [];
 
-        foreach ($pallets as $pallet) {
-            $customerLabel = $this->palletCustomerLabel($pallet);
-            $baseCount     = $pallet->bases->count();
-            $baseSuffix    = match (true) {
+        foreach ($pallets as $i => $pallet) {
+            $num       = $numberEmojis[$i] ?? (($i + 1) . '.');
+            $baseCount = $pallet->bases->count();
+            $baseSuffix = match (true) {
                 $baseCount === 0 => 'sin bases',
                 $baseCount === 1 => '1 base',
                 default          => "{$baseCount} bases",
             };
-            $label = $customerLabel
-                ? "📦 {$pallet->code} · {$customerLabel} ({$baseSuffix})"
-                : "📦 {$pallet->code} ({$baseSuffix})";
 
-            $buttons[] = [['text' => $label, 'callback_data' => "sel_p:{$pallet->id}"]];
+            // Unidades organizadas en este pallet
+            $qtyInPallet = $pallet->bases
+                ->flatMap(fn($b) => $b->orderItems)
+                ->sum(fn($item) => $item->pivot->qty ?? 0);
+
+            // Unidades totales de los pedidos asociados
+            $qtyOrdered = $pallet->orders
+                ->flatMap(fn($o) => $o->items)
+                ->sum('qty');
+
+            // Códigos de pedido
+            $orderCodes = $pallet->orders->pluck('code')
+                ->map(fn($c) => "#{$c}")
+                ->join(', ');
+
+            $lines[] = "{$num} *{$pallet->code}* · {$baseSuffix}";
+
+            if ($orderCodes) {
+                $uLabel  = $qtyOrdered > 0
+                    ? "{$qtyInPallet}/{$qtyOrdered} u."
+                    : "{$qtyInPallet} u.";
+                $lines[] = "   🧾 {$orderCodes} · {$uLabel}";
+            } else {
+                $lines[] = "   Sin pedidos asignados";
+            }
+
+            $lines[] = "   ⏱ " . $this->relativeTime($pallet->updated_at);
+            $lines[] = '';
+
+            $buttons[] = [['text' => "{$num} {$pallet->code}", 'callback_data' => "sel_p:{$pallet->id}"]];
         }
 
         foreach ($orders as $order) {
@@ -133,7 +166,16 @@ class TelegramBotController extends Controller
 
         $buttons[] = [['text' => '❌ Cancelar', 'callback_data' => 'cancel']];
 
-        $this->sendInlineKeyboard($chatId, "📸 *Foto recibida* — ¿A dónde la mando?", $buttons);
+        $this->sendInlineKeyboard($chatId, implode("\n", $lines), $buttons);
+    }
+
+    /** Formatea un timestamp como "hoy HH:MM", "ayer HH:MM" o "DD/MM HH:MM" */
+    private function relativeTime(\Carbon\Carbon $dt): string
+    {
+        $local = $dt->copy()->timezone('America/Argentina/Buenos_Aires');
+        if ($local->isToday())     return 'hoy ' . $local->format('H:i');
+        if ($local->isYesterday()) return 'ayer ' . $local->format('H:i');
+        return $local->format('d/m H:i');
     }
 
     // ─────────────────────────────────────────────────────
