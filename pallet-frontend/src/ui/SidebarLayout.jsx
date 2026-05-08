@@ -49,16 +49,19 @@ export default function SidebarLayout({ title = "Pallet Control", children }) {
 
   const items = useMemo(
     () => [
-      { to: "/", label: "Inicio" },
-      ...(!isPending ? [{ to: "/orders/new", label: "Empezar pedido" }] : []),
-      { to: "/pallets", label: "Mis pallets" },
-      { to: "/orders", label: "Mis pedidos" },
-      { to: "/clients", label: "Mis clientes" },
-      { to: "/pending-items", label: "Pendientes" },
-      { to: "/productos", label: "Buscar producto" },
-      { to: "/logs", label: "Logs" },
+      { to: "/",             label: "Inicio",          prefetch: () => import("../pages/Home.jsx") },
+      ...(!isPending ? [{ to: "/orders/new", label: "Empezar pedido", prefetch: () => import("../pages/CreateOrder.jsx") }] : []),
+      { to: "/pallets",      label: "Mis pallets",     prefetch: () => import("../pages/MyPallets.jsx") },
+      { to: "/orders",       label: "Mis pedidos",     prefetch: () => import("../pages/MyOrders.jsx") },
+      { to: "/clients",      label: "Mis clientes",    prefetch: () => import("../pages/MyClients.jsx") },
+      { to: "/pending-items",label: "Pendientes",      prefetch: () => import("../pages/PendingItems.jsx") },
+      { to: "/productos",    label: "Buscar producto", prefetch: () => import("../pages/ProductLookup.jsx") },
+      { to: "/logs",         label: "Logs",            prefetch: () => import("../pages/AllLogs.jsx") },
       ...(["admin", "superadmin"].includes(user?.role)
-        ? [{ to: "/admin/users", label: "Usuarios" }, { to: "/admin/storage", label: "Limpieza" }]
+        ? [
+            { to: "/admin/users",    label: "Usuarios", prefetch: () => import("../pages/AdminUsers.jsx") },
+            { to: "/admin/storage",  label: "Limpieza", prefetch: () => import("../pages/AdminStorage.jsx") },
+          ]
         : []),
     ],
     [user, isPending],
@@ -123,6 +126,8 @@ export default function SidebarLayout({ title = "Pallet Control", children }) {
                 key={it.to}
                 to={it.to}
                 onClick={closeMobile}
+                onMouseEnter={() => it.prefetch?.()}
+                onTouchStart={() => it.prefetch?.()}
                 className={cx(
                   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                   active
