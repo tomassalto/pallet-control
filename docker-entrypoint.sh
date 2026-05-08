@@ -8,7 +8,12 @@ php artisan config:cache
 php artisan route:cache
 php artisan migrate --force
 php artisan storage:link
-php artisan app:import-bulto
+
+if [ "$IMPORT_BULTO" = "true" ]; then
+    echo ">>> IMPORT_BULTO=true detectado, corriendo app:import-bulto..."
+    php artisan app:import-bulto
+    echo ">>> Import completado. Acordate de borrar la variable IMPORT_BULTO en Render."
+fi
 
 if [ "$RESET_ON_STARTUP" = "true" ]; then
     echo ">>> RESET_ON_STARTUP=true detectado, corriendo app:reset..."
