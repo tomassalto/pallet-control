@@ -1210,16 +1210,17 @@ class TicketOcrService
             $palletInfo = $palletEanMap[$ean];
 
             $highlight = [
-                'ean'           => $ean,
-                'detected_ean'  => $detectedEan,
-                'description'   => $palletInfo['description'],
-                'qty_in_pallet' => $palletInfo['total_qty'],
-                'qty_order'     => $palletInfo['qty_order_total'] ?? $palletInfo['total_qty'],
-                'orders'        => $palletInfo['orders'],
-                'img_w'         => $ocrData['img_w'],
-                'img_h'         => $ocrData['img_h'],
-                'ean_bbox'      => $detected['bbox'],
-                'bbox'          => self::expandBbox($detected['bbox'], $ocrData['img_w'], $ocrData['img_h']),
+                'ean'             => $ean,
+                'detected_ean'    => $detectedEan,
+                'description'     => $palletInfo['description'],
+                'qty_in_pallet'   => $palletInfo['total_qty'],
+                'qty_order'       => $palletInfo['qty_order_total'] ?? $palletInfo['total_qty'],
+                'units_per_bulto' => $palletInfo['units_per_bulto'] ?? null,
+                'orders'          => $palletInfo['orders'],
+                'img_w'           => $ocrData['img_w'],
+                'img_h'           => $ocrData['img_h'],
+                'ean_bbox'        => $detected['bbox'],
+                'bbox'            => self::expandBbox($detected['bbox'], $ocrData['img_w'], $ocrData['img_h']),
             ];
 
             $score = self::highlightScore($detected, $detectedEan, $ean);

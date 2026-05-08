@@ -257,6 +257,11 @@ export default function BaseProducts() {
                           <p className="text-xs font-mono text-gray-400 mt-0.5">
                             {item.ean}
                           </p>
+                          {item.units_per_bulto != null && (
+                            <p className="text-[10px] font-mono text-gray-400 mt-0.5">
+                              ×{item.units_per_bulto} u/bulto
+                            </p>
+                          )}
                         </div>
 
                         {/* Stepper o valor fijo */}

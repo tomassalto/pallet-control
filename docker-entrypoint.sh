@@ -8,6 +8,7 @@ php artisan config:cache
 php artisan route:cache
 php artisan migrate --force
 php artisan storage:link
+php artisan app:import-bulto
 
 if [ "$RESET_ON_STARTUP" = "true" ]; then
     echo ">>> RESET_ON_STARTUP=true detectado, corriendo app:reset..."

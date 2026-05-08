@@ -278,6 +278,7 @@ function CreateModal({ onClose, onCreated }) {
                         </p>
                         <p className="text-xs text-gray-400 font-mono mt-0.5">
                           {item.ean} · {item.qty} unid.
+                          {item.units_per_bulto != null && ` · ×${item.units_per_bulto} u/bulto`}
                         </p>
                       </div>
                       {selected && (
@@ -451,6 +452,12 @@ function PendingCard({ item, onResolve, onReopen, onDelete }) {
               <span className="text-[11px] text-gray-400 font-mono">
                 {item.ean}
               </span>
+              {/* U/bulto */}
+              {item.units_per_bulto != null && (
+                <span className="text-[11px] text-gray-400 font-mono">
+                  ×{item.units_per_bulto} u/bulto
+                </span>
+              )}
             </div>
           </div>
 

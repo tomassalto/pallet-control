@@ -76,6 +76,11 @@ function ProductRow({ item, c }) {
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 font-mono">
           {item.ean}
         </p>
+        {item.units_per_bulto != null && (
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 font-mono mt-0.5">
+            ×{item.units_per_bulto} u/bulto
+          </p>
+        )}
       </div>
 
       {/* Cantidad */}
@@ -359,6 +364,11 @@ function TicketPhotoHighlight({ photo }) {
                       )}{" "}
                       unid.
                     </p>
+                    {h.units_per_bulto != null && (
+                      <p className="text-gray-400 font-mono text-[10px] mt-0.5">
+                        ×{h.units_per_bulto} u/bulto
+                      </p>
+                    )}
                     {h.orders?.length > 1 && (
                       <div className="mt-1 space-y-0.5 text-gray-300">
                         {h.orders.map((o, oi) => (
