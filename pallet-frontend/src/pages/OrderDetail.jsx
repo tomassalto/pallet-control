@@ -4,7 +4,6 @@ import { apiGet, apiPost, apiDelete } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
 import BackButton from "../ui/BackButton";
 import Accordion from "../ui/Accordion";
-import QRModal from "../ui/QRModal";
 import OrganizeModal from "../Components/OrganizeModal";
 import QtyConflictModal from "../Components/QtyConflictModal";
 import { PageSpinner } from "../ui/Spinner";
@@ -62,9 +61,6 @@ export default function OrderDetail() {
   // desvincular pallet
   const [detachingPallet, setDetachingPallet] = useState(null);
   const [confirmDetachPallet, setConfirmDetachPallet] = useState(null);
-
-  // QR modal
-  const [showQR, setShowQR] = useState(false);
 
   // finalizar pedido
   const [canFinalize, setCanFinalize] = useState(false);
@@ -434,30 +430,9 @@ export default function OrderDetail() {
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="space-y-2.5">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="font-mono font-bold text-2xl md:text-3xl text-gray-900 dark:text-white leading-tight">
-            Pedido #{order?.code}
-          </h1>
-          <button
-            onClick={() => setShowQR(true)}
-            title="Ver QR del pedido"
-            className="shrink-0 p-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-5 h-5 text-gray-600 dark:text-gray-300"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.8}
-            >
-              <rect x="3" y="3" width="7" height="7" rx="1" />
-              <rect x="14" y="3" width="7" height="7" rx="1" />
-              <rect x="3" y="14" width="7" height="7" rx="1" />
-              <path d="M14 14h2v2h-2zM18 14h3v2h-3zM14 18h3v3h-3zM19 18h2v3h-2z" />
-            </svg>
-          </button>
-        </div>
+        <h1 className="font-mono font-bold text-2xl md:text-3xl text-gray-900 dark:text-white leading-tight">
+          Pedido #{order?.code}
+        </h1>
 
         {order &&
           (() => {
@@ -985,14 +960,6 @@ export default function OrderDetail() {
         countFromThisOrderInBase={countFromThisOrderInBase}
       />
 
-      {/* QR Modal */}
-      {showQR && order && (
-        <QRModal
-          order={order}
-          pallet={pallets[0] ?? null}
-          onClose={() => setShowQR(false)}
-        />
-      )}
     </div>
   );
 }
