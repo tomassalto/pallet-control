@@ -143,6 +143,7 @@ class PendingItemController extends Controller
             'description'      => $item->orderItem?->description,
             'ean'              => $item->orderItem?->ean,
             'image_url'        => $item->orderItem?->product?->image_url ?? null,
+            'units_per_bulto'  => $item->orderItem?->product?->units_per_bulto ?? null,
             'original_qty'     => $item->orderItem?->qty,
             'qty_missing'      => $item->qty_missing,
             'note'             => $item->note,

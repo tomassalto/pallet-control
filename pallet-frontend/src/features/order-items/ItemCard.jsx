@@ -61,6 +61,11 @@ export default function ItemCard({
                 Controlado
               </span>
             )}
+            {it.units_per_bulto != null && (
+              <span className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded font-mono">
+                ×{it.units_per_bulto} u/bulto
+              </span>
+            )}
           </div>
 
           {/* Ubicaciones — solo si el ítem está marcado como listo */}

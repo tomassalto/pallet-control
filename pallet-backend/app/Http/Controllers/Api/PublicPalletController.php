@@ -36,14 +36,12 @@ class PublicPalletController extends Controller
             return response()->json(['message' => 'Pallet no encontrado'], 404);
         }
 
-        // ── Pre-cargar imágenes (1 sola query) ────────────────────────────
+        // ── Pre-cargar info de productos (1 sola query) ───────────────────
         $eans = collect();
         foreach ($pallet->bases as $b) {
             $eans = $eans->merge($b->orderItems->pluck('ean'));
         }
-        $images = Product::whereIn('ean', $eans->unique()->values()->toArray())
-            ->whereNotNull('image_url')
-            ->pluck('image_url', 'ean');
+        $products = Product::infoByEans($eans->unique()->values()->toArray());
 
         // ── Fotos del pallet ──────────────────────────────────────────────
         $photos = $pallet->photos->map(fn ($p) => [
@@ -83,12 +81,14 @@ class PublicPalletController extends Controller
                 ];
             }
 
+            $prod = $products[$orderItem->ean] ?? null;
             $orderMap[$orderId]['items'][] = [
-                'ean'         => $orderItem->ean,
-                'description' => $orderItem->description,
-                'qty'         => $data['qty'],
-                'qty_order'   => $data['qty_order'],
-                'image_url'   => $images[$orderItem->ean] ?? null,
+                'ean'             => $orderItem->ean,
+                'description'     => $orderItem->description,
+                'qty'             => $data['qty'],
+                'qty_order'       => $data['qty_order'],
+                'image_url'       => $prod?->image_url ?? null,
+                'units_per_bulto' => $prod?->units_per_bulto ?? null,
             ];
         }
 
@@ -146,7 +146,7 @@ class PublicPalletController extends Controller
         }
 
         // ── Bases: fotos + ítems agrupados por pedido ─────────────────────
-        $bases = $pallet->bases->map(function ($base) use ($images) {
+        $bases = $pallet->bases->map(function ($base) use ($products) {
             $basePhotos = $base->photos->map(fn ($p) => [
                 'id'  => $p->id,
                 'url' => $p->url,
@@ -154,18 +154,22 @@ class PublicPalletController extends Controller
 
             $orderGroups = $base->orderItems
                 ->groupBy('order_id')
-                ->map(function ($items, $orderId) use ($images) {
+                ->map(function ($items, $orderId) use ($products) {
                     $first = $items->first();
                     return [
                         'order_id'   => $orderId,
                         'order_code' => $first->order?->code ?? "#{$orderId}",
                         'customer'   => $first->order?->customer?->name,
-                        'items'      => $items->sortBy('description')->map(fn ($item) => [
-                            'ean'         => $item->ean,
-                            'description' => $item->description,
-                            'qty'         => $item->pivot->qty,
-                            'image_url'   => $images[$item->ean] ?? null,
-                        ])->values(),
+                        'items'      => $items->sortBy('description')->map(function ($item) use ($products) {
+                            $prod = $products[$item->ean] ?? null;
+                            return [
+                                'ean'             => $item->ean,
+                                'description'     => $item->description,
+                                'qty'             => $item->pivot->qty,
+                                'image_url'       => $prod?->image_url ?? null,
+                                'units_per_bulto' => $prod?->units_per_bulto ?? null,
+                            ];
+                        })->values(),
                     ];
                 })
                 ->values();

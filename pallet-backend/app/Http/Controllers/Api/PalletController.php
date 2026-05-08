@@ -82,18 +82,20 @@ class PalletController extends Controller
         $allEans = $allEans->filter()->unique()->values()->all();
 
         if (!empty($allEans)) {
-            $productImages = Product::whereIn('ean', $allEans)
-                ->whereNotNull('image_url')
-                ->pluck('image_url', 'ean');
+            $products = Product::infoByEans($allEans);
 
             foreach ($pallet->orders as $order) {
                 foreach ($order->items as $item) {
-                    $item->setAttribute('image_url', $productImages[$item->ean] ?? null);
+                    $prod = $products[$item->ean] ?? null;
+                    $item->setAttribute('image_url', $prod?->image_url ?? null);
+                    $item->setAttribute('units_per_bulto', $prod?->units_per_bulto ?? null);
                 }
             }
             foreach ($pallet->bases as $base) {
                 foreach ($base->orderItems as $item) {
-                    $item->setAttribute('image_url', $productImages[$item->ean] ?? null);
+                    $prod = $products[$item->ean] ?? null;
+                    $item->setAttribute('image_url', $prod?->image_url ?? null);
+                    $item->setAttribute('units_per_bulto', $prod?->units_per_bulto ?? null);
                 }
             }
         }

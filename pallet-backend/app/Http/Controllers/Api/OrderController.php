@@ -74,13 +74,13 @@ class OrderController extends Controller
             ->filter()->unique()->values()->all();
 
         if (!empty($allEans)) {
-            $images = Product::whereIn('ean', $allEans)
-                ->whereNotNull('image_url')
-                ->pluck('image_url', 'ean');
+            $products = Product::infoByEans($allEans);
 
             foreach ($collection as $order) {
                 foreach ($order->items as $item) {
-                    $item->setAttribute('image_url', $images[$item->ean] ?? null);
+                    $prod = $products[$item->ean] ?? null;
+                    $item->setAttribute('image_url', $prod?->image_url ?? null);
+                    $item->setAttribute('units_per_bulto', $prod?->units_per_bulto ?? null);
                 }
             }
         }
@@ -132,14 +132,12 @@ class OrderController extends Controller
             'tickets.photos',
         ]);
 
-        // Lookup de imágenes (1 query extra)
+        // Lookup de productos (1 query extra)
         $eans = $order->items->pluck('ean')->filter()->unique()->values()->all();
-        $productImages = Product::whereIn('ean', $eans)
-            ->whereNotNull('image_url')
-            ->pluck('image_url', 'ean');
+        $productInfo = Product::infoByEans($eans);
 
         // Mapear usando relaciones ya cargadas (0 queries adicionales)
-        $itemsWithLocations = $order->items->map(function ($item) use ($productImages) {
+        $itemsWithLocations = $order->items->map(function ($item) use ($productInfo) {
             $bases = $item->bases; // ya cargado
 
             $locations = $bases->map(fn($base) => [
@@ -156,16 +154,19 @@ class OrderController extends Controller
                 $calculatedDoneQty = $item->qty;
             }
 
+            $prod = $productInfo[$item->ean] ?? null;
+
             return [
-                'id'          => $item->id,
-                'ean'         => $item->ean,
-                'ean_last4'   => $item->ean_last4,
-                'description' => $item->description,
-                'qty'         => $item->qty,
-                'status'      => $item->status,
-                'done_qty'    => $calculatedDoneQty,
-                'locations'   => $locations,
-                'image_url'   => $productImages[$item->ean] ?? null,
+                'id'              => $item->id,
+                'ean'             => $item->ean,
+                'ean_last4'       => $item->ean_last4,
+                'description'     => $item->description,
+                'qty'             => $item->qty,
+                'status'          => $item->status,
+                'done_qty'        => $calculatedDoneQty,
+                'locations'       => $locations,
+                'image_url'       => $prod?->image_url ?? null,
+                'units_per_bulto' => $prod?->units_per_bulto ?? null,
             ];
         });
 
