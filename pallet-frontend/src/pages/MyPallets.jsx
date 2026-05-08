@@ -217,6 +217,7 @@ function PalletCard({ p, dim = false }) {
                     <img
                       src={photo.url}
                       alt=""
+                      loading="lazy"
                       onError={() => handleImgError(photo.id)}
                       className="w-full h-full object-cover hover:scale-105 transition-transform duration-200"
                     />

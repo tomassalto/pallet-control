@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { apiGet } from "../api/client";
-import BarcodeScanner from "../Components/BarcodeScanner.jsx";
+
+const BarcodeScanner = lazy(() => import("../Components/BarcodeScanner.jsx"));
 
 export default function ProductLookup() {
   const [ean, setEan] = useState("");
@@ -118,12 +119,16 @@ export default function ProductLookup() {
         </div>
       )}
 
-      {/* Scanner */}
+      {/* Scanner — carga Konva solo cuando se abre */}
       {scannerOpen && (
-        <BarcodeScanner
-          onDetected={onScan}
-          onClose={() => setScannerOpen(false)}
-        />
+        <Suspense fallback={
+          <div className="text-center py-6 text-sm text-gray-500">Cargando escáner…</div>
+        }>
+          <BarcodeScanner
+            onDetected={onScan}
+            onClose={() => setScannerOpen(false)}
+          />
+        </Suspense>
       )}
     </div>
   );

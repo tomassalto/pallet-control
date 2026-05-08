@@ -183,6 +183,7 @@ export default function PalletGallery() {
               <img
                 src={photoUrl}
                 alt={`Foto ${photo.id}`}
+                loading="lazy"
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   e.target.style.display = "none";

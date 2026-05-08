@@ -78,6 +78,21 @@ export default defineConfig({
     outDir: "../pallet-backend/public/app",
     emptyOutDir: true,
     assetsDir: "assets",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // React core — casi nunca cambia, muy cacheable
+          "vendor-react": ["react", "react-dom"],
+          // Router + Query — estables entre deploys
+          "vendor-router": ["react-router-dom"],
+          "vendor-query": ["@tanstack/react-query"],
+          // Librerías pesadas bajo demanda (ya lazy-loaded por ruta,
+          // pero esto evita que se mezclen en el chunk de la página)
+          "vendor-konva": ["konva", "react-konva"],
+          "vendor-scanner": ["html5-qrcode"],
+        },
+      },
+    },
   },
   server: {
     host: true,
