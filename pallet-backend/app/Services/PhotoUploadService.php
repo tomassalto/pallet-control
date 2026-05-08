@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
 use App\Models\Pallet;
+use App\Models\PalletBase;
 use App\Models\PalletBasePhoto;
 use App\Models\PalletPhoto;
 use Illuminate\Http\UploadedFile;
@@ -99,14 +100,18 @@ class PhotoUploadService
 
     private function toBase(array $data): array
     {
-        $pallet = $this->resolvePallet($data);
-
-        $baseQuery = $pallet->bases();
-
-        if (!empty($data['base_name'])) {
-            $base = $baseQuery->where('name', 'like', '%' . $data['base_name'] . '%')->firstOrFail();
+        // Ruta directa: base_id conocido (bot interactivo)
+        if (!empty($data['base_id'])) {
+            $base   = PalletBase::with('pallet')->findOrFail($data['base_id']);
+            $pallet = $base->pallet;
         } else {
-            $base = $baseQuery->latest()->firstOrFail();
+            $pallet    = $this->resolvePallet($data);
+            $baseQuery = $pallet->bases();
+            if (!empty($data['base_name'])) {
+                $base = $baseQuery->where('name', 'like', '%' . $data['base_name'] . '%')->firstOrFail();
+            } else {
+                $base = $baseQuery->latest()->firstOrFail();
+            }
         }
 
         $path = ImageConverter::convertToWebP(

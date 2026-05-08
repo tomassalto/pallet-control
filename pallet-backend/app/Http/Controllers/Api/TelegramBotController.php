@@ -62,13 +62,13 @@ class TelegramBotController extends Controller
             }
         }
 
-        // ── Foto con caption → flujo original (rápido) ──────────────
+        // ── Foto con caption → flujo original rápido ─────────────────
         if ($photo && $caption) {
             $this->handlePhotoWithCaption($chatId, $photo, $caption);
             return response()->json(['ok' => true]);
         }
 
-        // ── Foto sin caption → flujo interactivo ────────────────────
+        // ── Foto sin caption → flujo interactivo ─────────────────────
         if ($photo && !$caption) {
             $this->handlePhotoWithoutCaption($chatId, $userId, $photo);
             return response()->json(['ok' => true]);
@@ -78,7 +78,7 @@ class TelegramBotController extends Controller
     }
 
     // ─────────────────────────────────────────────────────
-    // Flujo interactivo: foto sin caption
+    // PASO 1 — Foto sin caption: mostrar pallets y pedidos
     // ─────────────────────────────────────────────────────
 
     private function handlePhotoWithoutCaption(
@@ -87,22 +87,21 @@ class TelegramBotController extends Controller
         array $photoSizes,
     ): void {
         $fileId = end($photoSizes)['file_id'];
-
-        // Guardar el file_id mientras el usuario elige destino
         Cache::put("tg_photo_{$userId}", $fileId, now()->addMinutes(self::PHOTO_CACHE_TTL));
 
-        // Consultar pallets y pedidos abiertos
         $pallets = Pallet::where('status', 'open')
             ->orderByDesc('id')
-            ->with(['bases' => fn($q) => $q->orderByDesc('id')->limit(1)])
+            ->with(['bases' => fn($q) => $q->orderBy('id'), 'orders.customer'])
+            ->limit(4)
+            ->get();
+
+        $orders = Order::where('status', 'open')
+            ->orderByDesc('id')
+            ->with('customer')
             ->limit(3)
             ->get();
 
-        $order = Order::where('status', 'open')
-            ->orderByDesc('id')
-            ->first();
-
-        if ($pallets->isEmpty() && !$order) {
+        if ($pallets->isEmpty() && $orders->isEmpty()) {
             $this->reply($chatId, '❌ No hay pallets ni pedidos abiertos en este momento.');
             return;
         }
@@ -110,29 +109,35 @@ class TelegramBotController extends Controller
         $buttons = [];
 
         foreach ($pallets as $pallet) {
-            $lastBase = $pallet->bases->first();
-            $label = $lastBase
-                ? "📦 Base {$lastBase->name} — {$pallet->code}"
-                : "📦 {$pallet->code} (sin bases)";
+            $customerLabel = $this->palletCustomerLabel($pallet);
+            $baseCount     = $pallet->bases->count();
+            $baseSuffix    = match (true) {
+                $baseCount === 0 => 'sin bases',
+                $baseCount === 1 => '1 base',
+                default          => "{$baseCount} bases",
+            };
+            $label = $customerLabel
+                ? "📦 {$pallet->code} · {$customerLabel} ({$baseSuffix})"
+                : "📦 {$pallet->code} ({$baseSuffix})";
 
-            $buttons[] = [['text' => $label, 'callback_data' => "base:{$pallet->id}"]];
+            $buttons[] = [['text' => $label, 'callback_data' => "sel_p:{$pallet->id}"]];
         }
 
-        if ($order) {
-            $buttons[] = [['text' => "🧾 Ticket — Pedido #{$order->code}", 'callback_data' => "ticket:{$order->id}"]];
+        foreach ($orders as $order) {
+            $customerName = $order->customer?->name;
+            $label = $customerName
+                ? "🧾 Ticket #{$order->code} · {$customerName}"
+                : "🧾 Ticket — Pedido #{$order->code}";
+            $buttons[] = [['text' => $label, 'callback_data' => "sel_t:{$order->id}"]];
         }
 
         $buttons[] = [['text' => '❌ Cancelar', 'callback_data' => 'cancel']];
 
-        $this->sendInlineKeyboard(
-            $chatId,
-            "📸 *Foto recibida*\n¿A dónde la mando?",
-            $buttons,
-        );
+        $this->sendInlineKeyboard($chatId, "📸 *Foto recibida* — ¿A dónde la mando?", $buttons);
     }
 
     // ─────────────────────────────────────────────────────
-    // Callback query: usuario apretó un botón
+    // Dispatcher de callback queries
     // ─────────────────────────────────────────────────────
 
     private function handleCallbackQuery(array $callbackQuery): JsonResponse
@@ -143,7 +148,6 @@ class TelegramBotController extends Controller
         $userId     = $callbackQuery['from']['id'];
         $data       = $callbackQuery['data'];
 
-        // Quitar el spinner de Telegram inmediatamente
         $this->answerCallback($callbackId);
 
         if ($data === 'cancel') {
@@ -152,46 +156,133 @@ class TelegramBotController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        // Recuperar la foto cacheada
+        $parts  = explode(':', $data, 2);
+        $prefix = $parts[0];
+        $id     = isset($parts[1]) ? (int) $parts[1] : null;
+
+        return match ($prefix) {
+            'sel_p'    => $this->handleSelectPallet($chatId, $messageId, $userId, $id),
+            'sel_t'    => $this->handleUploadTicket($chatId, $messageId, $userId, $id),
+            'base'     => $this->handleUploadToBase($chatId, $messageId, $userId, $id),
+            'new_base' => $this->handleCreateBaseAndUpload($chatId, $messageId, $userId, $id),
+            default    => $this->unknownCallback($chatId, $messageId),
+        };
+    }
+
+    // ─────────────────────────────────────────────────────
+    // PASO 2 — Pallet seleccionado: mostrar sus bases
+    // ─────────────────────────────────────────────────────
+
+    private function handleSelectPallet(
+        int|string $chatId,
+        int        $messageId,
+        int|string $userId,
+        ?int       $palletId,
+    ): JsonResponse {
         $fileId = Cache::get("tg_photo_{$userId}");
         if (!$fileId) {
             $this->editMessage($chatId, $messageId, '⏱ La sesión expiró. Mandá la foto de nuevo.');
             return response()->json(['ok' => true]);
         }
 
-        $this->editMessage($chatId, $messageId, '⏳ Guardando foto…');
+        try {
+            $pallet = Pallet::with(['bases' => fn($q) => $q->orderBy('id'), 'orders.customer'])
+                ->findOrFail($palletId);
+        } catch (\Throwable) {
+            $this->editMessage($chatId, $messageId, '❌ Pallet no encontrado.');
+            return response()->json(['ok' => true]);
+        }
+
+        $customerLabel = $this->palletCustomerLabel($pallet);
+        $header = $customerLabel
+            ? "📦 *{$pallet->code}* · {$customerLabel}\n¿A qué base mando la foto?"
+            : "📦 *{$pallet->code}*\n¿A qué base mando la foto?";
+
+        $bases   = $pallet->bases;
+        $nextNum = $bases->count() + 1;
+        $buttons = [];
+
+        // Bases existentes (de a 2 por fila)
+        foreach ($bases->chunk(2) as $pair) {
+            $row = [];
+            foreach ($pair as $base) {
+                $row[] = ['text' => "🗂 {$base->name}", 'callback_data' => "base:{$base->id}"];
+            }
+            $buttons[] = $row;
+        }
+
+        // Siempre ofrecer crear la siguiente base
+        $buttons[] = [['text' => "➕ Base {$nextNum} (nueva)", 'callback_data' => "new_base:{$pallet->id}"]];
+        $buttons[] = [['text' => '❌ Cancelar', 'callback_data' => 'cancel']];
+
+        $this->editMessageWithKeyboard($chatId, $messageId, $header, $buttons);
+        return response()->json(['ok' => true]);
+    }
+
+    // ─────────────────────────────────────────────────────
+    // PASO 3a — Base existente seleccionada: subir foto
+    // ─────────────────────────────────────────────────────
+
+    private function handleUploadToBase(
+        int|string $chatId,
+        int        $messageId,
+        int|string $userId,
+        ?int       $baseId,
+    ): JsonResponse {
+        return $this->runUpload(
+            chatId: $chatId, messageId: $messageId, userId: $userId,
+            params: ['type' => 'base', 'base_id' => $baseId],
+        );
+    }
+
+    // ─────────────────────────────────────────────────────
+    // PASO 3b — Crear nueva base y subir foto
+    // ─────────────────────────────────────────────────────
+
+    private function handleCreateBaseAndUpload(
+        int|string $chatId,
+        int        $messageId,
+        int|string $userId,
+        ?int       $palletId,
+    ): JsonResponse {
+        $fileId = Cache::get("tg_photo_{$userId}");
+        if (!$fileId) {
+            $this->editMessage($chatId, $messageId, '⏱ La sesión expiró. Mandá la foto de nuevo.');
+            return response()->json(['ok' => true]);
+        }
+
+        $this->editMessage($chatId, $messageId, '⏳ Creando base y guardando foto…');
 
         $uploadedFile = null;
         try {
-            $uploadedFile = $this->downloadPhoto($fileId);
+            $pallet  = Pallet::with(['bases', 'orders.customer'])->findOrFail($palletId);
+            $nextNum = $pallet->bases->count() + 1;
+            $base    = $pallet->bases()->create(['name' => "Base {$nextNum}"]);
 
+            $uploadedFile = $this->downloadPhoto($fileId);
             if (!$uploadedFile) {
                 $this->editMessage($chatId, $messageId, '❌ No se pudo descargar la foto.');
                 return response()->json(['ok' => true]);
             }
 
-            [$type, $id] = explode(':', $data, 2);
-
-            $params = match ($type) {
-                'base'   => ['type' => 'base',   'pallet_id' => (int) $id],
-                'ticket' => ['type' => 'ticket',  'order_id'  => (int) $id],
-                default  => null,
-            };
-
-            if (!$params) {
-                $this->editMessage($chatId, $messageId, '❌ Acción no reconocida.');
-                return response()->json(['ok' => true]);
-            }
-
-            $result = app(PhotoUploadService::class)->upload($uploadedFile, $params);
+            app(PhotoUploadService::class)->upload($uploadedFile, [
+                'type'    => 'base',
+                'base_id' => $base->id,
+            ]);
 
             Cache::forget("tg_photo_{$userId}");
-            $this->editMessage($chatId, $messageId, $result['msg'] ?? '✅ Foto guardada');
+
+            $customerLabel = $this->palletCustomerLabel($pallet);
+            $msg = "✅ *Base {$nextNum}* creada — foto guardada\n📦 *{$pallet->code}*";
+            if ($customerLabel) {
+                $msg .= "\n👤 {$customerLabel}";
+            }
+            $this->editMessage($chatId, $messageId, $msg);
 
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
-            $this->editMessage($chatId, $messageId, '❌ No encontrado. Puede que el pallet o pedido haya sido cerrado.');
+            $this->editMessage($chatId, $messageId, '❌ Pallet no encontrado.');
         } catch (\Throwable $e) {
-            Log::error('[TelegramBot] callback error: ' . $e->getMessage());
+            Log::error('[TelegramBot] createBaseAndUpload: ' . $e->getMessage());
             $this->editMessage($chatId, $messageId, '❌ Error inesperado: ' . $e->getMessage());
         } finally {
             if ($uploadedFile instanceof UploadedFile) {
@@ -203,36 +294,117 @@ class TelegramBotController extends Controller
     }
 
     // ─────────────────────────────────────────────────────
-    // Menú principal (sin foto en contexto)
+    // Ticket: subir directo al pedido (sin segundo paso)
+    // ─────────────────────────────────────────────────────
+
+    private function handleUploadTicket(
+        int|string $chatId,
+        int        $messageId,
+        int|string $userId,
+        ?int       $orderId,
+    ): JsonResponse {
+        return $this->runUpload(
+            chatId: $chatId, messageId: $messageId, userId: $userId,
+            params: ['type' => 'ticket', 'order_id' => $orderId],
+        );
+    }
+
+    // ─────────────────────────────────────────────────────
+    // Helper genérico: descarga + upload + edición de mensaje
+    // ─────────────────────────────────────────────────────
+
+    private function runUpload(
+        int|string $chatId,
+        int        $messageId,
+        int|string $userId,
+        array      $params,
+    ): JsonResponse {
+        $fileId = Cache::get("tg_photo_{$userId}");
+        if (!$fileId) {
+            $this->editMessage($chatId, $messageId, '⏱ La sesión expiró. Mandá la foto de nuevo.');
+            return response()->json(['ok' => true]);
+        }
+
+        $this->editMessage($chatId, $messageId, '⏳ Guardando foto…');
+
+        $uploadedFile = null;
+        try {
+            $uploadedFile = $this->downloadPhoto($fileId);
+            if (!$uploadedFile) {
+                $this->editMessage($chatId, $messageId, '❌ No se pudo descargar la foto.');
+                return response()->json(['ok' => true]);
+            }
+
+            $result = app(PhotoUploadService::class)->upload($uploadedFile, $params);
+            Cache::forget("tg_photo_{$userId}");
+            $this->editMessage($chatId, $messageId, $result['msg'] ?? '✅ Foto guardada');
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            $this->editMessage($chatId, $messageId, '❌ No encontrado. Puede que el destino haya sido cerrado.');
+        } catch (\Throwable $e) {
+            Log::error('[TelegramBot] runUpload: ' . $e->getMessage());
+            $this->editMessage($chatId, $messageId, '❌ Error inesperado: ' . $e->getMessage());
+        } finally {
+            if ($uploadedFile instanceof UploadedFile) {
+                @unlink($uploadedFile->getPathname());
+            }
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    // ─────────────────────────────────────────────────────
+    // /menu — estado actual
     // ─────────────────────────────────────────────────────
 
     private function sendMainMenu(int|string $chatId): void
     {
-        $pallet = Pallet::where('status', 'open')->orderByDesc('id')->first();
-        $order  = Order::where('status', 'open')->orderByDesc('id')->first();
+        $pallets = Pallet::where('status', 'open')
+            ->orderByDesc('id')
+            ->with(['bases', 'orders.customer'])
+            ->limit(3)
+            ->get();
+
+        $orders = Order::where('status', 'open')
+            ->orderByDesc('id')
+            ->with('customer')
+            ->limit(3)
+            ->get();
 
         $lines = ["🤖 *PalletBot* — Estado actual\n"];
 
-        if ($pallet) {
-            $lines[] = "📦 Pallet activo: *{$pallet->code}*";
+        if ($pallets->isEmpty()) {
+            $lines[] = "📦 Sin pallets abiertos";
         } else {
-            $lines[] = "📦 Sin pallet abierto";
+            foreach ($pallets as $pallet) {
+                $customerLabel = $this->palletCustomerLabel($pallet);
+                $baseCount     = $pallet->bases->count();
+                $info = $customerLabel ? " · {$customerLabel}" : '';
+                $info .= ' (' . ($baseCount === 1 ? '1 base' : "{$baseCount} bases") . ')';
+                $lines[] = "📦 *{$pallet->code}*{$info}";
+            }
         }
 
-        if ($order) {
-            $lines[] = "🧾 Pedido activo: *#{$order->code}*";
+        $lines[] = '';
+
+        if ($orders->isEmpty()) {
+            $lines[] = "🧾 Sin pedidos abiertos";
         } else {
-            $lines[] = "🧾 Sin pedido abierto";
+            foreach ($orders as $order) {
+                $customerName = $order->customer?->name ?? '';
+                $info = $customerName ? " · {$customerName}" : '';
+                $lines[] = "🧾 *#{$order->code}*{$info}";
+            }
         }
 
-        $lines[] = "\n_Mandá una foto para subirla al destino que elijas._";
-        $lines[] = "_Usá caption p/b/t si querés ir directo._";
+        $lines[] = "\n_Mandá una foto para elegir el destino con botones._";
+        $lines[] = "_Usá caption (p / b / t) para ir directo._";
 
         $this->reply($chatId, implode("\n", $lines));
     }
 
     // ─────────────────────────────────────────────────────
-    // Flujo original con caption (backward compat)
+    // Flujo con caption — backward compat
     // ─────────────────────────────────────────────────────
 
     private function handlePhotoWithCaption(
@@ -241,7 +413,6 @@ class TelegramBotController extends Controller
         string $caption,
     ): void {
         $params = $this->parseCommand($caption);
-
         if (!$params) {
             $this->reply($chatId, "❓ Comando no reconocido.\n\n" . $this->helpText());
             return;
@@ -250,19 +421,17 @@ class TelegramBotController extends Controller
         $uploadedFile = null;
         try {
             $uploadedFile = $this->downloadPhoto(end($photoSizes)['file_id']);
-
             if (!$uploadedFile) {
                 $this->reply($chatId, '❌ No se pudo descargar la foto.');
                 return;
             }
-
             $result = app(PhotoUploadService::class)->upload($uploadedFile, $params);
             $this->reply($chatId, $result['msg'] ?? '✅ Foto guardada');
 
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
             $this->reply($chatId, '❌ No encontrado. Verificá el código.');
         } catch (\Throwable $e) {
-            Log::error('[TelegramBot] handlePhotoWithCaption error: ' . $e->getMessage());
+            Log::error('[TelegramBot] handlePhotoWithCaption: ' . $e->getMessage());
             $this->reply($chatId, '❌ Error: ' . $e->getMessage());
         } finally {
             if ($uploadedFile instanceof UploadedFile) {
@@ -297,6 +466,18 @@ class TelegramBotController extends Controller
         ]);
     }
 
+    private function editMessageWithKeyboard(int|string $chatId, int $messageId, string $text, array $buttons): void
+    {
+        $token = config('services.telegram.token');
+        Http::post("https://api.telegram.org/bot{$token}/editMessageText", [
+            'chat_id'      => $chatId,
+            'message_id'   => $messageId,
+            'text'         => $text,
+            'parse_mode'   => 'Markdown',
+            'reply_markup' => json_encode(['inline_keyboard' => $buttons]),
+        ]);
+    }
+
     private function answerCallback(string $callbackQueryId, string $text = ''): void
     {
         $token = config('services.telegram.token');
@@ -316,9 +497,29 @@ class TelegramBotController extends Controller
         ]);
     }
 
+    private function unknownCallback(int|string $chatId, int $messageId): JsonResponse
+    {
+        $this->editMessage($chatId, $messageId, '❌ Acción no reconocida.');
+        return response()->json(['ok' => true]);
+    }
+
     // ─────────────────────────────────────────────────────
     // Utilidades internas
     // ─────────────────────────────────────────────────────
+
+    /**
+     * Nombres de cliente(s) asociados al pallet, separados por ·.
+     * Máximo 2 clientes para no saturar el botón.
+     */
+    private function palletCustomerLabel(Pallet $pallet): string
+    {
+        return $pallet->orders
+            ->map(fn($o) => $o->customer?->name)
+            ->filter()
+            ->unique()
+            ->take(2)
+            ->join(' · ');
+    }
 
     /**
      * Parsea el caption a parámetros para PhotoUploadService.
@@ -350,7 +551,6 @@ class TelegramBotController extends Controller
         } elseif ($type === 'base') {
             $arg1 = $parts[1] ?? null;
             $rest = implode(' ', array_slice($parts, 2));
-
             if (!$arg1) {
                 $params['pallet_index'] = 1;
             } elseif (preg_match('/^\d{1,2}$/', $arg1) && $rest) {
