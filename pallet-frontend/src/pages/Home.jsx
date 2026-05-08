@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { PageSpinner } from "../ui/Spinner";
@@ -127,31 +127,21 @@ function OrdersByDate({ rows }) {
 export default function Home() {
   const { user } = useAuth();
   const canWrite = user?.role !== null && user?.role !== undefined;
-  const [loading, setLoading] = useState(true);
-  const [data, setData]       = useState(null);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await apiGet("/dashboard");
-      setData(res);
-    } catch (e) {
-      toastError(e?.message || "No se pudo cargar el dashboard");
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => apiGet("/dashboard"),
+  });
 
-  useEffect(() => { load(); }, []);
+  if (isError) toastError(error?.message || "No se pudo cargar el dashboard");
 
-  const stats         = data?.stats ?? {};
-  const lastOrder     = data?.last_open_order ?? null;
-  const lastPallet    = data?.last_open_pallet ?? null;
-  const pendingCount  = data?.pending_count ?? 0;
-  const ordersByDate  = data?.orders_by_date ?? [];
+  const stats        = data?.stats ?? {};
+  const lastOrder    = data?.last_open_order ?? null;
+  const lastPallet   = data?.last_open_pallet ?? null;
+  const pendingCount = data?.pending_count ?? 0;
+  const ordersByDate = data?.orders_by_date ?? [];
 
-  if (loading)
+  if (isLoading)
     return (
       <div className="flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 min-h-screen max-w-xl sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
         <PageSpinner />

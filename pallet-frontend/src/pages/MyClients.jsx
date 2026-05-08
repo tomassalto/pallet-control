@@ -1,51 +1,30 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../api/client";
 import { toastError } from "../ui/toast";
 import Title from "../ui/Title";
-import { PageSpinner, InlineSpinner } from "../ui/Spinner";
+import { PageSpinner } from "../ui/Spinner";
 import BackButton from "../ui/BackButton";
 import Accordion from "../ui/Accordion";
 
 export default function MyClients() {
-  const [loading, setLoading] = useState(true);
-  const [customers, setCustomers] = useState([]);
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [customerOrders, setCustomerOrders] = useState([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
 
-  async function loadCustomers() {
-    setLoading(true);
-    try {
-      const data = await apiGet("/customers");
-      setCustomers(data);
-    } catch (e) {
-      toastError(
-        e?.message || e?.response?.data?.message || "No se pudo cargar clientes"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: customers = [], isLoading } = useQuery({
+    queryKey: ["customers"],
+    queryFn: () => apiGet("/customers"),
+    onError: (e) => toastError(e?.message || "No se pudo cargar clientes"),
+  });
 
-  async function loadCustomerOrders(customerId) {
-    setLoadingOrders(true);
-    try {
-      const customer = await apiGet(`/customers/${customerId}`);
-      setSelectedCustomer(customer);
-      setCustomerOrders(customer.orders || []);
-    } catch (e) {
-      toastError(
-        e?.message || e?.response?.data?.message || "No se pudo cargar pedidos"
-      );
-    } finally {
-      setLoadingOrders(false);
-    }
-  }
+  const { data: selectedCustomer, isLoading: loadingOrders } = useQuery({
+    queryKey: ["customer", selectedCustomerId],
+    queryFn: () => apiGet(`/customers/${selectedCustomerId}`),
+    enabled: !!selectedCustomerId,
+    onError: (e) => toastError(e?.message || "No se pudo cargar pedidos"),
+  });
 
-  useEffect(() => {
-    loadCustomers();
-  }, []);
+  const customerOrders = selectedCustomer?.orders ?? [];
 
   function getOrderStatus(order) {
     if (order.status === "done") return "Completo";
@@ -74,14 +53,11 @@ export default function MyClients() {
         <div className="text-sm text-gray-600">
           Todavía no hay clientes registrados.
         </div>
-      ) : selectedCustomer ? (
+      ) : selectedCustomerId ? (
         <div className="space-y-4">
           {/* Botón volver */}
           <button
-            onClick={() => {
-              setSelectedCustomer(null);
-              setCustomerOrders([]);
-            }}
+            onClick={() => setSelectedCustomerId(null)}
             className="text-sm text-gray-600 underline"
           >
             ← Volver a lista de clientes
@@ -90,9 +66,9 @@ export default function MyClients() {
           {/* Información del cliente */}
           <div className="bg-white border border-border rounded-2xl p-4">
             <Title size="2xl" className="font-semibold">
-              {selectedCustomer.name}
+              {selectedCustomer?.name}
             </Title>
-            {selectedCustomer.quit && (
+            {selectedCustomer?.quit && (
               <div className="text-xs text-gray-500 mt-1">
                 Quit: {selectedCustomer.quit}
               </div>
@@ -194,7 +170,7 @@ export default function MyClients() {
           {customers.map((customer) => (
             <button
               key={customer.id}
-              onClick={() => loadCustomerOrders(customer.id)}
+              onClick={() => setSelectedCustomerId(customer.id)}
               className="block bg-white border border-border rounded-2xl p-4 text-left active:scale-[0.99]"
             >
               <div className="flex flex-col gap-1">

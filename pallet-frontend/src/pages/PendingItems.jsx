@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
 import BackButton from "../ui/BackButton";
@@ -534,31 +535,22 @@ function PendingCard({ item, onResolve, onReopen, onDelete }) {
 
 // ── Vista principal ───────────────────────────────────────────────────────────
 export default function PendingItems() {
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState("pending"); // "pending" | "resolved"
   const [showCreate, setShowCreate] = useState(false);
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function load() {
-    setLoading(true);
-    try {
-      const data = await apiGet("/pending-items");
-      setItems(data);
-    } catch {
-      toastError("Error al cargar los pendientes");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: items = [], isLoading: loading } = useQuery({
+    queryKey: ["pending-items"],
+    queryFn: () => apiGet("/pending-items"),
+    onError: () => toastError("Error al cargar los pendientes"),
+  });
 
   async function handleResolve(id) {
     try {
       const updated = await apiPatch(`/pending-items/${id}`, { status: "resolved" });
-      setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
+      queryClient.setQueryData(["pending-items"], (prev = []) =>
+        prev.map((i) => (i.id === id ? updated : i))
+      );
       toastSuccess("Marcado como entregado");
     } catch (e) {
       toastError(e?.message || "No se pudo marcar como entregado");
@@ -568,7 +560,9 @@ export default function PendingItems() {
   async function handleReopen(id) {
     try {
       const updated = await apiPatch(`/pending-items/${id}`, { status: "pending" });
-      setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
+      queryClient.setQueryData(["pending-items"], (prev = []) =>
+        prev.map((i) => (i.id === id ? updated : i))
+      );
       toastSuccess("Pendiente reabierto");
     } catch (e) {
       toastError(e?.message || "No se pudo reabrir el pendiente");
@@ -578,7 +572,9 @@ export default function PendingItems() {
   async function handleDelete(id) {
     try {
       await apiDelete(`/pending-items/${id}`);
-      setItems((prev) => prev.filter((i) => i.id !== id));
+      queryClient.setQueryData(["pending-items"], (prev = []) =>
+        prev.filter((i) => i.id !== id)
+      );
       toastSuccess("Pendiente eliminado");
     } catch (e) {
       toastError(e?.message || "No se pudo eliminar el pendiente");
@@ -586,7 +582,7 @@ export default function PendingItems() {
   }
 
   function handleCreated(item) {
-    setItems((prev) => [item, ...prev]);
+    queryClient.setQueryData(["pending-items"], (prev = []) => [item, ...prev]);
     setTab("pending");
   }
 

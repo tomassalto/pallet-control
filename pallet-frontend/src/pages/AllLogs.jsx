@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { apiGet } from "../api/client";
 import BackButton from "../ui/BackButton";
 import { PageSpinner, InlineSpinner } from "../ui/Spinner";
@@ -16,35 +16,29 @@ function actionDotColor(action = "") {
 }
 
 export default function AllLogs() {
-  const [loading, setLoading] = useState(true);
-  const [logs, setLogs] = useState([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [error, setError] = useState("");
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+    error,
+  } = useInfiniteQuery({
+    queryKey: ["logs"],
+    queryFn: ({ pageParam = 1 }) =>
+      apiGet(`/activity-logs?page=${pageParam}&per_page=50`),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const current = lastPage.current_page ?? 1;
+      const last = lastPage.last_page ?? 1;
+      return current < last ? current + 1 : undefined;
+    },
+  });
 
-  async function load(nextPage = 1, { append = false } = {}) {
-    setError("");
-    setLoading(true);
-    try {
-      const data = await apiGet(`/activity-logs?page=${nextPage}&per_page=50`);
-      const rows = data.logs || [];
-      setLogs((prev) => (append ? [...prev, ...rows] : rows));
-      setPage(data.current_page ?? nextPage);
-      setHasMore(
-        (data.current_page ?? nextPage) < (data.last_page ?? nextPage),
-      );
-    } catch (e) {
-      setError(e.message || "Error cargando logs");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const logs = data?.pages.flatMap((page) => page.logs ?? []) ?? [];
 
-  useEffect(() => {
-    load(1);
-  }, []);
-
-  if (loading && logs.length === 0) {
+  if (isLoading) {
     return (
       <div className="space-y-4">
         <BackButton to="/" />
@@ -53,12 +47,12 @@ export default function AllLogs() {
     );
   }
 
-  if (error) {
+  if (isError) {
     return (
       <div className="space-y-3">
         <BackButton to="/" />
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-xl p-3 text-sm">
-          {error}
+          {error?.message || "Error cargando logs"}
         </div>
       </div>
     );
@@ -174,13 +168,13 @@ export default function AllLogs() {
       )}
 
       {/* Cargar más */}
-      {hasMore && (
+      {hasNextPage && (
         <button
-          disabled={loading}
-          onClick={() => load(page + 1, { append: true })}
+          disabled={isFetchingNextPage}
+          onClick={() => fetchNextPage()}
           className="w-full rounded-2xl py-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/60 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-60 transition-colors"
         >
-          {loading ? <InlineSpinner label="Cargando…" /> : "Cargar más eventos"}
+          {isFetchingNextPage ? <InlineSpinner label="Cargando…" /> : "Cargar más eventos"}
         </button>
       )}
     </div>
