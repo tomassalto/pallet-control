@@ -16,7 +16,7 @@ export function useMigrate({ palletId, load }) {
   function openMigrateModal(base) {
     const quantities = {};
     (base.order_items || []).forEach((item) => {
-      quantities[item.id] = item.pivot?.qty ?? 0;
+      quantities[item.id] = 0; // empieza en 0, el usuario elige qué migrar
     });
     setMigrateModal({
       sourceBase: base,
@@ -54,7 +54,7 @@ export function useMigrate({ palletId, load }) {
       prev ? { ...prev, step: "dest", loadingPallets: true } : null
     );
     try {
-      const data = await apiGet("/pallets?page=1");
+      const data = await apiGet("/pallets?limit=200");
       const list = (Array.isArray(data) ? data : data.data || []).filter(
         (p) => p.id !== parseInt(palletId, 10)
       );

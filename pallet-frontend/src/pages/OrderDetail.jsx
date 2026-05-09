@@ -7,13 +7,15 @@ import Accordion from "../ui/Accordion";
 import OrganizeModal from "../Components/OrganizeModal";
 import QtyConflictModal from "../Components/QtyConflictModal";
 import { PageSpinner } from "../ui/Spinner";
-import { StatusBadge } from "../ui/EntityCard";
 import { ActionItem, Icons } from "../ui/ActionList";
 import { TicketCard, AddTicketModal } from "../features/tickets/TicketSection";
 import ItemCard from "../features/order-items/ItemCard";
 import ItemActionModal from "../features/order-items/ItemActionModal";
 import { useOrganize } from "../hooks/useOrganize";
 import { useItemAction } from "../hooks/useItemAction";
+import { useOrderDetail } from "../hooks/useOrderDetail";
+import { OrderHeader } from "../features/orders/OrderHeader";
+import { OrderActions } from "../features/orders/OrderActions";
 
 function onlyDigits(v) {
   return (v || "").replace(/\D/g, "");
@@ -25,22 +27,28 @@ const SEC_LABEL =
 const BTN_SEC =
   "flex items-center justify-center w-full py-3 px-4 rounded-xl bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors";
 
-function orderStatusBadge(status) {
-  if (status === "done") return { label: "Completo", color: "green" };
-  if (status === "paused") return { label: "Pausado", color: "amber" };
-  return { label: "En proceso", color: "blue" };
-}
-
 export default function OrderDetail() {
   const { orderId } = useParams();
 
-  const [loading, setLoading] = useState(true);
-  const [order, setOrder] = useState(null);
-  const [pallets, setPallets] = useState([]);
-  const [items, setItems] = useState([]);
-  const [tickets, setTickets] = useState([]);
-  const [highlightsReady, setHighlightsReady] = useState(false);
-  const [error, setError] = useState("");
+  // React Query hook - datos cacheados con staleTime de 30s
+  const {
+    order,
+    pallets,
+    items,
+    tickets,
+    highlightsReady,
+    isLoading,
+    error: queryError,
+    canFinalize,
+    attachPallet,
+    detachPallet,
+    finalize,
+    finalizing,
+    refetch,
+  } = useOrderDetail(orderId);
+
+  // Función de refetch para los hooks que necesitan recargar
+  const load = () => refetch();
 
   const [tab, setTab] = useState("pending"); // pending | done | removed
 
@@ -62,10 +70,6 @@ export default function OrderDetail() {
   const [detachingPallet, setDetachingPallet] = useState(null);
   const [confirmDetachPallet, setConfirmDetachPallet] = useState(null);
 
-  // finalizar pedido
-  const [canFinalize, setCanFinalize] = useState(false);
-  const [finalizing, setFinalizing] = useState(false);
-
   // tickets
   const [openAddTicket, setOpenAddTicket] = useState(false);
 
@@ -84,7 +88,7 @@ export default function OrderDetail() {
     decModalQty,
     setModalQty,
     saveOrganize,
-  } = useOrganize({ items, setPallets, load });
+  } = useOrganize({ items, setPallets: () => refetch(), load });
 
   const {
     actionItem,
@@ -96,43 +100,12 @@ export default function OrderDetail() {
     tryApplyAction,
     setConflictKeep,
     resolveConflictAndSave,
-  } = useItemAction({ setItems, load });
-
-  async function load() {
-    setError("");
-    setLoading(true);
-    try {
-      const data = await apiGet(`/orders/${orderId}`);
-      setOrder(data.order);
-      setPallets(data.pallets || []);
-      setItems(data.items || []);
-      setTickets(data.order?.tickets || []);
-      setHighlightsReady(data.highlights_ready ?? false);
-
-      // Verificar si se puede finalizar el pedido
-      if (data.order?.status === "open") {
-        try {
-          const canFinalizeData = await apiGet(
-            `/orders/${orderId}/can-finalize`,
-          );
-          setCanFinalize(canFinalizeData.can_finalize || false);
-        } catch {
-          setCanFinalize(false);
-        }
-      } else {
-        setCanFinalize(false);
-      }
-    } catch (e) {
-      setError(e.message || "Error cargando pedido");
-    } finally {
-      setLoading(false);
-    }
-  }
+  } = useItemAction({ items, load });
 
   async function loadAvailablePallets() {
     setLoadingPallets(true);
     try {
-      const data = await apiGet(`/pallets?page=1`);
+      const data = await apiGet(`/pallets?limit=200`);
       const allPallets = Array.isArray(data) ? data : data.data || [];
       // Filtrar pallets que ya están asociados
       const palletIds = new Set(pallets.map((p) => p.id));
@@ -172,17 +145,14 @@ export default function OrderDetail() {
       return;
     }
 
-    setFinalizing(true);
     try {
-      await apiPost(`/orders/${orderId}/finalize`);
+      await finalize();
       toastSuccess("Pedido finalizado correctamente");
-      load(); // Recargar para actualizar el estado del pedido
+      refetch();
     } catch (e) {
       toastError(
         e?.response?.data?.message || e?.message || "Error al finalizar pedido",
       );
-    } finally {
-      setFinalizing(false);
     }
   }
 
@@ -254,12 +224,8 @@ export default function OrderDetail() {
           ? { last4: raw.padStart(4, "0"), qty: q }
           : { ean: raw, qty: q };
 
-      const created = await apiPost(`/orders/${orderId}/items`, body);
-      setItems((prev) =>
-        [created, ...prev].sort((a, b) =>
-          a.description.localeCompare(b.description),
-        ),
-      );
+      await apiPost(`/orders/${orderId}/items`, body);
+      refetch(); // Recargar datos desde el servidor
       setEanOrLast4("");
       setQty("1");
       setOpenAddProduct(false);
@@ -286,13 +252,13 @@ export default function OrderDetail() {
     return "border-gray-200";
   }
 
-  if (loading) return <PageSpinner />;
+  if (isLoading) return <PageSpinner />;
 
-  if (error) {
+  if (queryError) {
     return (
       <div className="space-y-3">
         <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3">
-          {error}
+          {queryError.message || "Error cargando pedido"}
         </div>
         <div className="flex justify-start">
           <BackButton to="/" />
@@ -422,79 +388,16 @@ export default function OrderDetail() {
         </div>
       )}
 
-      {pallets.length > 0 ? (
-        <BackButton to={`/pallet/${pallets[0].id}`} />
-      ) : (
-        <BackButton to="/" />
-      )}
-
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="space-y-2.5">
-        <h1 className="font-mono font-bold text-2xl md:text-3xl text-gray-900 dark:text-white leading-tight">
-          Pedido #{order?.code}
-        </h1>
-
-        {order &&
-          (() => {
-            const b = orderStatusBadge(order.status);
-            return <StatusBadge label={b.label} color={b.color} />;
-          })()}
-
-        {/* Pallets asociados como chips */}
-        {pallets.length > 0 && (
-          <div className="space-y-2 pt-1">
-            <p className={SEC_LABEL}>Pallets asociados</p>
-            <div className="flex flex-wrap gap-2">
-              {pallets.map((p) => {
-                const isPalletDone = p.status === "done";
-                return (
-                  <div
-                    key={p.id}
-                    className="inline-flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700/60 rounded-xl px-3 py-1.5"
-                  >
-                    <Link
-                      to={`/pallet/${p.id}`}
-                      className="text-sm font-semibold text-gray-800 dark:text-gray-200 hover:underline font-mono"
-                    >
-                      {p.code}
-                    </Link>
-                    {isPalletDone && (
-                      <span className="text-[10px] bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded-full font-medium">
-                        cerrado
-                      </span>
-                    )}
-                    {order?.status !== "done" && modalItems.length > 0 && (
-                      <button
-                        onClick={() =>
-                          isPalletDone
-                            ? setReopenModal({ pallet: p, reopening: false })
-                            : openOrganizeModal(p)
-                        }
-                        className={`text-[11px] px-2 py-0.5 rounded-lg font-semibold transition-colors ${
-                          isPalletDone
-                            ? "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300"
-                            : "bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-700"
-                        }`}
-                      >
-                        {isPalletDone ? "🔒" : "📦"} Organizar
-                      </button>
-                    )}
-                    {order?.status !== "done" && (
-                      <button
-                        onClick={() => setConfirmDetachPallet(p)}
-                        disabled={detachingPallet === p.id}
-                        className="text-[11px] px-2 py-0.5 rounded-lg font-semibold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 transition-colors"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
+      <OrderHeader
+        order={order}
+        pallets={pallets}
+        modalItems={modalItems}
+        onOrganize={openOrganizeModal}
+        onDetach={setConfirmDetachPallet}
+        onReopen={setReopenModal}
+        detachingPallet={detachingPallet}
+        canFinalize={canFinalize}
+      />
 
       {/* ── Tickets ────────────────────────────────────────────────────── */}
       <section className="space-y-3">

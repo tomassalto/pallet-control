@@ -1,5 +1,10 @@
 import { PageSpinner } from "../../ui/Spinner";
 
+function shortDate(iso) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
 /**
  * Modal de migración de productos entre bases.
  * Flujo en 2 pasos: selección de ítems/cantidades → selección de destino.
@@ -45,7 +50,7 @@ export default function MigrateModal({
         {/* Paso 1: selección de ítems */}
         {migrateModal.step === "items" && (
           <>
-            <div className="flex-1 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
+            <div className="flex-1 overflow-y-auto overscroll-contain divide-y divide-gray-100 dark:divide-gray-700">
               <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-between">
                 <span className="text-xs text-gray-500 dark:text-gray-400">
                   {Object.values(migrateModal.quantities).filter((q) => q > 0).length}{" "}
@@ -139,7 +144,7 @@ export default function MigrateModal({
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
               {migrateModal.loadingPallets ? (
                 <PageSpinner />
               ) : (
@@ -167,31 +172,89 @@ export default function MigrateModal({
                         </span>
                       </button>
 
-                      {migrateModal.pallets.map((p) => (
-                        <button
-                          key={p.id}
-                          onClick={() => selectMigratePallet(p.id)}
-                          className={[
-                            "w-full text-left rounded-xl border px-4 py-3 text-sm transition-colors",
-                            migrateModal.selectedPalletId === p.id
-                              ? "border-amber-400 bg-amber-50 dark:bg-amber-900/20 font-semibold"
-                              : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700",
-                          ].join(" ")}
-                        >
-                          <span className="font-mono font-semibold text-gray-900 dark:text-white">
-                            {p.code}
-                          </span>
-                          <span
-                            className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
-                              p.status === "done"
-                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                                : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                            }`}
+                      {migrateModal.pallets.map((p) => {
+                        const orders = p.orders || [];
+                        const bases = p.bases || [];
+                        // Nombres de clientes únicos (filtramos nulos/vacíos)
+                        const customers = [
+                          ...new Set(
+                            orders.map((o) => o.customer?.name).filter(Boolean)
+                          ),
+                        ];
+                        // Contar productos únicos (a través de pedidos y bases)
+                        const allItems = [];
+                        orders.forEach(o => {
+                          if (o.items) o.items.forEach(i => allItems.push(i.description));
+                        });
+                        bases.forEach(b => {
+                          if (b.order_items) b.order_items.forEach(i => allItems.push(i.description));
+                        });
+                        const uniqueItems = [...new Set(allItems)];
+                        const selected = migrateModal.selectedPalletId === p.id;
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => selectMigratePallet(p.id)}
+                            className={[
+                              "w-full text-left rounded-xl border px-4 py-3 transition-colors",
+                              selected
+                                ? "border-amber-400 bg-amber-50 dark:bg-amber-900/20"
+                                : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700",
+                            ].join(" ")}
                           >
-                            {p.status === "done" ? "Finalizado" : "Abierto"}
-                          </span>
-                        </button>
-                      ))}
+                            {/* Fila 1: código + badge + fecha + productos */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-xs text-gray-400 dark:text-gray-500">
+                                {p.code}
+                              </span>
+                              <span
+                                className={`text-xs px-1.5 py-0.5 rounded-full ${
+                                  p.status === "done"
+                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                                }`}
+                              >
+                                {p.status === "done" ? "Cerrado" : "Abierto"}
+                              </span>
+                              {p.created_at && (
+                                <span className="text-xs text-gray-400 dark:text-gray-500">
+                                  {shortDate(p.created_at)}
+                                </span>
+                              )}
+                              {uniqueItems.length > 0 && (
+                                <span className="text-xs text-gray-400 dark:text-gray-500">
+                                  · {uniqueItems.length} prod.
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Fila 2: Nota del pallet — identificador principal */}
+                            {p.note ? (
+                              <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white leading-snug">
+                                📝 {p.note}
+                              </p>
+                            ) : null}
+
+                            {/* Fila 3: Clientes */}
+                            {customers.length > 0 ? (
+                              <p className={`text-sm font-medium text-gray-700 dark:text-gray-300 ${p.note ? "mt-0.5" : "mt-1"}`}>
+                                👤 {customers.join(" · ")}
+                              </p>
+                            ) : null}
+
+                            {/* Pedidos (secundario) */}
+                            {orders.length > 0 ? (
+                              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500 font-mono">
+                                {orders.map((o) => `#${o.code}`).join("  ")}
+                              </p>
+                            ) : (
+                              !p.note && !customers.length && (
+                                <p className="mt-1 text-xs text-gray-400 italic">Sin pedidos</p>
+                              )
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 

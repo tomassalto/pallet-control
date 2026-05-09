@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { apiDelete, apiGet, apiPost } from "../api/client";
+import { apiDelete, apiPost } from "../api/client";
 import { toastError, toastSuccess } from "../ui/toast";
 import BackButton from "../ui/BackButton";
 import ConfirmModal from "../ui/ConfirmModal";
@@ -10,6 +10,7 @@ import { StatusBadge } from "../ui/EntityCard";
 import { ActionItem, Icons } from "../ui/ActionList";
 import { useMigrate } from "../hooks/useMigrate";
 import { useBaseMutations } from "../hooks/useBaseMutations";
+import { usePalletDetail } from "../hooks/usePalletDetail";
 import MigrateModal from "../features/pallet-bases/MigrateModal";
 import BaseCard from "../features/pallet-bases/BaseCard";
 import BaseFormModal from "../features/pallet-bases/BaseFormModal";
@@ -68,17 +69,23 @@ function OrderChip({ o, activeOrderId, setActiveOrderId }) {
 export default function PalletDetail() {
   const { palletId } = useParams();
 
-  // Estado del pallet
-  const [loading, setLoading]       = useState(true);
-  const [pallet, setPallet]         = useState(null);
-  const [orders, setOrders]         = useState([]);
-  const [bases, setBases]           = useState([]);
-  const [error, setError]           = useState("");
-  const [canFinalize, setCanFinalize] = useState(false);
+  // React Query hook - datos cacheados con staleTime de 30s
+  const {
+    pallet,
+    orders,
+    bases,
+    isLoading,
+    error: queryError,
+    canFinalize,
+    refetch,
+  } = usePalletDetail(palletId);
+
+  // Función de refetch para los hooks que necesitan recargar
+  const load = () => refetch();
+
+  // Estado UI
   const [confirmModal, setConfirmModal] = useState(null);
   const [showQR, setShowQR]             = useState(false);
-
-  // Estado UI de pedidos
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [openAssign, setOpenAssign] = useState(false);
   const [openImport, setOpenImport] = useState(false);
@@ -86,7 +93,7 @@ export default function PalletDetail() {
   const [raw, setRaw]               = useState("");
 
   const activeOrder = useMemo(
-    () => orders.find((o) => o.id === activeOrderId) || null,
+    () => (orders || []).find((o) => o.id === activeOrderId) || null,
     [orders, activeOrderId]
   );
 
@@ -94,37 +101,12 @@ export default function PalletDetail() {
   const migrate = useMigrate({ palletId, load });
   const baseMutations = useBaseMutations({ palletId, load, setConfirmModal });
 
-  // ── Carga de datos ───────────────────────────────────────────────────────
-  async function load() {
-    setError("");
-    setLoading(true);
-    try {
-      const data = await apiGet(`/pallets/${palletId}`);
-      setPallet(data.pallet || null);
-      setOrders(data.orders || []);
-      setBases(data.bases || []);
-      if ((data.orders || []).length > 0 && !activeOrderId) {
-        setActiveOrderId(data.orders[data.orders.length - 1].id);
-      }
-      if (data.pallet?.status === "open") {
-        try {
-          const fd = await apiGet(`/pallets/${palletId}/can-finalize`);
-          setCanFinalize(fd.can_finalize || false);
-        } catch {
-          setCanFinalize(false);
-        }
-      } else {
-        setCanFinalize(false);
-      }
-    } catch (e) {
-      setError(e?.data?.message || e.message || "Error cargando pallet");
-      toastError(e?.data?.message || e.message || "Error cargando pallet");
-    } finally {
-      setLoading(false);
+  // Seleccionar primer pedido automáticamente
+  useEffect(() => {
+    if ((orders || []).length > 0 && !activeOrderId) {
+      setActiveOrderId(orders[orders.length - 1].id);
     }
-  }
-
-  useEffect(() => { load(); }, [palletId]); // eslint-disable-line
+  }, [orders, activeOrderId]);
 
   // ── Handlers: asignar pedido / importar ─────────────────────────────────
   async function onAssignSubmit(e) {
@@ -134,10 +116,10 @@ export default function PalletDetail() {
     try {
       const res = await apiPost(`/pallets/${palletId}/attach-order`, { order_code: clean });
       toastSuccess("Pedido asignado");
-      setOrders(res.orders || []);
       if (res.order?.id) setActiveOrderId(res.order.id);
       setOrderCode("");
       setOpenAssign(false);
+      refetch(); // Recargar datos
     } catch (e) {
       toastError(e.response?.data?.message || e.message || "No se pudo asignar");
     }
@@ -237,13 +219,13 @@ export default function PalletDetail() {
   }
 
   // ── Early returns ────────────────────────────────────────────────────────
-  if (loading) return <PageSpinner />;
-  if (error || !pallet) {
+  if (isLoading) return <PageSpinner />;
+  if (queryError || !pallet) {
     return (
       <div className="space-y-3">
         <BackButton to="/" />
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-xl p-3 text-sm">
-          {error || "No se pudo cargar el pallet."}
+          {queryError?.message || "No se pudo cargar el pallet."}
         </div>
       </div>
     );
@@ -340,24 +322,13 @@ export default function PalletDetail() {
           <ActionItem icon={Icons.Gallery} iconBg="bg-amber-500" label="Galería" sublabel="Fotos del pallet completo" to={`/pallet/${palletId}/gallery`} />
           <ActionItem icon={Icons.History} iconBg="bg-gray-500" label="Historial" sublabel="Registro de actividad" to={`/pallet/${palletId}/history`} />
 
-          <a
+          <ActionItem
+            icon={Icons.Eye}
+            iconBg="bg-blue-600"
+            label="Vista pública"
+            sublabel="Ver como cliente vía QR"
             href={`/pallet-view/${pallet.code}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-colors"
-          >
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-sm bg-blue-600">
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-              </svg>
-            </div>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Vista pública</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500">Ver como cliente vía QR</p>
-            </div>
-            <ExternalLinkIcon />
-          </a>
+          />
 
           {palletDone && (
             <button onClick={handleReopen} className={BTN_GREEN}>Reabrir pallet</button>
