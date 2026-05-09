@@ -47,7 +47,7 @@ export default function MyClients() {
         </p>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <PageSpinner />
       ) : customers.length === 0 ? (
         <div className="text-sm text-gray-600">

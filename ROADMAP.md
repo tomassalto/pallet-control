@@ -48,10 +48,10 @@ Estados: [ ] pendiente | [~] en progreso | [x] hecho | [!] bloqueado
     Cero trabajo de backend. Mejora percepción de velocidad en primera navegación a cada ruta.
     Implementación: `onMouseEnter` en cada `<Link>` del sidebar llama `import('../pages/X.jsx')`.
 
-[ ] **OrderDetail — reducir chunk de 92kB**
-    Es la página más pesada después de los vendors. Revisar si `PhotoAnnotator` tiene deps
-    pesadas que ya están en `vendor-konva` (y si es así, el peso real puede ser menor de lo que parece).
-    Evaluar extraer el modal de organización en base como lazy si pesa demasiado.
+[x] **OrderDetail — chunk de 92kB investigado** _(2026-05-08)_
+    No hay librerías pesadas ocultas. Son ~2776 líneas de código legítimo de la app
+    (OrderDetail 999 + TicketSection 820 + OrganizeModal 254 + hooks + modales).
+    Gzipped = 24kB — perfectamente aceptable. No se toca.
 
 [x] **OCR Highlights — mapa de distribución del pedido**
 
