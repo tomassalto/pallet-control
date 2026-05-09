@@ -4,9 +4,9 @@ import QRCode from "react-qr-code";
 export default function QRModal({ order, pallet, onClose }) {
   const url = pallet
     ? `${window.location.origin}/pallet-view/${pallet.code}`
-    : `${window.location.origin}/order/${order.id}`;
+    : `${window.location.origin}/order/${order?.id}`;
 
-  const label = pallet ? `Pallet ${pallet.code}` : `Pedido #${order.code}`;
+  const label = pallet ? `Pallet ${pallet.code}` : `Pedido #${order?.code}`;
 
   // Cerrar con Escape
   useEffect(() => {
@@ -134,7 +134,7 @@ export default function QRModal({ order, pallet, onClose }) {
       link.href = canvas.toDataURL("image/png");
       link.download = pallet
         ? `pallet-${pallet.code}-qr.png`
-        : `pedido-${order.code}-qr.png`;
+        : `pedido-${order?.code}-qr.png`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -161,7 +161,7 @@ export default function QRModal({ order, pallet, onClose }) {
           </button>
         </div>
 
-        {order.customer?.name && (
+        {order?.customer?.name && (
           <p className="text-sm text-gray-500 -mt-2 self-start">
             {order.customer.name}
           </p>

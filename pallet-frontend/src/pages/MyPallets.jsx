@@ -7,28 +7,9 @@ import Title from "../ui/Title";
 import BackButton from "../ui/BackButton";
 import Accordion from "../ui/Accordion";
 import { PageSpinner, InlineSpinner } from "../ui/Spinner";
+import { STATUS_CONFIG as STATUS } from "../constants/status";
 
-/* ── Helpers ────────────────────────────────────────────────────────────────── */
-
-const STATUS_CONFIG = {
-  done: {
-    label: "Completo",
-    accent: "bg-green-500",
-    badge:
-      "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-    bar: "bg-green-500",
-  },
-  open: {
-    label: "En proceso",
-    accent: "bg-blue-500",
-    badge: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-    bar: "bg-blue-500",
-  },
-};
-
-function cfg(status) {
-  return STATUS_CONFIG[status] ?? STATUS_CONFIG.open;
-}
+const cfg = (status) => STATUS[status] ?? STATUS.open;
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString("es-AR", {

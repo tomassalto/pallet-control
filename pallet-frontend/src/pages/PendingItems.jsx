@@ -278,7 +278,8 @@ function CreateModal({ onClose, onCreated }) {
                         </p>
                         <p className="text-xs text-gray-400 font-mono mt-0.5">
                           {item.ean} · {item.qty} unid.
-                          {item.units_per_bulto != null && ` · ×${item.units_per_bulto} u/bulto`}
+                          {item.units_per_bulto != null &&
+                            ` · ×${item.units_per_bulto} u/bulto`}
                         </p>
                       </div>
                       {selected && (
@@ -515,7 +516,7 @@ function PendingCard({ item, onResolve, onReopen, onDelete }) {
                 disabled={resolving}
                 className="text-xs px-3 py-1.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold transition-colors disabled:opacity-40"
               >
-                {resolving ? "…" : "✓ Entregar"}
+                {resolving ? "…" : "Entregar"}
               </button>
             ) : (
               <button
@@ -554,9 +555,11 @@ export default function PendingItems() {
 
   async function handleResolve(id) {
     try {
-      const updated = await apiPatch(`/pending-items/${id}`, { status: "resolved" });
+      const updated = await apiPatch(`/pending-items/${id}`, {
+        status: "resolved",
+      });
       queryClient.setQueryData(["pending-items"], (prev = []) =>
-        prev.map((i) => (i.id === id ? updated : i))
+        prev.map((i) => (i.id === id ? updated : i)),
       );
       toastSuccess("Marcado como entregado");
     } catch (e) {
@@ -566,9 +569,11 @@ export default function PendingItems() {
 
   async function handleReopen(id) {
     try {
-      const updated = await apiPatch(`/pending-items/${id}`, { status: "pending" });
+      const updated = await apiPatch(`/pending-items/${id}`, {
+        status: "pending",
+      });
       queryClient.setQueryData(["pending-items"], (prev = []) =>
-        prev.map((i) => (i.id === id ? updated : i))
+        prev.map((i) => (i.id === id ? updated : i)),
       );
       toastSuccess("Pendiente reabierto");
     } catch (e) {
@@ -580,7 +585,7 @@ export default function PendingItems() {
     try {
       await apiDelete(`/pending-items/${id}`);
       queryClient.setQueryData(["pending-items"], (prev = []) =>
-        prev.filter((i) => i.id !== id)
+        prev.filter((i) => i.id !== id),
       );
       toastSuccess("Pendiente eliminado");
     } catch (e) {

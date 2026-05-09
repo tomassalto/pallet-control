@@ -1,5 +1,5 @@
-import { lazy, Suspense } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import RequireAuth from "./auth/RequireAuth";
 import SidebarLayout from "./ui/SidebarLayout";
 import ScrollToTop from "./ui/ScrollToTop";
@@ -7,6 +7,7 @@ import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useTheme } from "./context/ThemeContext";
 import { PageSpinner } from "./ui/Spinner";
+import { setNavigate } from "./api/client";
 
 // Lazy-loaded pages — cada ruta carga su chunk solo cuando se navega a ella
 const Home             = lazy(() => import("./pages/Home"));
@@ -34,6 +35,11 @@ const PendingItems     = lazy(() => import("./pages/PendingItems"));
 
 export default function App() {
   const { dark } = useTheme();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    setNavigate(navigate);
+  }, [navigate]);
 
   return (
     <>
