@@ -14,19 +14,21 @@ use Illuminate\Support\Facades\DB;
  *
  *  0  EAN
  *  1  Descripción
- *  2  Cant Pedida        ← qty (lo que el cliente pidió)
- *  3  Cant Real          ← done_qty (lo que realmente se encontró/entregó)
- *  4  Precio Unitario    ← price
- *  5  Precio Base        ← ignorar
+ *  2  Cant Pedida        ← ignorar (no se usa)
+ *  3  Cant Real          ← qty y done_qty (siempre lo que realmente vino)
+ *  4  Precio Unitario    ← price base
+ *  5  Precio Base        ← price FINAL si > 0 (tiene prioridad sobre col 4)
  *  6  Desc. Base         ← ignorar
  *  7  Desc. Medio Pago   ← desc_medio_pago (10.00 = lunes/viernes, vacío = no)
  *  8  Controlado         ← is_controlled  (1 = sí, vacío = no)
  *
+ * Lógica de precio:
+ *   - precio_base (col 5) > 0  →  price = precio_base
+ *   - precio_base = 0          →  price = precio_unitario (col 4)
+ *
  * Lógica de estado al importar:
- *   - Cant Real > 0  →  status = 'done',    done_qty = Cant Real  ✓ se importa
- *   - Cant Real = 0  →  se OMITE (el pedido ya está cerrado, sin stock = no viene)
- *   - Cant Pedida = 0 y Cant Real > 0 (producto extra no pedido originalmente)
- *                    →  qty = Cant Real  (para que el conteo tenga sentido)
+ *   - Cant Real > 0  →  qty = done_qty = Cant Real, status = 'done'  ✓ se importa
+ *   - Cant Real = 0  →  se OMITE (sin stock = no viene)
  */
 class OrderImportController extends Controller
 {
@@ -59,32 +61,30 @@ class OrderImportController extends Controller
             $desc = trim($parts[1] ?? '');
             if ($desc === '') continue;
 
-            // ── Columna 2: Cant Pedida ─────────────────────────────────────
-            $cantPedidaRaw = str_replace(',', '.', trim($parts[2] ?? '0'));
-            $cantPedidaRaw = preg_replace('/[^0-9.]/', '', $cantPedidaRaw);
-            $cantPedida    = (int) floor((float) $cantPedidaRaw);
-
-            // ── Columna 3: Cant Real (lo que realmente se encontró) ────────
+            // ── Columna 3: Cant Real (qty siempre = lo que realmente vino) ─
             $cantRealRaw = str_replace(',', '.', trim($parts[3] ?? '0'));
             $cantRealRaw = preg_replace('/[^0-9.]/', '', $cantRealRaw);
             $cantReal    = (int) floor((float) $cantRealRaw);
 
-            // Solo importar productos que realmente se entregaron (Cant Real > 0)
-            // El pedido ya está cerrado: si no vino, no se importa
+            // Si no vino nada, no se importa
             if ($cantReal <= 0) continue;
 
-            // Si Cant Pedida = 0 pero Cant Real > 0 (producto extra no pedido),
-            // usamos Cant Real como qty para que el conteo tenga sentido
-            $qty = $cantPedida > 0 ? $cantPedida : $cantReal;
-
-            // Todos los ítems importados son done (Cant Real > 0 garantizado)
+            $qty     = $cantReal;
             $doneQty = $cantReal;
             $status  = 'done';
 
             // ── Columna 4: Precio Unitario ─────────────────────────────────
-            $priceRaw = str_replace(',', '.', trim($parts[4] ?? ''));
-            $priceRaw = preg_replace('/[^0-9.]/', '', $priceRaw);
-            $price    = $priceRaw !== '' ? (float) $priceRaw : null;
+            $precioUnitarioRaw = str_replace(',', '.', trim($parts[4] ?? ''));
+            $precioUnitarioRaw = preg_replace('/[^0-9.]/', '', $precioUnitarioRaw);
+            $precioUnitario    = $precioUnitarioRaw !== '' ? (float) $precioUnitarioRaw : null;
+
+            // ── Columna 5: Precio Base (prioridad si > 0) ──────────────────
+            $precioBaseRaw = str_replace(',', '.', trim($parts[5] ?? ''));
+            $precioBaseRaw = preg_replace('/[^0-9.]/', '', $precioBaseRaw);
+            $precioBase    = $precioBaseRaw !== '' ? (float) $precioBaseRaw : 0.0;
+
+            // Precio final: precio_base tiene prioridad cuando es > 0
+            $price = ($precioBase > 0) ? $precioBase : $precioUnitario;
 
             // ── Columna 7: Desc. Medio Pago ────────────────────────────────
             $dmpRaw = str_replace(',', '.', trim($parts[7] ?? ''));
