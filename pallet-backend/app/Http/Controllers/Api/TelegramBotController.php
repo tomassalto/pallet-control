@@ -60,6 +60,10 @@ class TelegramBotController extends Controller
                 $this->reply($chatId, $this->helpText());
                 return response()->json(['ok' => true]);
             }
+            if ($lower === '/vermas' || $lower === 'vermas') {
+                $this->sendRecentItems($chatId);
+                return response()->json(['ok' => true]);
+            }
         }
 
         // ── Foto con caption → flujo original rápido ─────────────────
@@ -651,7 +655,68 @@ O usá caption para ir directo:
 🎫 *t* — último pedido abierto
 🎫 *t 12345* — pedido específico
 
+*📋 /vermas* — Ver lista reciente de pallets y pedidos con más detalles
+
 _Escribí */menu* para ver el estado actual._
 TXT;
+    }
+
+    private function sendRecentItems(int $chatId): void
+    {
+        $pallets = Pallet::with(['orders.customer', 'bases.orderItems'])
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get();
+
+        $orders = Order::with(['customer', 'pallets'])
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get();
+
+        $message = "📋 *Lista reciente*\n\n";
+
+        if ($pallets->isEmpty() && $orders->isEmpty()) {
+            $message .= "No hay pallets ni pedidos registrados.";
+            $this->reply($chatId, $message);
+            return;
+        }
+
+        $message .= "*PALLETS:*\n";
+        foreach ($pallets as $p) {
+            $status = $p->status === 'done' ? '✅' : '🔵';
+            $customers = $p->orders->pluck('customer.name')->filter()->unique()->join(', ');
+            $productCount = $p->bases->flatMap(fn($b) => $b->orderItems ?? [])->count();
+
+            $message .= "{$status} *{$p->code}*\n";
+            if ($p->note) {
+                $message .= "   📝 {$p->note}\n";
+            }
+            if ($customers) {
+                $message .= "   👤 {$customers}\n";
+            }
+            $message .= "   📦 {$productCount} productos · {$p->bases->count()} bases\n\n";
+        }
+
+        $message .= "*PEDIDOS:*\n";
+        foreach ($orders as $o) {
+            $status = $o->status === 'done' ? '✅' : ($o->status === 'paused' ? '⏸️' : '🔵');
+            $itemsCount = $o->items()->count();
+
+            $message .= "{$status} *#{$o->code}*\n";
+            if ($o->customer?->name) {
+                $message .= "   👤 {$o->customer->name}\n";
+            }
+            $message .= "   📦 {$itemsCount} productos";
+
+            $palletsList = $o->pallets->pluck('code')->join(', ');
+            if ($palletsList) {
+                $message .= " · Pallets: {$palletsList}";
+            }
+            $message .= "\n\n";
+        }
+
+        $message .= "_Usá /menu para ver el estado actual_";
+
+        $this->reply($chatId, $message);
     }
 }

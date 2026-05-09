@@ -12,7 +12,17 @@ class BotSecretMiddleware
     {
         $secret = config('services.whatsapp_bot.secret');
 
-        if (empty($secret) || ! hash_equals((string) $secret, (string) $request->header('X-Bot-Secret', ''))) {
+        if (empty($secret)) {
+            \Illuminate\Support\Facades\Log::warning('BotSecretMiddleware: Secret no configurado en producción', [
+                'ip' => $request->ip(),
+                'uri' => $request->fullUrl(),
+            ]);
+            return response()->json(['message' => 'Unauthorized: Bot no configurado.'], 401);
+        }
+
+        $provided = $request->header('X-Bot-Secret', '');
+
+        if (! hash_equals((string) $secret, (string) $provided)) {
             return response()->json(['message' => 'Unauthorized.'], 401);
         }
 

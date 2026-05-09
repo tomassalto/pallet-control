@@ -91,11 +91,7 @@ class PhotoUploadService
             newValues: ['photo_id' => $photo->id, 'via' => 'bot'],
         );
 
-        return [
-            'ok'  => true,
-            'msg' => "✅ Foto guardada en pallet *{$pallet->code}*",
-            'url' => \Illuminate\Support\Facades\Storage::disk(config('filesystems.default', 'public'))->url($path),
-        ];
+        return $this->buildSuccessResponse($path, "Foto guardada en pallet *{$pallet->code}*");
     }
 
     private function toBase(array $data): array
@@ -136,11 +132,7 @@ class PhotoUploadService
             newValues: ['photo_id' => $photo->id, 'via' => 'bot'],
         );
 
-        return [
-            'ok'  => true,
-            'msg' => "✅ Foto guardada en base *{$baseName}* del pallet *{$pallet->code}*",
-            'url' => \Illuminate\Support\Facades\Storage::disk(config('filesystems.default', 'public'))->url($path),
-        ];
+        return $this->buildSuccessResponse($path, "Foto guardada en base *{$baseName}* del pallet *{$pallet->code}*");
     }
 
     private function toTicket(array $data): array
@@ -174,9 +166,14 @@ class PhotoUploadService
             orderId: $order->id,
         );
 
+        return $this->buildSuccessResponse($path, "Foto guardada en ticket del pedido *#{$order->code}*");
+    }
+
+    private function buildSuccessResponse(string $path, string $message): array
+    {
         return [
             'ok'  => true,
-            'msg' => "✅ Foto guardada en ticket del pedido *#{$order->code}*",
+            'msg' => "✅ {$message}",
             'url' => \Illuminate\Support\Facades\Storage::disk(config('filesystems.default', 'public'))->url($path),
         ];
     }
