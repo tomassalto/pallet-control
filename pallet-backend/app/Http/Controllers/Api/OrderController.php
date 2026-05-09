@@ -10,7 +10,6 @@ use App\Models\ActivityLog;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Pallet;
-use App\Models\Product;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -64,26 +63,13 @@ class OrderController extends Controller
             $result = $q->paginate(20);
         }
 
-        // Enriquecer items con image_url desde products (1 query extra para todos los EANs)
+        // Enriquecer items con image_url desde products
         $collection = $result instanceof \Illuminate\Pagination\LengthAwarePaginator
             ? $result->getCollection()
             : $result;
 
-        $allEans = $collection
-            ->flatMap(fn ($o) => $o->items->pluck('ean'))
-            ->filter()->unique()->values()->all();
-
-        if (!empty($allEans)) {
-            $products = Product::infoByEans($allEans);
-
-            foreach ($collection as $order) {
-                foreach ($order->items as $item) {
-                    $prod = $products[$item->ean] ?? null;
-                    $item->setAttribute('image_url', $prod?->image_url ?? null);
-                    $item->setAttribute('units_per_bulto', $prod?->units_per_bulto ?? null);
-                }
-            }
-        }
+        $allItems = $collection->flatMap(fn ($o) => $o->items);
+        OrderService::enrichWithProductInfo($allItems);
 
         return $result;
     }
@@ -132,50 +118,8 @@ class OrderController extends Controller
             'tickets.photos',
         ]);
 
-        // Lookup de productos (1 query extra)
-        $eans = $order->items->pluck('ean')->filter()->unique()->values()->all();
-        $productInfo = Product::infoByEans($eans);
-
-        // Mapear usando relaciones ya cargadas (0 queries adicionales)
-        $itemsWithLocations = $order->items->map(function ($item) use ($productInfo) {
-            $bases = $item->bases; // ya cargado
-
-            $locations = $bases->map(fn($base) => [
-                'pallet_id'   => $base->pallet->id,
-                'pallet_code' => $base->pallet->code,
-                'base_id'     => $base->id,
-                'base_name'   => $base->name,
-                'qty'         => $base->pivot->qty,
-            ]);
-
-            $calculatedDoneQty = $bases->sum(fn($base) => $base->pivot->qty ?? 0);
-
-            if ($item->status === 'done' && $calculatedDoneQty === 0 && $bases->isEmpty()) {
-                $calculatedDoneQty = $item->qty;
-            }
-
-            $prod = $productInfo[$item->ean] ?? null;
-
-            return [
-                'id'              => $item->id,
-                'ean'             => $item->ean,
-                'ean_last4'       => $item->ean_last4,
-                'description'     => $item->description,
-                'qty'             => $item->qty,
-                'status'          => $item->status,
-                'done_qty'        => $calculatedDoneQty,
-                'locations'       => $locations,
-                'image_url'       => $prod?->image_url ?? null,
-                'units_per_bulto' => $prod?->units_per_bulto ?? null,
-            ];
-        });
-
-        // Precondición para el botón "Ver mapa": todas las unidades distribuidas Y 2+ pallets
-        $allDistributed = $itemsWithLocations->every(fn ($i) => $i['done_qty'] >= $i['qty']);
-        $distinctPalletIds = $itemsWithLocations
-            ->flatMap(fn ($i) => collect($i['locations'])->pluck('pallet_id'))
-            ->unique();
-        $highlightsReady = $allDistributed && $distinctPalletIds->count() >= 2;
+        $itemsWithLocations = OrderService::enrichItemsWithLocations($order);
+        $highlightsReady = OrderService::isHighlightsReady($itemsWithLocations);
 
         return response()->json([
             'order'           => $order,

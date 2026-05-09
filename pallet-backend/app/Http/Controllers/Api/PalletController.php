@@ -6,9 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Helpers\ActivityLogger;
 use App\Helpers\TelegramNotifier;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\Pallet;
-use App\Models\Product;
+use App\Services\OrderService;
 use App\Services\PalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +30,9 @@ class PalletController extends Controller
             $q->where('status', $request->string('status'));
         }
 
-        return $q->paginate(20);
+        $perPage = min((int) $request->input('limit', 20), 500);
+
+        return $q->paginate($perPage);
     }
 
     // crea pallet "vacío" (sin pedido). Opcional nota.
@@ -71,34 +72,15 @@ class PalletController extends Controller
     {
         $pallet->load(['orders.items', 'photos', 'bases.photos', 'bases.orderItems']);
 
-        // Lookup de imágenes de productos (1 query extra, cubre orders.items + bases.orderItems)
-        $allEans = collect();
+        // Enrich con info de productos
+        $allItems = collect();
         foreach ($pallet->orders as $order) {
-            $allEans = $allEans->merge($order->items->pluck('ean'));
+            $allItems = $allItems->merge($order->items);
         }
         foreach ($pallet->bases as $base) {
-            $allEans = $allEans->merge($base->orderItems->pluck('ean'));
+            $allItems = $allItems->merge($base->orderItems);
         }
-        $allEans = $allEans->filter()->unique()->values()->all();
-
-        if (!empty($allEans)) {
-            $products = Product::infoByEans($allEans);
-
-            foreach ($pallet->orders as $order) {
-                foreach ($order->items as $item) {
-                    $prod = $products[$item->ean] ?? null;
-                    $item->setAttribute('image_url', $prod?->image_url ?? null);
-                    $item->setAttribute('units_per_bulto', $prod?->units_per_bulto ?? null);
-                }
-            }
-            foreach ($pallet->bases as $base) {
-                foreach ($base->orderItems as $item) {
-                    $prod = $products[$item->ean] ?? null;
-                    $item->setAttribute('image_url', $prod?->image_url ?? null);
-                    $item->setAttribute('units_per_bulto', $prod?->units_per_bulto ?? null);
-                }
-            }
-        }
+        OrderService::enrichWithProductInfo($allItems);
 
         // Los logs están en el endpoint dedicado /activity-logs, no se duplican aquí
 
