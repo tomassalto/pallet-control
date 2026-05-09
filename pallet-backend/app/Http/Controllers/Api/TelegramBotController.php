@@ -413,7 +413,7 @@ class TelegramBotController extends Controller
 
         $orders = Order::where('status', 'open')
             ->orderByDesc('id')
-            ->with('customer')
+            ->with(['customer', 'items'])
             ->limit(3)
             ->get();
 
@@ -438,7 +438,13 @@ class TelegramBotController extends Controller
         } else {
             foreach ($orders as $order) {
                 $customerName = $order->customer?->name ?? '';
+                $total = $order->items
+                    ->whereNotNull('price')
+                    ->sum(fn($i) => $i->qty * $i->price);
                 $info = $customerName ? " · {$customerName}" : '';
+                if ($total > 0) {
+                    $info .= "\n   💰 " . $this->formatPeso($total);
+                }
                 $lines[] = "🧾 *#{$order->code}*{$info}";
             }
         }
@@ -668,7 +674,7 @@ TXT;
             ->limit(5)
             ->get();
 
-        $orders = Order::with(['customer', 'pallets'])
+        $orders = Order::with(['customer', 'pallets', 'items'])
             ->orderByDesc('id')
             ->limit(5)
             ->get();
@@ -700,17 +706,22 @@ TXT;
         $message .= "*PEDIDOS:*\n";
         foreach ($orders as $o) {
             $status = $o->status === 'done' ? '✅' : ($o->status === 'paused' ? '⏸️' : '🔵');
-            $itemsCount = $o->items()->count();
+            $itemsCount = $o->items->count();
+            $total = $o->items
+                ->whereNotNull('price')
+                ->sum(fn($i) => $i->qty * $i->price);
 
             $message .= "{$status} *#{$o->code}*\n";
             if ($o->customer?->name) {
                 $message .= "   👤 {$o->customer->name}\n";
             }
             $message .= "   📦 {$itemsCount} productos";
-
+            if ($total > 0) {
+                $message .= " · 💰 " . $this->formatPeso($total);
+            }
             $palletsList = $o->pallets->pluck('code')->join(', ');
             if ($palletsList) {
-                $message .= " · Pallets: {$palletsList}";
+                $message .= "\n   📦 Pallets: {$palletsList}";
             }
             $message .= "\n\n";
         }
@@ -718,5 +729,10 @@ TXT;
         $message .= "_Usá /menu para ver el estado actual_";
 
         $this->reply($chatId, $message);
+    }
+
+    private function formatPeso(float $amount): string
+    {
+        return '$' . number_format($amount, 0, ',', '.');
     }
 }
