@@ -125,6 +125,7 @@ Mandá una foto con el texto (caption):
 🎫 *t* — último pedido abierto
 🎫 *t 12345* — pedido específico
 
+*📋 vermas* — Ver lista reciente de pallets y pedidos
 _Escribí *ayuda* (sin foto) para ver esto._`;
 
 // ─────────────────────────────────────────────────────────
@@ -300,6 +301,12 @@ async function connect() {
           continue;
         }
 
+        if (text === 'vermas') {
+          const recentItems = await getRecentItemsMessage();
+          await sock.sendMessage(WA_GROUP_ID, { text: recentItems, quoted: msg });
+          continue;
+        }
+
         // Foto con caption → subir imagen
         if (msg.message?.imageMessage) {
           handlePhotoMessage(msg).catch(e => console.error('[Bot] unhandled:', e.message));
@@ -471,6 +478,82 @@ app.get('/groups', requireKey, async (_req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ─────────────────────────────────────────────────────────
+// Helper: obtener lista de pallets y pedidos recientes
+// ─────────────────────────────────────────────────────────
+async function getRecentItemsMessage() {
+  try {
+    // Obtener pallets recientes con pedidos y bases
+    const palletsRes = await pool.query(`
+      SELECT p.id, p.code, p.status, p.note, p.created_at,
+             COALESCE(json_agg(DISTINCT jsonb_build_object('name', c.name)) FILTER (WHERE c.name IS NOT NULL), '[]') as customers,
+             (SELECT COUNT(*) FROM pallet_base_order_items pboi
+              JOIN pallet_bases pb ON pb.id = pboi.base_id
+              WHERE pb.pallet_id = p.id) as product_count,
+             (SELECT COUNT(*) FROM pallet_bases WHERE pallet_id = p.id) as base_count
+      FROM pallets p
+      LEFT JOIN order_pallet po ON po.pallet_id = p.id
+      LEFT JOIN orders o ON o.id = po.order_id
+      LEFT JOIN customers c ON c.id = o.customer_id
+      GROUP BY p.id
+      ORDER BY p.id DESC
+      LIMIT 5
+    `);
+
+    // Obtener pedidos recientes
+    const ordersRes = await pool.query(`
+      SELECT o.id, o.code, o.status, o.created_at, c.name as customer_name,
+             (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count,
+             (SELECT array_agg(p.code) FROM order_pallet po JOIN pallets p ON p.id = po.pallet_id WHERE po.order_id = o.id) as pallets
+      FROM orders o
+      LEFT JOIN customers c ON c.id = o.customer_id
+      ORDER BY o.id DESC
+      LIMIT 5
+    `);
+
+    const pallets = palletsRes.rows;
+    const orders = ordersRes.rows;
+
+    if (pallets.length === 0 && orders.length === 0) {
+      return "📋 *Lista reciente*\n\nNo hay pallets ni pedidos registrados.";
+    }
+
+    let msg = "📋 *Lista reciente*\n\n";
+
+    msg += "*PALLETS:*\n";
+    for (const p of pallets) {
+      const status = p.status === 'done' ? '✅' : '🔵';
+      const customers = p.customers?.filter(c => c.name).map(c => c.name).join(', ') || '';
+      const productCount = parseInt(p.product_count) || 0;
+      const baseCount = parseInt(p.base_count) || 0;
+
+      msg += `${status} *${p.code}*\n`;
+      if (p.note) msg += `   📝 ${p.note}\n`;
+      if (customers) msg += `   👤 ${customers}\n`;
+      msg += `   📦 ${productCount} productos · ${baseCount} bases\n\n`;
+    }
+
+    msg += "*PEDIDOS:*\n";
+    for (const o of orders) {
+      const status = o.status === 'done' ? '✅' : (o.status === 'paused' ? '⏸️' : '🔵');
+      const itemsCount = parseInt(o.item_count) || 0;
+      const palletsList = o.pallets?.filter(Boolean).join(', ') || '';
+
+      msg += `${status} *#${o.code}*\n`;
+      if (o.customer_name) msg += `   👤 ${o.customer_name}\n`;
+      msg += `   📦 ${itemsCount} productos`;
+      if (palletsList) msg += ` · Pallets: ${palletsList}`;
+      msg += `\n\n`;
+    }
+
+    msg += "_Escribí *ayuda* para ver comandos_";
+    return msg;
+  } catch (err) {
+    console.error('[Bot] getRecentItemsMessage:', err.message);
+    return "❌ Error al obtener la lista. Intentalo más tarde.";
+  }
+}
 
 /** POST /logout — cierra sesión y limpia la DB */
 app.post('/logout', requireKey, async (_req, res) => {
