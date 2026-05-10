@@ -18,6 +18,11 @@ function formatDate(iso) {
   });
 }
 
+function formatPeso(amount) {
+  if (!amount || amount <= 0) return null;
+  return "$" + Math.round(amount).toLocaleString("es-AR");
+}
+
 /* ── Placeholder de imagen ──────────────────────────────────────────────────── */
 function ProductAvatar({ description, imageUrl, size = "sm" }) {
   const [imgErr, setImgErr] = useState(false);
@@ -129,7 +134,14 @@ function OrderCard({
           </div>
         )}
 
-        {/* Fila 3: barra de progreso (unidades en bases) */}
+        {/* Fila 3: total de precio si está disponible */}
+        {formatPeso(o.total_price) && (
+          <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+            💰 {formatPeso(o.total_price)}
+          </p>
+        )}
+
+        {/* Fila 4: barra de progreso (unidades en bases) */}
         {totalQty > 0 && (
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -151,7 +163,7 @@ function OrderCard({
           </div>
         )}
 
-        {/* Fila 4: pallets vinculados */}
+        {/* Fila 5: pallets vinculados */}
         {pallets.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {pallets.map((p) => (

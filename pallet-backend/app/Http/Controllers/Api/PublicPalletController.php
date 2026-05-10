@@ -49,6 +49,38 @@ class PublicPalletController extends Controller
             'url' => $p->url,
         ])->values();
 
+        // ── Mapa EAN → bases (para mostrar desglose en highlights) ────────
+        // Construido en un único recorrido sobre las bases del pallet.
+        $eanBasesMap      = []; // [ean]           => [{base_id, name, qty}, …]
+        $orderEanBasesMap = []; // [order_id][ean] => [{base_id, name, qty}, …]
+
+        $mergeBase = function (array &$list, int $baseId, string $baseName, int $qty): void {
+            foreach ($list as &$entry) {
+                if ($entry['base_id'] === $baseId) {
+                    $entry['qty'] += $qty;
+                    return;
+                }
+            }
+            unset($entry);
+            $list[] = ['base_id' => $baseId, 'name' => $baseName, 'qty' => $qty];
+        };
+
+        foreach ($pallet->bases as $base) {
+            $baseName = $base->name ?: "Base #{$base->id}";
+            foreach ($base->orderItems as $item) {
+                $ean     = $item->ean;
+                $orderId = $item->order_id;
+                $qty     = (int) ($item->pivot->qty ?? 0);
+
+                $eanBasesMap[$ean] ??= [];
+                $mergeBase($eanBasesMap[$ean], $base->id, $baseName, $qty);
+
+                $orderEanBasesMap[$orderId]         ??= [];
+                $orderEanBasesMap[$orderId][$ean]   ??= [];
+                $mergeBase($orderEanBasesMap[$orderId][$ean], $base->id, $baseName, $qty);
+            }
+        }
+
         // ── Resumen de pedidos: SOLO los ítems asignados a bases ──────────
         $palletItemsMap = [];
         foreach ($pallet->bases as $base) {
@@ -115,6 +147,7 @@ class PublicPalletController extends Controller
                         'qty_order_total' => 0, // suma de qty_order de todos los pedidos
                         'units_per_bulto' => $item['units_per_bulto'] ?? null,
                         'orders'          => [],
+                        'bases'           => $eanBasesMap[$ean] ?? [],
                     ];
                 }
 
@@ -136,6 +169,7 @@ class PublicPalletController extends Controller
                         'qty_order_total' => 0,
                         'units_per_bulto' => $item['units_per_bulto'] ?? null,
                         'orders'          => [],
+                        'bases'           => $orderEanBasesMap[$orderId][$ean] ?? [],
                     ];
                 }
                 $orderScopedEanMaps[$orderId][$ean]['total_qty']       += (int) ($item['qty'] ?? 0);

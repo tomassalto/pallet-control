@@ -1217,6 +1217,7 @@ class TicketOcrService
                 'qty_order'       => $palletInfo['qty_order_total'] ?? $palletInfo['total_qty'],
                 'units_per_bulto' => $palletInfo['units_per_bulto'] ?? null,
                 'orders'          => $palletInfo['orders'],
+                'bases'           => $palletInfo['bases'] ?? [],
                 'img_w'           => $ocrData['img_w'],
                 'img_h'           => $ocrData['img_h'],
                 'ean_bbox'        => $detected['bbox'],

@@ -383,6 +383,15 @@ function TicketPhotoHighlight({ photo }) {
                         Pedido #{h.orders[0].code}
                       </p>
                     )}
+                    {h.bases?.length > 1 && (
+                      <div className="mt-1 pt-1 border-t border-gray-700 space-y-0.5">
+                        {h.bases.map((b, bi) => (
+                          <p key={bi} className="text-[10px] text-gray-300">
+                            🧱 {b.name}: {b.qty} u.
+                          </p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -421,6 +430,11 @@ function TicketPhotoHighlight({ photo }) {
                 <p className="text-[11px] text-gray-500 dark:text-gray-400 font-mono">
                   {h.ean}
                 </p>
+                {h.bases?.length > 1 && (
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                    {h.bases.map((b) => `${b.name}: ${b.qty}`).join(" · ")}
+                  </p>
+                )}
               </div>
               <span className="shrink-0 text-xs font-bold text-green-600 dark:text-green-400">
                 {h.qty_in_pallet} unid.

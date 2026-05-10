@@ -33,6 +33,9 @@ class OrderController extends Controller
                   JOIN order_items oi ON oi.id = pboi.order_item_id
                   WHERE oi.order_id = orders.id) as assigned_qty'
             ))
+            ->addSelect(DB::raw(
+                '(SELECT COALESCE(SUM(qty * price),0) FROM order_items WHERE order_items.order_id = orders.id AND price IS NOT NULL) as total_price'
+            ))
             ->orderByDesc('id');
 
         if ($request->filled('status')) {
