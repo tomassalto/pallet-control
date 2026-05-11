@@ -12,7 +12,7 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 30_000,        // datos frescos por 30s — sin re-fetch innecesario al navegar
       gcTime: 5 * 60_000,       // caché en memoria por 5min después de desmontar
-      retry: 1,                 // 1 reintento en error antes de mostrar el fallo
+      retry: (count, err) => err?.response?.status !== 401 && count < 1,
       refetchOnWindowFocus: false,
     },
   },

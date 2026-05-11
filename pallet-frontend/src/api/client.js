@@ -53,7 +53,9 @@ async function apiFetch(path, options = {}) {
       } else {
         window.location.href = "/login";
       }
-      return;
+      const authErr = new Error("Sesión expirada");
+      authErr.response = { status: 401 };
+      throw authErr;
     }
     const err = new Error(data?.message || `HTTP ${res.status}`);
     err.response = { status: res.status, data };

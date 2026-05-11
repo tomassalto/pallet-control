@@ -8,6 +8,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { useTheme } from "./context/ThemeContext";
 import { PageSpinner } from "./ui/Spinner";
 import { setNavigate } from "./api/client";
+import ErrorBoundary from "./ui/ErrorBoundary";
 
 // Lazy-loaded pages — cada ruta carga su chunk solo cuando se navega a ella
 const Home             = lazy(() => import("./pages/Home"));
@@ -51,6 +52,7 @@ export default function App() {
         theme={dark ? "dark" : "light"}
         toastClassName="!rounded-xl !text-sm"
       />
+      <ErrorBoundary>
       <Suspense fallback={<PageSpinner />}>
         <Routes>
           {/* ── Sin layout: páginas públicas y auth ────────────────────────── */}
@@ -91,6 +93,7 @@ export default function App() {
           />
         </Routes>
       </Suspense>
+      </ErrorBoundary>
     </>
   );
 }
