@@ -3,7 +3,6 @@ import { Link, useParams } from "react-router-dom";
 import { apiGet, apiPost, apiDelete } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
 import BackButton from "../ui/BackButton";
-import Accordion from "../ui/Accordion";
 import OrganizeModal from "../Components/OrganizeModal";
 import QtyConflictModal from "../Components/QtyConflictModal";
 import { PageSpinner } from "../ui/Spinner";
@@ -37,6 +36,7 @@ export default function OrderDetail() {
     items,
     tickets,
     highlightsReady,
+    pendingItemsCount,
     isLoading,
     error: queryError,
     canFinalize,
@@ -175,36 +175,6 @@ export default function OrderDetail() {
     [items],
   );
 
-  // Categorizar productos para pedidos finalizados
-  const categorizedItems = useMemo(() => {
-    if (order?.status !== "done") return null;
-
-    const doneQty = (it) => it.done_qty || 0;
-    const qty = (it) => it.qty || 0;
-
-    // Productos completados/de más: marcados como "done" y alcanzaron o superaron la cantidad
-    const completed = items.filter(
-      (it) => it.status === "done" && doneQty(it) >= qty(it) && doneQty(it) > 0,
-    );
-
-    // Productos incompletos: marcados como "done" pero no alcanzaron la cantidad (y tienen alguna cantidad encontrada)
-    const incomplete = items.filter(
-      (it) => it.status === "done" && doneQty(it) < qty(it) && doneQty(it) > 0,
-    );
-
-    // Productos no encontrados:
-    // - Removidos explícitamente (status === 'removed')
-    // - Marcados como "done" pero con 0 unidades encontradas (no se encontró nada)
-    // - Pendientes con 0 unidades encontradas
-    const notFound = items.filter(
-      (it) =>
-        it.status === "removed" ||
-        (it.status === "done" && doneQty(it) === 0) ||
-        (it.status === "pending" && doneQty(it) === 0),
-    );
-
-    return { completed, incomplete, notFound };
-  }, [items, order?.status]);
 
   async function onAddManual(e) {
     e.preventDefault();
@@ -553,97 +523,61 @@ export default function OrderDetail() {
       )}
 
       {/* items */}
-      {order?.status === "done" && categorizedItems ? (
-        // Vista de acordeón para pedidos finalizados
-        <div className="space-y-3">
-          <Accordion
-            title={`Productos completados/de más (${categorizedItems.completed.length})`}
-            defaultOpen={true}
-          >
-            {categorizedItems.completed.length === 0 ? (
-              <div className="p-4 text-sm text-gray-600 text-center">
-                No hay productos completados
+      {order?.status === "done" ? (
+        // Vista de pedido finalizado
+        <section className="space-y-3">
+          {pendingItemsCount > 0 && (
+            <Link
+              to="/pending-items"
+              className="flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-2xl px-4 py-3 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+            >
+              <span className="text-2xl shrink-0">🚨</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-red-700 dark:text-red-400">
+                  {pendingItemsCount === 1
+                    ? "1 faltante sin resolver"
+                    : `${pendingItemsCount} faltantes sin resolver`}
+                </p>
+                <p className="text-xs text-red-500 dark:text-red-500 mt-0.5">
+                  Hay productos de este pedido que no fueron entregados
+                </p>
               </div>
-            ) : (
-              <div className="p-2 flex flex-col gap-3">
-                {categorizedItems.completed.map((it) => (
-                  <ItemCard
-                    key={it.id}
-                    item={it}
-                    onSelect={() => {
-                      setActionItem(it);
-                      // Para pedidos finalizados, mostrar la cantidad encontrada (done_qty)
-                      setActionQty(String(it.done_qty ?? it.qty ?? ""));
-                    }}
-                    borderColor="border-green-500"
-                    bgColor="bg-green-50"
-                    showDoneQty={true}
-                  />
-                ))}
-              </div>
-            )}
-          </Accordion>
+              <svg
+                className="w-4 h-4 text-red-400 shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={2.5}
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          )}
 
-          <Accordion
-            title={`Productos incompletos (${categorizedItems.incomplete.length})`}
-            defaultOpen={false}
-          >
-            {categorizedItems.incomplete.length === 0 ? (
-              <div className="p-4 text-sm text-gray-600 text-center">
-                No hay productos incompletos
-              </div>
-            ) : (
-              <div className="p-2 flex flex-col gap-3">
-                {categorizedItems.incomplete.map((it) => (
-                  <ItemCard
-                    key={it.id}
-                    item={it}
-                    onSelect={() => {
-                      setActionItem(it);
-                      // Para pedidos finalizados, mostrar la cantidad encontrada (done_qty)
-                      setActionQty(String(it.done_qty ?? it.qty ?? ""));
-                    }}
-                    borderColor="border-yellow-500"
-                    bgColor="bg-yellow-50"
-                    showDoneQty={true}
-                  />
-                ))}
-              </div>
-            )}
-          </Accordion>
+          <div className="flex items-center justify-between">
+            <p className={SEC_LABEL}>Productos del pedido</p>
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 tabular-nums">
+              {items.length} producto{items.length !== 1 ? "s" : ""}
+            </span>
+          </div>
 
-          <Accordion
-            title={`Productos no encontrados (${categorizedItems.notFound.length})`}
-            defaultOpen={false}
-          >
-            {categorizedItems.notFound.length === 0 ? (
-              <div className="p-4 text-sm text-gray-600 text-center">
-                No hay productos no encontrados
-              </div>
-            ) : (
-              <div className="p-2 flex flex-col gap-3">
-                {categorizedItems.notFound.map((it) => (
-                  <ItemCard
-                    key={it.id}
-                    item={it}
-                    onSelect={() => {
-                      setActionItem(it);
-                      // Si está removido, inicializar con 0, sino con la cantidad encontrada o actual
-                      setActionQty(
-                        it.status === "removed"
-                          ? "0"
-                          : String(it.done_qty ?? it.qty ?? ""),
-                      );
-                    }}
-                    borderColor="border-red-500"
-                    bgColor="bg-red-50"
-                    showDoneQty={true}
-                  />
-                ))}
-              </div>
-            )}
-          </Accordion>
-        </div>
+          <div className="flex flex-col gap-3">
+            {[...items]
+              .sort((a, b) => a.description.localeCompare(b.description))
+              .map((it) => (
+                <ItemCard
+                  key={it.id}
+                  item={it}
+                  borderColor={
+                    it.status === "removed"
+                      ? "border-red-200 dark:border-red-800/40"
+                      : "border-gray-200 dark:border-gray-700/50"
+                  }
+                  bgColor="bg-white"
+                />
+              ))}
+          </div>
+        </section>
       ) : items.length === 0 ? (
         // Sin productos
         <div className="text-center py-10 space-y-1">

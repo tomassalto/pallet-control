@@ -124,11 +124,16 @@ class OrderController extends Controller
         $itemsWithLocations = OrderService::enrichItemsWithLocations($order);
         $highlightsReady = OrderService::isHighlightsReady($itemsWithLocations);
 
+        $pendingItemsCount = \App\Models\PendingItem::where('order_id', $order->id)
+            ->where('status', 'open')
+            ->count();
+
         return response()->json([
-            'order'           => $order,
-            'pallets'         => $order->pallets,
-            'items'           => $itemsWithLocations,
-            'highlights_ready' => $highlightsReady,
+            'order'                => $order,
+            'pallets'              => $order->pallets,
+            'items'                => $itemsWithLocations,
+            'highlights_ready'     => $highlightsReady,
+            'pending_items_count'  => $pendingItemsCount,
         ]);
     }
 
