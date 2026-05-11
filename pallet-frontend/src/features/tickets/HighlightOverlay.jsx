@@ -428,6 +428,18 @@ export default function HighlightOverlay({ highlightsUrl, photoUrl, onClose }) {
           </div>
         )}
 
+        {/* Panel inferior desktop — overlay, no desplaza la imagen */}
+        {!loading && data?.ready && !isMobile && (
+          <div className="absolute bottom-0 left-0 right-0 z-10 border-t border-gray-200 dark:border-white/5 bg-white/95 dark:bg-black/80 backdrop-blur-sm">
+            <DesktopBottomPanel
+              selected={selected}
+              pallets={data.pallets}
+              hasSplit={hasSplit}
+              onClear={() => setSelected(null)}
+            />
+          </div>
+        )}
+
         {/* Imagen + highlights — wrapper inline para que escalen juntos */}
         {!loading && data?.ready && (
           <div
@@ -461,7 +473,7 @@ export default function HighlightOverlay({ highlightsUrl, photoUrl, onClose }) {
                 const width  = ((h.bbox.right  - h.bbox.left) / h.img_w) * 100;
                 const height = ((h.bbox.bottom - h.bbox.top)  / h.img_h) * 100;
                 const color  = highlightColor(h);
-                const isOpen = !isMobile && selected?.ean === h.ean;
+                const isSelected = selected?.ean === h.ean;
 
                 return (
                   <div key={i}>
@@ -474,9 +486,7 @@ export default function HighlightOverlay({ highlightsUrl, photoUrl, onClose }) {
                         width:           `${width}%`,
                         height:          `${height}%`,
                         border:          `2px solid ${color}`,
-                        backgroundColor: (isOpen || (isMobile && selected?.ean === h.ean))
-                          ? `${color}45`
-                          : `${color}28`,
+                        backgroundColor: isSelected ? `${color}45` : `${color}28`,
                         borderRadius:    4,
                         cursor:          "pointer",
                         boxSizing:       "border-box",
@@ -496,68 +506,6 @@ export default function HighlightOverlay({ highlightsUrl, photoUrl, onClose }) {
                         setSelected((s) => (s?.ean === h.ean ? null : h));
                       }}
                     />
-
-                    {/* Tooltip inline — solo desktop, siempre oscuro (sobre foto) */}
-                    {isOpen && (
-                      <div
-                        style={{
-                          position:      "absolute",
-                          left:          `${Math.min(left + width + 1, 52)}%`,
-                          top:           `${top}%`,
-                          zIndex:        20,
-                          maxWidth:      190,
-                          pointerEvents: "none",
-                        }}
-                        className="bg-gray-900 text-white text-xs rounded-xl px-3 py-2 shadow-2xl border border-white/10"
-                      >
-                        <p className="font-semibold leading-snug mb-1.5">
-                          {h.description}
-                        </p>
-                        {h.is_split ? (
-                          <div className="space-y-1">
-                            {h.pallet_breakdown.map((b, bi) => {
-                              const c = palletColor(b.color_index);
-                              return (
-                                <div key={bi} className="flex items-center gap-1.5">
-                                  <div
-                                    className="w-1.5 h-1.5 rounded-full shrink-0"
-                                    style={{ backgroundColor: c }}
-                                  />
-                                  <span style={{ color: c }} className="font-bold">
-                                    {b.qty} u.
-                                  </span>
-                                  <span className="text-gray-400 text-[10px] truncate">
-                                    {b.pallet_code}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                            <p className="text-gray-500 text-[10px] border-t border-white/10 pt-1">
-                              Total: {h.qty_order} u. en pedido
-                            </p>
-                          </div>
-                        ) : (
-                          <>
-                            <p style={{ color }} className="font-bold">
-                              {h.pallet_breakdown[0]?.qty ?? h.qty_order} u.
-                              {(h.pallet_breakdown[0]?.qty ?? h.qty_order) < h.qty_order && (
-                                <span className="text-gray-400 font-normal">
-                                  {" "}de {h.qty_order}
-                                </span>
-                              )}
-                            </p>
-                            <p className="text-gray-400 text-[10px] mt-0.5 truncate">
-                              {h.pallet_breakdown[0]?.pallet_code}
-                              {h.pallet_breakdown[0]?.base_name && (
-                                <span className="text-gray-600">
-                                  {" "}/ {h.pallet_breakdown[0].base_name}
-                                </span>
-                              )}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -565,21 +513,15 @@ export default function HighlightOverlay({ highlightsUrl, photoUrl, onClose }) {
         )}
       </div>
 
-      {/* ── Panel inferior ─────────────────────────────────────── */}
-      {!loading && data?.ready && (
+      {/* ── Panel inferior mobile — barra separada ─────────────── */}
+      {!loading && data?.ready && isMobile && (
         <div className="shrink-0 border-t border-gray-200 dark:border-white/5 bg-white/95 dark:bg-black/80 backdrop-blur-sm">
-          {isMobile ? (
-            <LegendPanel pallets={data.pallets} hasSplit={hasSplit} />
-          ) : (
-            <DesktopBottomPanel
-              selected={selected}
-              pallets={data.pallets}
-              hasSplit={hasSplit}
-              onClear={() => setSelected(null)}
-            />
-          )}
+          <LegendPanel pallets={data.pallets} hasSplit={hasSplit} />
         </div>
       )}
+
+      {/* ── Panel inferior desktop — overlay absoluto dentro del área de imagen ── */}
+      {/* Posicionado como absolute para no cambiar el tamaño del área y evitar jitter al hover */}
 
       {/* ── Modal centrado (mobile only) ───────────────────────── */}
       {isMobile && (

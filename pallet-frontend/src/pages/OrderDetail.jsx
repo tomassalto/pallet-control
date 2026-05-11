@@ -716,17 +716,17 @@ export default function OrderDetail() {
       {/* ── Modal reabrir pallet para organizar ──────────────────────────────── */}
       {reopenModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white rounded-2xl p-6 space-y-4">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl p-6 space-y-4 shadow-2xl">
             <div className="text-center space-y-2">
               <div className="text-4xl">🔒</div>
-              <p className="font-bold text-lg">Pallet finalizado</p>
-              <p className="text-sm text-gray-600 leading-snug">
+              <p className="font-bold text-lg text-gray-900 dark:text-white">Pallet finalizado</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300 leading-snug">
                 <span className="font-semibold font-mono">
                   {reopenModal.pallet.code}
                 </span>{" "}
                 está cerrado. Para organizar productos necesitás reabrirlo.
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-400 dark:text-gray-500">
                 Podés volver a finalizarlo después de hacer los cambios.
               </p>
             </div>
@@ -734,14 +734,14 @@ export default function OrderDetail() {
               <button
                 onClick={() => setReopenModal(null)}
                 disabled={reopenModal.reopening}
-                className="flex-1 rounded-xl py-3 border text-sm text-gray-600 disabled:opacity-50"
+                className="flex-1 rounded-xl py-3 border border-gray-200 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={reopenAndOrganize}
                 disabled={reopenModal.reopening}
-                className="flex-1 rounded-xl py-3 bg-green-600 text-white text-sm font-semibold disabled:opacity-60"
+                className="flex-1 rounded-xl py-3 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold disabled:opacity-60 transition-colors"
               >
                 {reopenModal.reopening ? "Reabriendo…" : "Reabrir y organizar"}
               </button>

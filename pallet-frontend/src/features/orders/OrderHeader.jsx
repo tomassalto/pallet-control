@@ -58,8 +58,8 @@ export function OrderHeader({ order, pallets, modalItems, onOrganize, onDetach, 
                         }
                         className={`text-[11px] px-2 py-0.5 rounded-lg font-semibold transition-colors ${
                           isPalletDone
-                            ? "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300"
-                            : "bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-700"
+                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50"
+                            : "bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-700 dark:hover:bg-gray-100"
                         }`}
                       >
                         {isPalletDone ? "🔒" : "📦"} Organizar
