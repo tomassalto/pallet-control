@@ -10,6 +10,7 @@ const COLORS = [
     badge: "bg-blue-600",
     dot: "bg-blue-500",
     customer: "text-gray-700 dark:text-blue-200",
+    hex: "#3B82F6",
   },
   {
     bg: "bg-emerald-50 dark:bg-emerald-950/40",
@@ -17,6 +18,7 @@ const COLORS = [
     badge: "bg-emerald-600",
     dot: "bg-emerald-500",
     customer: "text-gray-700 dark:text-emerald-200",
+    hex: "#10B981",
   },
   {
     bg: "bg-violet-50 dark:bg-violet-950/40",
@@ -24,6 +26,7 @@ const COLORS = [
     badge: "bg-violet-600",
     dot: "bg-violet-500",
     customer: "text-gray-700 dark:text-violet-200",
+    hex: "#A855F7",
   },
   {
     bg: "bg-amber-50 dark:bg-amber-950/40",
@@ -31,6 +34,7 @@ const COLORS = [
     badge: "bg-amber-500",
     dot: "bg-amber-400",
     customer: "text-gray-700 dark:text-amber-200",
+    hex: "#F59E0B",
   },
   {
     bg: "bg-rose-50 dark:bg-rose-950/40",
@@ -38,6 +42,7 @@ const COLORS = [
     badge: "bg-rose-600",
     dot: "bg-rose-500",
     customer: "text-gray-700 dark:text-rose-200",
+    hex: "#EC4899",
   },
   {
     bg: "bg-cyan-50 dark:bg-cyan-950/40",
@@ -45,6 +50,7 @@ const COLORS = [
     badge: "bg-cyan-600",
     dot: "bg-cyan-500",
     customer: "text-gray-700 dark:text-cyan-200",
+    hex: "#06B6D4",
   },
 ];
 const color = (idx) => COLORS[idx % COLORS.length];
@@ -300,7 +306,7 @@ function BaseCard({ base, orderColorMap, baseNum }) {
 }
 
 // ── Foto de ticket con overlays de EAN ───────────────────────────────────────
-function TicketPhotoHighlight({ photo }) {
+function TicketPhotoHighlight({ photo, c }) {
   const [tooltip, setTooltip] = useState(null); // highlight activo para tooltip
   const [imgLoaded, setImgLoaded] = useState(false);
 
@@ -336,8 +342,12 @@ function TicketPhotoHighlight({ photo }) {
                     top: `${top}%`,
                     width: `${width}%`,
                     height: `${height}%`,
+                    borderColor: c.hex,
+                    backgroundColor: tooltip?.ean === h.ean
+                      ? `${c.hex}66`
+                      : `${c.hex}3F`,
                   }}
-                  className="absolute border-2 border-green-400 bg-green-400/25 rounded cursor-pointer transition-opacity hover:bg-green-400/40"
+                  className="absolute border-2 rounded cursor-pointer transition-all"
                   onMouseEnter={() => setTooltip(h)}
                   onMouseLeave={() => setTooltip(null)}
                   onClick={() => setTooltip(tooltip?.ean === h.ean ? null : h)}
@@ -355,7 +365,7 @@ function TicketPhotoHighlight({ photo }) {
                     <p className="font-semibold leading-snug mb-1">
                       {h.description}
                     </p>
-                    <p className="text-green-400 font-bold">
+                    <p className="font-bold" style={{ color: c.hex }}>
                       {h.qty_in_pallet}
                       {h.qty_order && h.qty_order > h.qty_in_pallet && (
                         <span className="text-gray-400 font-normal">
@@ -420,9 +430,10 @@ function TicketPhotoHighlight({ photo }) {
           {photo.highlights.map((h, i) => (
             <div
               key={i}
-              className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/40 rounded-xl px-3 py-2"
+              style={{ borderColor: `${c.hex}66` }}
+              className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800/60 border rounded-xl px-3 py-2"
             >
-              <span className="text-green-500 text-sm shrink-0">✓</span>
+              <span className="text-sm shrink-0" style={{ color: c.hex }}>✓</span>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 line-clamp-1">
                   {h.description}
@@ -436,7 +447,7 @@ function TicketPhotoHighlight({ photo }) {
                   </p>
                 )}
               </div>
-              <span className="shrink-0 text-xs font-bold text-green-600 dark:text-green-400">
+              <span className="shrink-0 text-xs font-bold" style={{ color: c.hex }}>
                 {h.qty_in_pallet} unid.
               </span>
             </div>
@@ -448,7 +459,8 @@ function TicketPhotoHighlight({ photo }) {
 }
 
 // ── Sección de tickets de un pedido ──────────────────────────────────────────
-function TicketSection({ section }) {
+function TicketSection({ section, colorIdx }) {
+  const c = color(colorIdx);
   const [open, setOpen] = useState(true);
   const totalPhotos = section.tickets.reduce((s, t) => s + t.photos.length, 0);
   const totalHighlights = section.tickets.reduce(
@@ -497,7 +509,7 @@ function TicketSection({ section }) {
                     {ticket.note}
                   </p>
                 )}
-                <TicketPhotoHighlight photo={photo} />
+                <TicketPhotoHighlight photo={photo} c={c} />
               </div>
             )),
           )}
@@ -774,12 +786,16 @@ export default function PalletPublicView() {
               🧾 Tickets del cliente
             </h2>
             <p className="text-xs text-gray-400 dark:text-gray-500 mb-3 -mt-1">
-              Los productos resaltados en verde coinciden con lo que está en
-              este pallet.
+              Los productos resaltados coinciden con lo que está en este pallet.
+              El color de cada resaltado corresponde al pedido indicado.
             </p>
             <div className="space-y-3">
               {pallet.ticket_sections.map((section) => (
-                <TicketSection key={section.order_id} section={section} />
+                <TicketSection
+                  key={section.order_id}
+                  section={section}
+                  colorIdx={orderColorMap[section.order_id] ?? 0}
+                />
               ))}
             </div>
           </section>

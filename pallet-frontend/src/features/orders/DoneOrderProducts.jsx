@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { palletColor } from "../../constants/palletColors";
 
 const SEC_LABEL =
   "text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500";
@@ -117,7 +118,7 @@ function BaseSection({ base, items }) {
 
 // ── Acordeón de pallet ────────────────────────────────────────────────────────
 
-function PalletAccordion({ pallet, locationMap }) {
+function PalletAccordion({ pallet, locationMap, colorIndex }) {
   const [open, setOpen] = useState(true);
 
   const palletBaseMap = locationMap[pallet.id] || {};
@@ -133,9 +134,10 @@ function PalletAccordion({ pallet, locationMap }) {
 
   return (
     <div className="relative bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/50 rounded-2xl overflow-hidden shadow-sm">
-      {/* Acento lateral */}
+      {/* Acento lateral — color de identidad del pallet */}
       <div
-        className={`absolute left-0 top-0 bottom-0 w-1 ${isDone ? "bg-green-500" : "bg-blue-500"}`}
+        className="absolute left-0 top-0 bottom-0 w-1"
+        style={{ backgroundColor: palletColor(colorIndex) }}
       />
 
       {/* Header toggle */}
@@ -204,6 +206,14 @@ function PalletAccordion({ pallet, locationMap }) {
 export default function DoneOrderProducts({ pallets, items, pendingItemsCount }) {
   const locationMap = useMemo(() => buildLocationMap(items), [items]);
 
+  // Mismo orden que el backend: sort por pallet.id ascendente → índice de color
+  const palletColorIndexMap = useMemo(() => {
+    const sorted = [...pallets].sort((a, b) => a.id - b.id);
+    const map = {};
+    sorted.forEach((p, i) => { map[p.id] = i; });
+    return map;
+  }, [pallets]);
+
   const removedItems = items.filter(
     (it) => it.status === "removed" && !it.locations?.length,
   );
@@ -246,6 +256,7 @@ export default function DoneOrderProducts({ pallets, items, pendingItemsCount })
           key={pallet.id}
           pallet={pallet}
           locationMap={locationMap}
+          colorIndex={palletColorIndexMap[pallet.id] ?? 0}
         />
       ))}
 

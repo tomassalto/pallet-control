@@ -12,13 +12,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiGet } from "../../api/client";
+import { palletColor, SPLIT_COLOR } from "../../constants/palletColors";
 
-const PALLET_COLORS = ["#3B82F6", "#F97316", "#A855F7", "#10B981", "#EC4899"];
-const SPLIT_COLOR   = "#6B7280";
-
-function palletColor(ci) {
-  return PALLET_COLORS[ci % PALLET_COLORS.length] ?? SPLIT_COLOR;
-}
 function highlightColor(h) {
   if (h.is_split) return SPLIT_COLOR;
   return palletColor(h.pallet_color_index);
