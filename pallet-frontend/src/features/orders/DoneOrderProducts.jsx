@@ -203,7 +203,7 @@ function PalletAccordion({ pallet, locationMap, colorIndex }) {
 
 // ── Export principal ──────────────────────────────────────────────────────────
 
-export default function DoneOrderProducts({ pallets, items, pendingItemsCount }) {
+export default function DoneOrderProducts({ pallets, items }) {
   const locationMap = useMemo(() => buildLocationMap(items), [items]);
 
   // Mismo orden que el backend: sort por pallet.id ascendente → índice de color
@@ -220,35 +220,6 @@ export default function DoneOrderProducts({ pallets, items, pendingItemsCount })
 
   return (
     <section className="space-y-3">
-      {/* Alerta faltantes */}
-      {pendingItemsCount > 0 && (
-        <Link
-          to="/pending-items"
-          className="flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-2xl px-4 py-3 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-        >
-          <span className="text-2xl shrink-0">🚨</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-red-700 dark:text-red-400">
-              {pendingItemsCount === 1
-                ? "1 faltante sin resolver"
-                : `${pendingItemsCount} faltantes sin resolver`}
-            </p>
-            <p className="text-xs text-red-500 dark:text-red-500 mt-0.5">
-              Hay productos de este pedido que no fueron entregados
-            </p>
-          </div>
-          <svg
-            className="w-4 h-4 text-red-400 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2.5}
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </Link>
-      )}
-
       <p className={SEC_LABEL}>Distribución por pallet</p>
 
       {pallets.map((pallet) => (

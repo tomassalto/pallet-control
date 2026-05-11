@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { apiGet, apiPost, apiDelete } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
 import BackButton from "../ui/BackButton";
@@ -523,13 +523,38 @@ export default function OrderDetail() {
         </>
       )}
 
+      {/* Alerta faltantes — visible en cualquier estado del pedido */}
+      {pendingItemsCount > 0 && (
+        <Link
+          to="/pending-items"
+          className="flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-2xl px-4 py-3 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+        >
+          <span className="text-2xl shrink-0">🚨</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-red-700 dark:text-red-400">
+              {pendingItemsCount === 1
+                ? "1 pendiente sin resolver"
+                : `${pendingItemsCount} pendientes sin resolver`}
+            </p>
+            <p className="text-xs text-red-500 dark:text-red-500 mt-0.5 truncate">
+              Hay productos faltantes que todavía no fueron entregados
+            </p>
+          </div>
+          <svg
+            className="w-4 h-4 text-red-400 shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={2.5}
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+      )}
+
       {/* items */}
       {order?.status === "done" ? (
-        <DoneOrderProducts
-          pallets={pallets}
-          items={items}
-          pendingItemsCount={pendingItemsCount}
-        />
+        <DoneOrderProducts pallets={pallets} items={items} />
       ) : items.length === 0 ? (
         // Sin productos
         <div className="text-center py-10 space-y-1">
