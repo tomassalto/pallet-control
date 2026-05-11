@@ -115,6 +115,7 @@ class OrderController extends Controller
         // Eager-load todo en 4 queries fijas (sin N+1 por items)
         $order->load([
             'pallets:id,code,status,created_at',
+            'pallets.bases'        => fn($q) => $q->with('photos')->orderBy('name'),
             'items'                => fn($q) => $q->orderBy('description'),
             'items.bases'          => fn($q) => $q->select('pallet_bases.id', 'pallet_bases.name', 'pallet_bases.pallet_id'),
             'items.bases.pallet:id,code',
