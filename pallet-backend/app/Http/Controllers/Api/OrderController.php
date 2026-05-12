@@ -126,7 +126,7 @@ class OrderController extends Controller
         $highlightsReady = OrderService::isHighlightsReady($itemsWithLocations);
 
         $pendingItemsCount = \App\Models\PendingItem::where('order_id', $order->id)
-            ->where('status', 'open')
+            ->where('status', 'pending')
             ->count();
 
         return response()->json([
