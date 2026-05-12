@@ -5,7 +5,7 @@ import SidebarLayout from "./ui/SidebarLayout";
 import ScrollToTop from "./ui/ScrollToTop";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { useTheme } from "./context/ThemeContext";
+import { useTheme } from "./hooks/useTheme";
 import { PageSpinner } from "./ui/Spinner";
 import { setNavigate } from "./api/client";
 import ErrorBoundary from "./ui/ErrorBoundary";

@@ -6,7 +6,7 @@ import { getStatusConfig } from "../../constants/status";
 const SEC_LABEL =
   "text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500";
 
-export function OrderHeader({ order, pallets, modalItems, onOrganize, onDetach, onReopen, detachingPallet, canFinalize }) {
+export function OrderHeader({ order, pallets, modalItems, onOrganize, onDetach, onReopen, detachingPallet }) {
   if (!order) return null;
 
   const status = getStatusConfig(order.status);

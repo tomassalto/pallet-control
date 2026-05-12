@@ -40,7 +40,7 @@ function OrderChip({ o, activeOrderId, setActiveOrderId }) {
   );
 }
 
-export function PalletHeader({ pallet, orders, activeOrderId, setActiveOrderId, onShowQR, onAddBase, onDeletePallet }) {
+export function PalletHeader({ pallet, orders, activeOrderId, setActiveOrderId, onShowQR }) {
   if (!pallet) return null;
 
   const status = getPalletStatusConfig(pallet.status);

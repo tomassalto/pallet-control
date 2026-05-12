@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import { toastSuccess, toastError } from "../ui/toast";
 import AuthLayout from "../ui/AuthLayout";
 import Spinner from "../ui/Spinner";

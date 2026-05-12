@@ -42,8 +42,6 @@ export default function OrderDetail() {
     isLoading,
     error: queryError,
     canFinalize,
-    attachPallet,
-    detachPallet,
     finalize,
     finalizing,
     refetch,
@@ -51,8 +49,6 @@ export default function OrderDetail() {
 
   // Función de refetch para los hooks que necesitan recargar
   const load = () => refetch();
-
-  const [tab, setTab] = useState("pending"); // pending | done | removed
 
   // add manual
   const [eanOrLast4, setEanOrLast4] = useState("");
@@ -162,11 +158,6 @@ export default function OrderDetail() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
-
-  const filtered = useMemo(
-    () => items.filter((it) => it.status === tab),
-    [items, tab],
-  );
 
   // Items a mostrar en el modal "Organizar en pallet" — todos los que tienen qty > 0
   const modalItems = useMemo(

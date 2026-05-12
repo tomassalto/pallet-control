@@ -1,5 +1,5 @@
 import { Navigate } from "react-router-dom";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import { PageSpinner } from "../ui/Spinner";
 
 export default function RequireAuth({ children }) {

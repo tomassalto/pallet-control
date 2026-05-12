@@ -28,7 +28,7 @@ export default function ProductLookup() {
           setProduct(data);
           setLoading(false);
           return;
-        } catch (e) {
+        } catch {
           // seguimos intentando
         }
       }
@@ -38,9 +38,6 @@ export default function ProductLookup() {
     }
   }
 
-  function normalizeEan(text) {
-    return String(text).replace(/\D/g, ""); // deja solo números
-  }
   function normalizeBarcode(text) {
     // deja solo números (EAN/UPC son numéricos)
     return String(text || "").replace(/\D/g, "");

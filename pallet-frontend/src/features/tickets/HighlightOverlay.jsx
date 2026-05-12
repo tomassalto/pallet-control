@@ -10,6 +10,7 @@
  * header, leyenda y modal se adaptan con dark: classes.
  */
 
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiGet } from "../../api/client";
 import { palletColor, SPLIT_COLOR } from "../../constants/palletColors";

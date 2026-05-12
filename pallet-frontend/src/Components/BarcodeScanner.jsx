@@ -17,11 +17,15 @@ export default function BarcodeScanner({ onDetected, onClose }) {
 
       try {
         await scanner.stop();
-      } catch (_e) {}
+      } catch {
+        // ignore
+      }
 
       try {
         await scanner.clear();
-      } catch (_e) {}
+      } catch {
+        // ignore
+      }
 
       scannerRef.current = null;
     }

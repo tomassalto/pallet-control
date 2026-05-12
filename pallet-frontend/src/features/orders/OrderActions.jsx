@@ -3,7 +3,7 @@ import { ActionItem, Icons } from "../../ui/ActionList";
 const SEC_LABEL =
   "text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500";
 
-export function OrderActions({ order, onAttachPallet, onImport, onFinalize, onAddProduct, finalizing, canFinalize }) {
+export function OrderActions({ order, onAttachPallet, onFinalize, onAddProduct, canFinalize }) {
   if (!order) return null;
 
   if (order.status === "done") {

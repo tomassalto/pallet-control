@@ -16,14 +16,9 @@ const SIZE_CLASSES = {
   "10xl": "text-10xl",
 };
 
-export default function Title({
-  children,
-  size = "",
-  className = "text-4xl lg:text-5xl",
-  as: Component = "h1",
-}) {
-  // size prop solo aplica si se pasa explícitamente; si no, className controla el tamaño
+export default function Title({ children, size = "", className = "text-4xl lg:text-5xl", as: As = "h1" }) {
   const sizeClass = size ? SIZE_CLASSES[size] : "";
+  const Component = As;
 
   return (
     <Component

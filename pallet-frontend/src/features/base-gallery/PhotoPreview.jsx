@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
 import { Stage, Layer, Text, Image as KonvaImage } from "react-konva";
 import close_eye from "../../assets/icons/close_eye.svg";

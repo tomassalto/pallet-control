@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import { apiGet, apiPatch, apiPost } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
 import Title from "../ui/Title";

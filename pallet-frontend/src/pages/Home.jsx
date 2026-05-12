@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../api/client";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import { PageSpinner } from "../ui/Spinner";
 import { ActionItem, Icons } from "../ui/ActionList";
 import { toastError } from "../ui/toast";

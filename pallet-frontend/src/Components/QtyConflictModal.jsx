@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 /**
  * Bottom-sheet modal shown when the user tries to reduce an order item's qty
  * below the total already organized across pallet bases.
