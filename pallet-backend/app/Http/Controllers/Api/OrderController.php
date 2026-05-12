@@ -18,6 +18,14 @@ class OrderController extends Controller
 {
     public function index(Request $request)
     {
+        // Verificar si la tabla pending_items existe
+        $hasPendingTable = false;
+        try {
+            $hasPendingTable = !empty(\Illuminate\Support\Facades\DB::select("SHOW TABLES LIKE 'pending_items'"));
+        } catch (\Exception $e) {
+            $hasPendingTable = false;
+        }
+
         $q = Order::with([
                 'customer',
                 'pallets:id,code,status',
@@ -28,21 +36,22 @@ class OrderController extends Controller
                 '(SELECT COALESCE(SUM(qty),0) FROM order_items WHERE order_items.order_id = orders.id) as total_qty'
             ))
             ->addSelect(DB::raw(
-                '(SELECT COALESCE(SUM(pboi.qty),0)
-                  FROM pallet_base_order_items pboi
-                  JOIN order_items oi ON oi.id = pboi.order_item_id
-                  WHERE oi.order_id = orders.id) as assigned_qty'
+                '(SELECT COALESCE(SUM(pboi.qty),0) FROM pallet_base_order_items pboi JOIN order_items oi ON oi.id = pboi.order_item_id WHERE oi.order_id = orders.id) as assigned_qty'
             ))
             ->addSelect(DB::raw(
                 '(SELECT COALESCE(SUM(qty * price),0) FROM order_items WHERE order_items.order_id = orders.id AND price IS NOT NULL) as total_price'
-            ))
-            ->addSelect(DB::raw(
+            ));
+
+        if ($hasPendingTable) {
+            $q->addSelect(DB::raw(
                 "(SELECT COUNT(*) FROM pending_items WHERE pending_items.order_id = orders.id AND pending_items.status = 'pending') as pending_items_count"
             ))
             ->addSelect(DB::raw(
                 "(SELECT GROUP_CONCAT(DISTINCT order_item_id) FROM pending_items WHERE pending_items.order_id = orders.id AND pending_items.status = 'pending') as pending_item_ids"
-            ))
-            ->orderByDesc('id');
+            ));
+        }
+
+        $q->orderByDesc('id');
 
         if ($request->filled('status')) {
             $q->where('status', $request->string('status'));
