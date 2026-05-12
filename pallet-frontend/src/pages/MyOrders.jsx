@@ -587,7 +587,7 @@ export default function MyOrders() {
           )}
 
           {completedOrders.length > 0 && (
-            <Accordion title={`Completados (${completedOrders.length})`}>
+            <Accordion title={`Completados (${completedOrders.length})`} defaultOpen>
               <div className="flex flex-col gap-2 pt-1">
                 {completedOrders.map((o) => (
                   <OrderCard key={o.id} o={o} dim />

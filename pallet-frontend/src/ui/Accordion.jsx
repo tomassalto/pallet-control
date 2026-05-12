@@ -7,10 +7,10 @@ export default function Accordion({ title, children, defaultOpen = false }) {
     <div className="border rounded-xl overflow-hidden">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 flex items-center justify-between text-left"
+        className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between text-left"
       >
         <span className="font-semibold text-sm">{title}</span>
-        <span className="text-gray-500 text-lg">{isOpen ? "−" : "+"}</span>
+        <span className="text-gray-500 dark:text-gray-400 text-lg">{isOpen ? "−" : "+"}</span>
       </button>
       {isOpen && <div className="p-2">{children}</div>}
     </div>
