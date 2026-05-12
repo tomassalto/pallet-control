@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Order;
 use App\Models\OrderTicketPhoto;
 use App\Models\Pallet;
@@ -30,10 +31,10 @@ class DashboardController extends Controller
             WHERE o.status != 'done'
         ")->pending;
 
-        // OCR consumido este mes
-        $ocrThisMonth = OrderTicketPhoto::whereNotNull('ocr_processed_at')
-            ->whereYear('ocr_processed_at', now()->year)
-            ->whereMonth('ocr_processed_at', now()->month)
+        // OCR consumido este mes - contar desde activity logs (persiste aunque se borre la foto)
+        $ocrThisMonth = ActivityLog::where('action', 'order_ticket_ocr_triggered')
+            ->whereYear('created_at', now()->year)
+            ->whereMonth('created_at', now()->month)
             ->count();
 
         // Pendientes (PendingItems sin resolver)
