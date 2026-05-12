@@ -38,6 +38,7 @@ export default function OrderDetail() {
     tickets,
     highlightsReady,
     pendingItemsCount,
+    pendingItemIds,
     isLoading,
     error: queryError,
     canFinalize,
@@ -176,6 +177,12 @@ export default function OrderDetail() {
     [items],
   );
 
+  // IDs de items con pendientes para highlight visual
+  const pendingItemIdsSet = useMemo(
+    () => new Set(pendingItemIds),
+    [pendingItemIds],
+  );
+
 
   async function onAddManual(e) {
     e.preventDefault();
@@ -216,7 +223,8 @@ export default function OrderDetail() {
     }
   }
 
-  function rowClass(status) {
+  function rowClass(status, hasPending) {
+    if (hasPending) return "border-red-500";
     if (status === "done") return "border-green-500";
     if (status === "removed") return "border-red-500 opacity-80";
     // pendiente / default: tarjeta neutra
@@ -592,20 +600,23 @@ export default function OrderDetail() {
           <div className="flex flex-col gap-3">
             {[...items]
               .sort((a, b) => a.description.localeCompare(b.description))
-              .map((it) => (
-                <ItemCard
-                  key={it.id}
-                  item={it}
-                  onSelect={() => {
-                    setActionItem(it);
-                    setActionQty(
-                      it.status === "removed" ? "0" : String(it.qty ?? ""),
-                    );
-                  }}
-                  borderColor={rowClass(it.status)}
-                  bgColor="bg-gray-50"
-                />
-              ))}
+              .map((it) => {
+                const isPending = pendingItemIdsSet.has(it.id);
+                return (
+                  <ItemCard
+                    key={it.id}
+                    item={it}
+                    onSelect={() => {
+                      setActionItem(it);
+                      setActionQty(
+                        it.status === "removed" ? "0" : String(it.qty ?? ""),
+                      );
+                    }}
+                    borderColor={rowClass(it.status, isPending)}
+                    bgColor={isPending ? "bg-red-50 dark:bg-red-900/20" : "bg-gray-50"}
+                  />
+                );
+              })}
           </div>
 
           <button onClick={load} className={BTN_SEC}>

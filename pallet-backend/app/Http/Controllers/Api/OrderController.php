@@ -135,12 +135,18 @@ class OrderController extends Controller
             ->where('status', 'pending')
             ->count();
 
+        $pendingItemIds = \App\Models\PendingItem::where('order_id', $order->id)
+            ->where('status', 'pending')
+            ->pluck('order_item_id')
+            ->toArray();
+
         return response()->json([
             'order'                => $order,
             'pallets'              => $order->pallets,
             'items'                => $itemsWithLocations,
             'highlights_ready'     => $highlightsReady,
             'pending_items_count'  => $pendingItemsCount,
+            'pending_item_ids'     => $pendingItemIds,
         ]);
     }
 

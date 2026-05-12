@@ -62,6 +62,7 @@ export function useOrderDetail(orderId) {
     tickets: orderQuery.data?.order?.tickets || [],
     highlightsReady: orderQuery.data?.highlights_ready ?? false,
     pendingItemsCount: orderQuery.data?.pending_items_count ?? 0,
+    pendingItemIds: orderQuery.data?.pending_item_ids ?? [],
     isLoading: orderQuery.isLoading,
     error: orderQuery.error,
     canFinalize: canFinalizeQuery.data?.can_finalize ?? false,
