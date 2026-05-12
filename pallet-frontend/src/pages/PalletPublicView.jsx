@@ -1,59 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { apiGet } from "../api/client";
-
-// ── Paleta de colores por pedido ─────────────────────────────────────────────
-const COLORS = [
-  {
-    bg: "bg-blue-50 dark:bg-blue-950/40",
-    border: "border-blue-200 dark:border-blue-800",
-    badge: "bg-blue-600",
-    dot: "bg-blue-500",
-    customer: "text-gray-700 dark:text-blue-200",
-    hex: "#3B82F6",
-  },
-  {
-    bg: "bg-emerald-50 dark:bg-emerald-950/40",
-    border: "border-emerald-200 dark:border-emerald-800",
-    badge: "bg-emerald-600",
-    dot: "bg-emerald-500",
-    customer: "text-gray-700 dark:text-emerald-200",
-    hex: "#10B981",
-  },
-  {
-    bg: "bg-violet-50 dark:bg-violet-950/40",
-    border: "border-violet-200 dark:border-violet-800",
-    badge: "bg-violet-600",
-    dot: "bg-violet-500",
-    customer: "text-gray-700 dark:text-violet-200",
-    hex: "#A855F7",
-  },
-  {
-    bg: "bg-amber-50 dark:bg-amber-950/40",
-    border: "border-amber-200 dark:border-amber-800",
-    badge: "bg-amber-500",
-    dot: "bg-amber-400",
-    customer: "text-gray-700 dark:text-amber-200",
-    hex: "#F59E0B",
-  },
-  {
-    bg: "bg-rose-50 dark:bg-rose-950/40",
-    border: "border-rose-200 dark:border-rose-800",
-    badge: "bg-rose-600",
-    dot: "bg-rose-500",
-    customer: "text-gray-700 dark:text-rose-200",
-    hex: "#EC4899",
-  },
-  {
-    bg: "bg-cyan-50 dark:bg-cyan-950/40",
-    border: "border-cyan-200 dark:border-cyan-800",
-    badge: "bg-cyan-600",
-    dot: "bg-cyan-500",
-    customer: "text-gray-700 dark:text-cyan-200",
-    hex: "#06B6D4",
-  },
-];
-const color = (idx) => COLORS[idx % COLORS.length];
+import { getPalletColorTheme } from "../constants/palletColors";
 
 // ── Fila de producto ─────────────────────────────────────────────────────────
 function ProductRow({ item, c }) {
@@ -168,7 +116,7 @@ function PhotoStrip({ photos }) {
 
 // ── Tarjeta de pedido (resumen global) ───────────────────────────────────────
 function OrderCard({ order, idx }) {
-  const c = color(idx);
+  const c = getPalletColorTheme(idx);
   const [open, setOpen] = useState(true);
 
   return (
@@ -216,7 +164,7 @@ function OrderCard({ order, idx }) {
 
 // ── Grupo de productos dentro de una base (agrupado por pedido) ──────────────
 function BaseOrderGroup({ group, idx }) {
-  const c = color(idx);
+  const c = getPalletColorTheme(idx);
   return (
     <div>
       {/* Sub-header del pedido dentro de la base */}
@@ -460,7 +408,7 @@ function TicketPhotoHighlight({ photo, c }) {
 
 // ── Sección de tickets de un pedido ──────────────────────────────────────────
 function TicketSection({ section, colorIdx }) {
-  const c = color(colorIdx);
+  const c = getPalletColorTheme(colorIdx);
   const [open, setOpen] = useState(true);
   const totalPhotos = section.tickets.reduce((s, t) => s + t.photos.length, 0);
   const totalHighlights = section.tickets.reduce(
