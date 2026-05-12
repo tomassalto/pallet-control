@@ -39,6 +39,9 @@ class OrderController extends Controller
             ->addSelect(DB::raw(
                 "(SELECT COUNT(*) FROM pending_items WHERE pending_items.order_id = orders.id AND pending_items.status = 'pending') as pending_items_count"
             ))
+            ->addSelect(DB::raw(
+                "(SELECT GROUP_CONCAT(DISTINCT order_item_id) FROM pending_items WHERE pending_items.order_id = orders.id AND pending_items.status = 'pending') as pending_item_ids"
+            ))
             ->orderByDesc('id');
 
         if ($request->filled('status')) {

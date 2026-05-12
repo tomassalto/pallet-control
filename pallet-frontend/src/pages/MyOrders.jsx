@@ -61,6 +61,11 @@ function OrderCard({
   const [expanded, setExpanded] = useState(false);
 
   const hasPending = o.pending_items_count > 0;
+  const pendingItemIds = useMemo(() => {
+    const ids = o.pending_item_ids;
+    if (!ids) return new Set();
+    return new Set(ids.split(",").map(Number));
+  }, [o.pending_item_ids]);
   const c = hasPending
     ? {
         label: "Pendiente",
@@ -235,29 +240,38 @@ function OrderCard({
           <div className="border-t border-gray-100 dark:border-gray-700/40 px-4 py-3 space-y-3">
             {/* Lista completa con imágenes */}
             <div className="space-y-2">
-              {items.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 min-w-0">
-                  <ProductAvatar
-                    description={item.description}
-                    imageUrl={item.image_url}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-800 dark:text-gray-100 leading-snug truncate">
-                      {item.description}
-                    </p>
-                    <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
-                      {item.qty} unidades
-                    </p>
+              {items.map((item) => {
+                const isPending = pendingItemIds.has(item.id);
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex items-center gap-3 min-w-0 ${isPending ? "bg-red-50 dark:bg-red-900/20 -mx-2 px-2 rounded-lg" : ""}`}
+                  >
+                    <ProductAvatar
+                      description={item.description}
+                      imageUrl={item.image_url}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs leading-snug truncate ${isPending ? "text-red-700 dark:text-red-300 font-semibold" : "text-gray-800 dark:text-gray-100"}`}>
+                        {item.description}
+                        {isPending && " 🚨"}
+                      </p>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                        {item.qty} unidades
+                      </p>
+                    </div>
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        isPending
+                          ? "bg-red-500 animate-pulse"
+                          : item.status === "done"
+                            ? "bg-green-400"
+                            : "bg-gray-300 dark:bg-gray-600"
+                      }`}
+                    />
                   </div>
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      item.status === "done"
-                        ? "bg-green-400"
-                        : "bg-gray-300 dark:bg-gray-600"
-                    }`}
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Botón finalizar */}
