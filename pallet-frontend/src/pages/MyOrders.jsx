@@ -60,7 +60,19 @@ function OrderCard({
 }) {
   const [expanded, setExpanded] = useState(false);
 
-  const c = cfg(o.status);
+  const hasPending = o.pending_items_count > 0;
+  const c = hasPending
+    ? {
+        label: "Pendiente",
+        color: "red",
+        bg: "bg-red-50 dark:bg-red-900/20",
+        text: "text-red-700 dark:text-red-300",
+        border: "border-red-200 dark:border-red-800",
+        accent: "bg-red-500",
+        badge: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+        bar: "bg-red-500",
+      }
+    : cfg(o.status);
   const totalQty = o.total_qty ?? 0;
   const assignedQty = o.assigned_qty ?? 0;
   const pct = totalQty > 0 ? Math.round((assignedQty / totalQty) * 100) : 0;
@@ -101,6 +113,11 @@ function OrderCard({
               <span className={`w-1.5 h-1.5 rounded-full ${c.accent}`} />
               {c.label}
             </span>
+            {hasPending && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 shrink-0 animate-pulse">
+                🚨 {o.pending_items_count}
+              </span>
+            )}
             {canFinalize && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 shrink-0">
                 ✓ Listo

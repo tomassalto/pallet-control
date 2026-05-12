@@ -36,6 +36,9 @@ class OrderController extends Controller
             ->addSelect(DB::raw(
                 '(SELECT COALESCE(SUM(qty * price),0) FROM order_items WHERE order_items.order_id = orders.id AND price IS NOT NULL) as total_price'
             ))
+            ->addSelect(DB::raw(
+                "(SELECT COUNT(*) FROM pending_items WHERE pending_items.order_id = orders.id AND pending_items.status = 'pending') as pending_items_count"
+            ))
             ->orderByDesc('id');
 
         if ($request->filled('status')) {
