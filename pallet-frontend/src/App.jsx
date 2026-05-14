@@ -31,7 +31,7 @@ const OrderHistory     = lazy(() => import("./pages/OrderHistory"));
 const AllLogs          = lazy(() => import("./pages/AllLogs"));
 const AdminUsers       = lazy(() => import("./pages/AdminUsers"));
 const AdminStorage     = lazy(() => import("./pages/AdminStorage"));
-const PalletPublicView = lazy(() => import("./pages/PalletPublicView"));
+const OrderPublicView  = lazy(() => import("./pages/OrderPublicView"));
 const PendingItems     = lazy(() => import("./pages/PendingItems"));
 
 export default function App() {
@@ -56,8 +56,8 @@ export default function App() {
       <Suspense fallback={<PageSpinner />}>
         <Routes>
           {/* ── Sin layout: páginas públicas y auth ────────────────────────── */}
-          <Route path="/pallet-view/:code" element={<PalletPublicView />} />
-          <Route path="/app/pallet-view/:code" element={<PalletPublicView />} />
+          <Route path="/order-view/:code" element={<OrderPublicView />} />
+          <Route path="/app/order-view/:code" element={<OrderPublicView />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
