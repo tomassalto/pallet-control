@@ -5,7 +5,6 @@ import { apiDelete, apiPost } from "../api/client";
 import { toastError, toastSuccess } from "../ui/toast";
 import BackButton from "../ui/BackButton";
 import ConfirmModal from "../ui/ConfirmModal";
-import QRModal from "../ui/QRModal";
 import { PageSpinner } from "../ui/Spinner";
 import { StatusBadge } from "../ui/EntityCard";
 import { ActionItem, Icons } from "../ui/ActionList";
@@ -86,7 +85,6 @@ export default function PalletDetail() {
 
   // Estado UI
   const [confirmModal, setConfirmModal] = useState(null);
-  const [showQR, setShowQR]             = useState(false);
   const [activeOrderId, setActiveOrderId] = useState(null);
   const [openAssign, setOpenAssign] = useState(false);
   const [openImport, setOpenImport] = useState(false);
@@ -250,30 +248,9 @@ export default function PalletDetail() {
 
       {/* Header */}
       <div className="space-y-2.5">
-        <div className="flex items-start justify-between gap-3">
-          <h1 className="font-mono font-bold text-2xl md:text-3xl text-gray-900 dark:text-white leading-tight">
-            {pallet.code}
-          </h1>
-          <button
-            onClick={() => setShowQR(true)}
-            title="Ver QR del pallet"
-            className="shrink-0 p-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-5 h-5 text-gray-600 dark:text-gray-300"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.8}
-            >
-              <rect x="3" y="3" width="7" height="7" rx="1" />
-              <rect x="14" y="3" width="7" height="7" rx="1" />
-              <rect x="3" y="14" width="7" height="7" rx="1" />
-              <path d="M14 14h2v2h-2zM18 14h3v2h-3zM14 18h3v3h-3zM19 18h2v3h-2z" />
-            </svg>
-          </button>
-        </div>
+        <h1 className="font-mono font-bold text-2xl md:text-3xl text-gray-900 dark:text-white leading-tight">
+          {pallet.code}
+        </h1>
         <div className="flex items-center gap-3 flex-wrap">
           <StatusBadge
             label={palletDone ? "Completo" : "En proceso"}
@@ -284,15 +261,6 @@ export default function PalletDetail() {
               Creado el {formatDate(pallet.created_at)}
             </span>
           )}
-          <a
-            href={`/pallet-view/${pallet.code}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-          >
-            <ExternalLinkIcon />
-            Vista pública
-          </a>
         </div>
       </div>
 
@@ -322,14 +290,6 @@ export default function PalletDetail() {
 
           <ActionItem icon={Icons.Gallery} iconBg="bg-amber-500" label="Galería" sublabel="Fotos del pallet completo" to={`/pallet/${palletId}/gallery`} />
           <ActionItem icon={Icons.History} iconBg="bg-gray-500" label="Historial" sublabel="Registro de actividad" to={`/pallet/${palletId}/history`} />
-
-          <ActionItem
-            icon={Icons.Eye}
-            iconBg="bg-blue-600"
-            label="Vista pública"
-            sublabel="Ver como cliente vía QR"
-            href={`/pallet-view/${pallet.code}`}
-          />
 
           {palletDone && (
             <button onClick={handleReopen} className={BTN_GREEN}>Reabrir pallet</button>
@@ -494,14 +454,6 @@ export default function PalletDetail() {
         confirmColor={confirmModal?.confirmColor}
       />
 
-      {/* Modal: QR vista pública */}
-      {showQR && (
-        <QRModal
-          order={null}
-          pallet={pallet}
-          onClose={() => setShowQR(false)}
-        />
-      )}
     </div>
   );
 }
