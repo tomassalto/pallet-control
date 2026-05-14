@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { StatusBadge } from "../../ui/EntityCard";
 import BackButton from "../../ui/BackButton";
@@ -6,7 +7,29 @@ import { getStatusConfig } from "../../constants/status";
 const SEC_LABEL =
   "text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500";
 
-export function OrderHeader({ order, pallets, modalItems, onOrganize, onDetach, onReopen, detachingPallet }) {
+async function copyOrderViewUrl(code, setCopied) {
+  const url = `${window.location.origin}/order-view/${code}`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: `Pedido ${code}`, url });
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+  } catch {
+    const el = document.createElement("textarea");
+    el.value = url;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+  }
+  setCopied(true);
+  setTimeout(() => setCopied(false), 2000);
+}
+
+export function OrderHeader({ order, pallets, modalItems, onOrganize, onDetach, onReopen, detachingPallet, onShowQR }) {
+  const [copied, setCopied] = useState(false);
+
   if (!order) return null;
 
   const status = getStatusConfig(order.status);
@@ -21,11 +44,41 @@ export function OrderHeader({ order, pallets, modalItems, onOrganize, onDetach, 
       )}
 
       <div className="space-y-2.5">
-        <h1 className="font-mono font-bold text-2xl md:text-3xl text-gray-900 dark:text-white leading-tight">
-          Pedido #{order.code}
-        </h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="font-mono font-bold text-2xl md:text-3xl text-gray-900 dark:text-white leading-tight">
+            Pedido #{order.code}
+          </h1>
+          <button
+            onClick={onShowQR}
+            title="Ver QR del pedido"
+            className="shrink-0 p-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-5 h-5 text-gray-600 dark:text-gray-300"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.8}
+            >
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <path d="M14 14h2v2h-2zM18 14h3v2h-3zM14 18h3v3h-3zM19 18h2v3h-2z" />
+            </svg>
+          </button>
+        </div>
 
-        <StatusBadge label={status.label} color={status.color} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <StatusBadge label={status.label} color={status.color} />
+          <button
+            onClick={() => copyOrderViewUrl(order.code, setCopied)}
+            className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors"
+            title="Compartir vista pública del pedido"
+          >
+            {copied ? "✓ Copiado" : "🔗 Compartir vista"}
+          </button>
+        </div>
 
         {pallets.length > 0 && (
           <div className="space-y-2 pt-1">

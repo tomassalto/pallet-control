@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiPatch, apiDelete } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
 import BackButton from "../ui/BackButton";
+import RequestCard from "./RequestCard";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function relativeDate(iso) {
@@ -544,7 +545,7 @@ function PendingCard({ item, onResolve, onReopen, onDelete }) {
 // ── Vista principal ───────────────────────────────────────────────────────────
 export default function PendingItems() {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState("pending"); // "pending" | "resolved"
+  const [tab, setTab] = useState("pending"); // "pending" | "resolved" | "requests"
   const [showCreate, setShowCreate] = useState(false);
 
   const { data: items = [], isLoading: loading } = useQuery({
@@ -552,6 +553,21 @@ export default function PendingItems() {
     queryFn: () => apiGet("/pending-items"),
     onError: () => toastError("Error al cargar los pendientes"),
   });
+
+  const { data: requests = [], isLoading: loadingRequests } = useQuery({
+    queryKey: ["missing-item-requests"],
+    queryFn: () => apiGet("/admin/missing-item-requests"),
+    onError: () => toastError("Error al cargar las solicitudes"),
+  });
+
+  function handleRequestUpdated(updated) {
+    queryClient.setQueryData(["missing-item-requests"], (prev = []) =>
+      prev.map((r) => (r.id === updated.id ? updated : r)),
+    );
+    if (updated.status === "approved") {
+      queryClient.invalidateQueries({ queryKey: ["pending-items"] });
+    }
+  }
 
   async function handleResolve(id) {
     try {
@@ -600,7 +616,8 @@ export default function PendingItems() {
 
   const pendingList = items.filter((i) => i.status === "pending");
   const resolvedList = items.filter((i) => i.status === "resolved");
-  const current = tab === "pending" ? pendingList : resolvedList;
+  const pendingRequestsCount = requests.filter((r) => r.status === "pending_review").length;
+  const current = tab === "pending" ? pendingList : tab === "resolved" ? resolvedList : requests;
 
   return (
     <div className="space-y-6 py-2">
@@ -689,10 +706,25 @@ export default function PendingItems() {
             </span>
           )}
         </button>
+        <button
+          onClick={() => setTab("requests")}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold transition-colors ${
+            tab === "requests"
+              ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+          }`}
+        >
+          Solicitudes
+          {pendingRequestsCount > 0 && (
+            <span className="bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+              {pendingRequestsCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Lista */}
-      {loading ? (
+      {(tab === "requests" ? loadingRequests : loading) ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
             <div
@@ -703,15 +735,23 @@ export default function PendingItems() {
         </div>
       ) : current.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-5xl mb-4">{tab === "pending" ? "✅" : "📭"}</p>
+          <p className="text-5xl mb-4">{tab === "pending" ? "✅" : tab === "resolved" ? "📭" : "📋"}</p>
           <p className="text-base font-semibold text-gray-700 dark:text-gray-300">
-            {tab === "pending" ? "¡Todo al día!" : "Sin pendientes resueltos"}
+            {tab === "pending" ? "¡Todo al día!" : tab === "resolved" ? "Sin pendientes resueltos" : "Sin solicitudes"}
           </p>
           <p className="text-sm text-gray-400 mt-1">
             {tab === "pending"
               ? "No hay productos con faltantes pendientes"
-              : "Los pendientes resueltos aparecerán acá"}
+              : tab === "resolved"
+              ? "Los pendientes resueltos aparecerán acá"
+              : "Los clientes pueden reportar faltantes desde la vista pública del pedido"}
           </p>
+        </div>
+      ) : tab === "requests" ? (
+        <div className="space-y-3">
+          {current.map((req) => (
+            <RequestCard key={req.id} item={req} onUpdated={handleRequestUpdated} />
+          ))}
         </div>
       ) : (
         <div className="space-y-3">

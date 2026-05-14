@@ -10,8 +10,9 @@ import { toastSuccess, toastError } from "../ui/toast";
  * @param {object}   deps
  * @param {Function} deps.setItems — setter del array de ítems del pedido
  * @param {Function} deps.load     — recarga los datos del pedido
+ * @param {Function} deps.refreshOrder — opcional, invalida cache de React Query
  */
-export function useItemAction({ setItems, load }) {
+export function useItemAction({ setItems, load, refreshOrder }) {
   // null | objeto del ítem seleccionado
   const [actionItem, setActionItem] = useState(null);
   const [actionQty, setActionQty] = useState("");
@@ -71,6 +72,7 @@ export function useItemAction({ setItems, load }) {
       toastSuccess(`Cantidad actualizada: ${newQty} unidades`);
     }
     setActionItem(null);
+    if (refreshOrder) refreshOrder();
   }
 
   /** Ajusta keepQty de una ubicación en el modal de conflicto */

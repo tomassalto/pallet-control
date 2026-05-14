@@ -1,14 +1,10 @@
 import { useEffect } from "react";
 import QRCode from "react-qr-code";
 
-export default function QRModal({ order, pallet, onClose }) {
-  const url = pallet
-    ? `${window.location.origin}/pallet-view/${pallet.code}`
-    : `${window.location.origin}/order/${order?.id}`;
+export default function QRModal({ order, onClose }) {
+  const url = `${window.location.origin}/order-view/${order?.code}`;
+  const label = `Pedido #${order?.code}`;
 
-  const label = pallet ? `Pallet ${pallet.code}` : `Pedido #${order?.code}`;
-
-  // Cerrar con Escape
   useEffect(() => {
     const handler = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", handler);
@@ -24,7 +20,7 @@ export default function QRModal({ order, pallet, onClose }) {
       <head>
         <meta charset="UTF-8" />
         <title>${label}</title>
-        
+
         <style>
           @page {
             margin: 0;
@@ -75,7 +71,7 @@ export default function QRModal({ order, pallet, onClose }) {
           <div class="qr-wrap">${qrMarkup}</div>
           <div class="order-code">${label}</div>
         </div>
-        
+
         <script>window.onload = () => { window.print(); }</script>
       </body>
       </html>
@@ -132,9 +128,7 @@ export default function QRModal({ order, pallet, onClose }) {
 
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
-      link.download = pallet
-        ? `pallet-${pallet.code}-qr.png`
-        : `pedido-${order?.code}-qr.png`;
+      link.download = `pedido-${order?.code}-qr.png`;
       document.body.appendChild(link);
       link.click();
       link.remove();

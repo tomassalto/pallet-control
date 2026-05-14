@@ -6,6 +6,7 @@ import BackButton from "../ui/BackButton";
 import OrganizeModal from "../Components/OrganizeModal";
 import QtyConflictModal from "../Components/QtyConflictModal";
 import { PageSpinner } from "../ui/Spinner";
+import QRModal from "../ui/QRModal";
 import { ActionItem, Icons } from "../ui/ActionList";
 import { TicketCard, AddTicketModal } from "../features/tickets/TicketSection";
 import ItemCard from "../features/order-items/ItemCard";
@@ -13,6 +14,7 @@ import ItemActionModal from "../features/order-items/ItemActionModal";
 import { useOrganize } from "../hooks/useOrganize";
 import { useItemAction } from "../hooks/useItemAction";
 import { useOrderDetail } from "../hooks/useOrderDetail";
+import { useRefreshData } from "../hooks/useRefreshData";
 import { OrderHeader } from "../features/orders/OrderHeader";
 import { OrderActions } from "../features/orders/OrderActions";
 import DoneOrderProducts from "../features/orders/DoneOrderProducts";
@@ -50,6 +52,9 @@ export default function OrderDetail() {
   // Función de refetch para los hooks que necesitan recargar
   const load = () => refetch();
 
+  // Cache invalidation functions
+  const { refreshOrder } = useRefreshData();
+
   // add manual
   const [eanOrLast4, setEanOrLast4] = useState("");
   const [qty, setQty] = useState("1");
@@ -70,6 +75,8 @@ export default function OrderDetail() {
 
   // tickets
   const [openAddTicket, setOpenAddTicket] = useState(false);
+  // QR modal
+  const [showQR, setShowQR] = useState(false);
 
   const {
     organizeModal,
@@ -86,7 +93,7 @@ export default function OrderDetail() {
     decModalQty,
     setModalQty,
     saveOrganize,
-  } = useOrganize({ items, setPallets: () => refetch(), load });
+  } = useOrganize({ items, setPallets: () => refetch(), load, refreshOrder });
 
   const {
     actionItem,
@@ -98,7 +105,7 @@ export default function OrderDetail() {
     tryApplyAction,
     setConflictKeep,
     resolveConflictAndSave,
-  } = useItemAction({ items, load });
+  } = useItemAction({ items, load, refreshOrder });
 
   async function loadAvailablePallets() {
     setLoadingPallets(true);
@@ -367,6 +374,7 @@ export default function OrderDetail() {
         onReopen={setReopenModal}
         detachingPallet={detachingPallet}
         canFinalize={canFinalize}
+        onShowQR={() => setShowQR(true)}
       />
 
       {/* ── Tickets ────────────────────────────────────────────────────── */}
@@ -406,6 +414,13 @@ export default function OrderDetail() {
         <p className={SEC_LABEL}>Acciones</p>
         {order?.status !== "done" ? (
           <div className="space-y-2">
+            <ActionItem
+              icon={Icons.Eye}
+              iconBg="bg-blue-600"
+              label="Vista pública"
+              sublabel="Ver como cliente vía QR"
+              href={`/order-view/${order?.code}`}
+            />
             <ActionItem
               icon={Icons.Import}
               iconBg="bg-blue-500"
@@ -450,13 +465,22 @@ export default function OrderDetail() {
             )}
           </div>
         ) : (
-          <ActionItem
-            icon={Icons.History}
-            iconBg="bg-gray-500"
-            label="Ver historial"
-            sublabel="Registro de actividad del pedido"
-            to={`/order/${orderId}/history`}
-          />
+          <>
+            <ActionItem
+              icon={Icons.Eye}
+              iconBg="bg-blue-600"
+              label="Vista pública"
+              sublabel="Ver como cliente vía QR"
+              href={`/order-view/${order?.code}`}
+            />
+            <ActionItem
+              icon={Icons.History}
+              iconBg="bg-gray-500"
+              label="Ver historial"
+              sublabel="Registro de actividad del pedido"
+              to={`/order/${orderId}/history`}
+            />
+          </>
         )}
       </section>
 
@@ -757,6 +781,7 @@ export default function OrderDetail() {
           onSuccess={() => {
             setOpenAddTicket(false);
             load();
+            refreshOrder(orderId);
           }}
         />
       )}
@@ -775,6 +800,13 @@ export default function OrderDetail() {
         saveOrganize={saveOrganize}
         countFromThisOrderInBase={countFromThisOrderInBase}
       />
+
+      {showQR && (
+        <QRModal
+          order={order}
+          onClose={() => setShowQR(false)}
+        />
+      )}
 
     </div>
   );

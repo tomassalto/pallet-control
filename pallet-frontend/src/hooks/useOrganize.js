@@ -9,8 +9,9 @@ import { toastSuccess, toastError } from "../ui/toast";
  * @param {Array}    deps.items      — ítems del pedido (del estado del padre)
  * @param {Function} deps.setPallets — setter para actualización optimista al reabrir
  * @param {Function} deps.load       — recarga los datos del pedido
+ * @param {Function} deps.refreshOrder — opcional, invalida cache de React Query
  */
-export function useOrganize({ items, setPallets, load }) {
+export function useOrganize({ items, setPallets, load, refreshOrder }) {
   // null | { palletId, palletCode, step:'base'|'products', bases:[], selectedBase:null, quantities:{}, loading, saving }
   const [organizeModal, setOrganizeModal] = useState(null);
 
@@ -145,8 +146,6 @@ export function useOrganize({ items, setPallets, load }) {
   async function saveOrganize() {
     if (!organizeModal) return;
     const init = organizeModal.initQty ?? {};
-    // Incluir qty=0 solo si el item tenía unidades previas en esta base (para retirarlo).
-    // Items nunca asignados con qty=0 se descartan — no hay nada que retirar.
     const payload = Object.entries(organizeModal.quantities)
       .filter(([id, q]) => q > 0 || (init[id] ?? 0) > 0)
       .map(([id, q]) => ({ order_item_id: parseInt(id, 10), qty: q }));
@@ -159,6 +158,7 @@ export function useOrganize({ items, setPallets, load }) {
       toastSuccess("Productos asignados al pallet");
       setOrganizeModal(null);
       load();
+      if (refreshOrder) refreshOrder();
     } catch (e) {
       toastError(e?.response?.data?.message || "Error al guardar");
       setOrganizeModal((prev) => (prev ? { ...prev, saving: false } : null));
