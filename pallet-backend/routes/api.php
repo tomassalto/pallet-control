@@ -17,11 +17,12 @@ use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\OrderTicketController;
 use App\Http\Controllers\Api\BotController;
 use App\Http\Controllers\Api\ProductImageController;
-use App\Http\Controllers\Api\PublicPalletController;
 use App\Http\Controllers\Api\TelegramBotController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\PendingItemController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\PublicOrderController;
+use App\Http\Controllers\Api\MissingItemRequestController;
 
 Route::prefix('v1')->group(function () {
     // Rutas autenticadas con X-Bot-Secret (WhatsApp bot + scraper de imágenes)
@@ -34,8 +35,10 @@ Route::prefix('v1')->group(function () {
     // Producto por EAN — lectura pública (no requiere auth)
     Route::get('/products/by-ean/{ean}', [ProductController::class, 'showByEan']);
 
-    // Vista pública de pallet (QR) — no requiere auth
-    Route::get('/public/pallets/{code}', [PublicPalletController::class, 'show']);
+    // Vista pública de pedido — no requiere auth
+    Route::get('/public/orders/{code}', [PublicOrderController::class, 'show']);
+    Route::post('/public/orders/{code}/missing-items', [MissingItemRequestController::class, 'store'])
+        ->middleware('throttle:5,1');
 
     // Telegram webhook (sin auth Sanctum, valida X-Telegram-Bot-Api-Secret-Token)
     Route::post('/telegram/webhook', [TelegramBotController::class, 'webhook']);
@@ -154,6 +157,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/users', [UserController::class, 'index']);
             Route::patch('/users/{user}/role', [UserController::class, 'updateRole']);
             Route::post('/users/{user}/toggle-active', [UserController::class, 'toggleActive']);
+
+            // Solicitudes de faltantes enviadas por clientes
+            Route::get('/missing-item-requests', [MissingItemRequestController::class, 'index']);
+            Route::patch('/missing-item-requests/{missingItemRequest}', [MissingItemRequestController::class, 'update']);
 
             // Storage cleanup
             Route::get('/storage/stats',           [\App\Http\Controllers\Api\Admin\StorageController::class, 'stats']);
