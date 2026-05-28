@@ -349,7 +349,7 @@ export function OrderItemsTable({ items, totalPrice }) {
 }
 
 // ── Pallet card ───────────────────────────────────────────────────────────────
-export function PalletCard({ pallet, palletNum }) {
+export function PalletCard({ pallet }) {
   const [open, setOpen] = useState(true);
   const totalItems = pallet.bases?.reduce((s, b) => s + (b.items?.length ?? 0), 0) ?? 0;
   const isDone = pallet.status === "done";

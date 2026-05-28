@@ -10,6 +10,7 @@ import { PageSpinner, InlineSpinner } from "../ui/Spinner";
 import { STATUS_CONFIG as STATUS } from "../constants/status";
 
 const cfg = (status) => STATUS[status] ?? STATUS.open;
+const EMPTY_LIST = [];
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString("es-AR", {
@@ -260,9 +261,13 @@ export default function MyPallets() {
     toastError(error?.message || "No se pudo cargar pallets");
   }
 
-  const pallets = data?.pages.flatMap((page) =>
-    Array.isArray(page) ? page : (page.data ?? [])
-  ) ?? [];
+  const pallets = useMemo(
+    () =>
+      (data?.pages ?? EMPTY_LIST).flatMap((page) =>
+        Array.isArray(page) ? page : (page.data ?? EMPTY_LIST),
+      ),
+    [data?.pages],
+  );
 
   const { openPallets, completedPallets } = useMemo(
     () => ({

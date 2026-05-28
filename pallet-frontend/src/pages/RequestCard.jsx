@@ -17,7 +17,6 @@ export default function RequestCard({ item, onUpdated }) {
 
   const isPending = item.status === "pending_review";
   const isApproved = item.status === "approved";
-  const isRejected = item.status === "rejected";
 
   async function handleAction(status) {
     setLoading(status);

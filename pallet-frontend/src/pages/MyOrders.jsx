@@ -10,6 +10,7 @@ import { PageSpinner, InlineSpinner } from "../ui/Spinner";
 import { STATUS_CONFIG as STATUS } from "../constants/status";
 
 const cfg = (status) => STATUS[status] ?? STATUS.open;
+const EMPTY_LIST = [];
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString("es-AR", {
@@ -21,6 +22,15 @@ function formatDate(iso) {
 function formatPeso(amount) {
   if (!amount || amount <= 0) return null;
   return "$" + Math.round(amount).toLocaleString("es-AR");
+}
+
+function normalizePendingItemIds(rawIds) {
+  if (Array.isArray(rawIds)) return rawIds.map(Number).filter(Boolean);
+  if (!rawIds) return EMPTY_LIST;
+  return String(rawIds)
+    .split(",")
+    .map(Number)
+    .filter(Boolean);
 }
 
 /* ── Placeholder de imagen ──────────────────────────────────────────────────── */
@@ -62,9 +72,7 @@ function OrderCard({
 
   const hasPending = o.pending_items_count > 0;
   const pendingItemIds = useMemo(() => {
-    const ids = o.pending_item_ids;
-    if (!ids) return new Set();
-    return new Set(ids.split(",").map(Number));
+    return new Set(normalizePendingItemIds(o.pending_item_ids));
   }, [o.pending_item_ids]);
   const c = hasPending
     ? {
@@ -481,10 +489,13 @@ export default function MyOrders() {
       },
     });
 
-  const orders =
-    data?.pages.flatMap((page) =>
-      Array.isArray(page) ? page : (page.data ?? []),
-    ) ?? [];
+  const orders = useMemo(
+    () =>
+      (data?.pages ?? EMPTY_LIST).flatMap((page) =>
+        Array.isArray(page) ? page : (page.data ?? EMPTY_LIST),
+      ),
+    [data?.pages],
+  );
 
   const { openOrders, completedOrders } = useMemo(
     () => ({
