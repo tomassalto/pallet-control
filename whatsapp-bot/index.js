@@ -22,21 +22,101 @@ const PORT         = parseInt(process.env.PORT     || '3001', 10);
 const WA_GROUP_ID  = process.env.WHATSAPP_GROUP_ID || '';   // e.g. "120363xxxxxxx@g.us"
 const SESSION_ID   = process.env.SESSION_ID        || 'pallet-bot';
 const LARAVEL_URL  = (process.env.LARAVEL_URL      || '').replace(/\/$/, '');
+const DATABASE_URL = process.env.DATABASE_URL || process.env.DB_URL || '';
+const DB_QUERY_RETRIES = Math.max(1, parseInt(process.env.DB_QUERY_RETRIES || '4', 10));
+const DB_QUERY_RETRY_DELAY_MS = Math.max(100, parseInt(process.env.DB_QUERY_RETRY_DELAY_MS || '1500', 10));
+
+function parseBoolean(value, fallback = false) {
+  if (value == null || value === '') return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldUseSsl(connectionString) {
+  return /neon\.tech|render\.com|amazonaws\.com/i.test(connectionString);
+}
+
+function buildSslConfig(connectionString) {
+  const sslMode = (process.env.DATABASE_SSL_MODE || '').toLowerCase();
+
+  if (sslMode === 'disable') {
+    return false;
+  }
+
+  const shouldEnableSsl = sslMode
+    ? !['disable', 'off', 'false', '0'].includes(sslMode)
+    : shouldUseSsl(connectionString);
+
+  if (!shouldEnableSsl) {
+    return false;
+  }
+
+  return {
+    rejectUnauthorized: parseBoolean(process.env.DATABASE_SSL_REJECT_UNAUTHORIZED, false),
+  };
+}
+
+function isRetryableDbError(error) {
+  const code = error?.code;
+
+  return [
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'ETIMEDOUT',
+    'EPIPE',
+    '57P01',
+    '57P03',
+  ].includes(code);
+}
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('render.com') || process.env.DATABASE_URL?.includes('amazonaws')
-    ? { rejectUnauthorized: false }
-    : false,
+  connectionString: DATABASE_URL || undefined,
+  ssl: buildSslConfig(DATABASE_URL),
+  max: Math.max(1, parseInt(process.env.DB_POOL_MAX || '5', 10)),
+  idleTimeoutMillis: Math.max(1000, parseInt(process.env.DB_IDLE_TIMEOUT_MS || '30000', 10)),
+  connectionTimeoutMillis: Math.max(1000, parseInt(process.env.DB_CONNECT_TIMEOUT_MS || '10000', 10)),
 });
 
 const logger = pino({ level: 'warn' });
+
+async function queryDb(text, params = []) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= DB_QUERY_RETRIES; attempt += 1) {
+    try {
+      return await pool.query(text, params);
+    } catch (error) {
+      lastError = error;
+
+      if (!isRetryableDbError(error) || attempt === DB_QUERY_RETRIES) {
+        throw error;
+      }
+
+      logger.warn(
+        {
+          err: error,
+          code: error.code,
+          attempt,
+          retries: DB_QUERY_RETRIES,
+        },
+        'DB query failed, retrying after transient error'
+      );
+
+      await sleep(DB_QUERY_RETRY_DELAY_MS * attempt);
+    }
+  }
+
+  throw lastError;
+}
 
 // ─────────────────────────────────────────────────────────
 // PostgreSQL Auth State (persists session across restarts)
 // ─────────────────────────────────────────────────────────
 async function usePGAuthState(sessionId) {
-  await pool.query(`
+  await queryDb(`
     CREATE TABLE IF NOT EXISTS whatsapp_sessions (
       session_id TEXT NOT NULL,
       key        TEXT NOT NULL,
@@ -47,7 +127,7 @@ async function usePGAuthState(sessionId) {
 
   const write = async (data, file) => {
     const value = JSON.stringify(data, BufferJSON.replacer);
-    await pool.query(
+    await queryDb(
       `INSERT INTO whatsapp_sessions (session_id, key, value)
        VALUES ($1, $2, $3)
        ON CONFLICT (session_id, key) DO UPDATE SET value = EXCLUDED.value`,
@@ -56,7 +136,7 @@ async function usePGAuthState(sessionId) {
   };
 
   const read = async (file) => {
-    const { rows } = await pool.query(
+    const { rows } = await queryDb(
       `SELECT value FROM whatsapp_sessions WHERE session_id = $1 AND key = $2`,
       [sessionId, file]
     );
@@ -65,7 +145,7 @@ async function usePGAuthState(sessionId) {
   };
 
   const remove = async (file) => {
-    await pool.query(
+    await queryDb(
       `DELETE FROM whatsapp_sessions WHERE session_id = $1 AND key = $2`,
       [sessionId, file]
     );
@@ -346,7 +426,7 @@ async function connect() {
         } else {
           console.log('[WA] Logged out — scan QR again at GET /qr');
           // Clear stored creds so next connect shows a fresh QR
-          await pool.query(
+          await queryDb(
             `DELETE FROM whatsapp_sessions WHERE session_id = $1`,
             [SESSION_ID]
           );
@@ -485,7 +565,7 @@ app.get('/groups', requireKey, async (_req, res) => {
 async function getRecentItemsMessage() {
   try {
     // Obtener pallets recientes con pedidos y bases
-    const palletsRes = await pool.query(`
+    const palletsRes = await queryDb(`
       SELECT p.id, p.code, p.status, p.note, p.created_at,
              COALESCE(json_agg(DISTINCT jsonb_build_object('name', c.name)) FILTER (WHERE c.name IS NOT NULL), '[]') as customers,
              (SELECT COUNT(*) FROM pallet_base_order_items pboi
@@ -502,7 +582,7 @@ async function getRecentItemsMessage() {
     `);
 
     // Obtener pedidos recientes
-    const ordersRes = await pool.query(`
+    const ordersRes = await queryDb(`
       SELECT o.id, o.code, o.status, o.created_at, c.name as customer_name,
              (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) as item_count,
              (SELECT array_agg(p.code) FROM order_pallet po JOIN pallets p ON p.id = po.pallet_id WHERE po.order_id = o.id) as pallets
@@ -559,7 +639,7 @@ async function getRecentItemsMessage() {
 app.post('/logout', requireKey, async (_req, res) => {
   try {
     if (sock) await sock.logout();
-    await pool.query(
+    await queryDb(
       `DELETE FROM whatsapp_sessions WHERE session_id = $1`,
       [SESSION_ID]
     );
