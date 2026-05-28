@@ -1,16 +1,7 @@
 import { useState } from "react";
 import { apiPatch } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
-
-function relativeDate(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const diff = Math.floor((Date.now() - d) / 1000);
-  if (diff < 60) return "hace un momento";
-  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
-  if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
-  return d.toLocaleDateString("es-AR", { day: "numeric", month: "short" });
-}
+import { relativeDate } from "../features/pending-items/PendingItemsShared";
 
 export default function RequestCard({ item, onUpdated }) {
   const [loading, setLoading] = useState(null); // "approved" | "rejected" | null
