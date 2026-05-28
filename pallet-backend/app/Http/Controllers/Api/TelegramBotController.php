@@ -6,17 +6,24 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Pallet;
 use App\Services\PhotoUploadService;
+use App\Services\TelegramBotClient;
+use App\Services\TelegramBotCommandParser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class TelegramBotController extends Controller
 {
     // TTL del file_id cacheado mientras el usuario elige destino
     private const PHOTO_CACHE_TTL = 5; // minutos
+
+    public function __construct(
+        private readonly TelegramBotClient $telegram,
+        private readonly TelegramBotCommandParser $commandParser,
+    ) {
+    }
 
     // ─────────────────────────────────────────────────────
     // POST /api/v1/telegram/webhook
@@ -464,7 +471,7 @@ class TelegramBotController extends Controller
         array $photoSizes,
         string $caption,
     ): void {
-        $params = $this->parseCommand($caption);
+        $params = $this->commandParser->parsePhotoCaption($caption);
         if (!$params) {
             $this->reply($chatId, "❓ Comando no reconocido.\n\n" . $this->helpText());
             return;
@@ -498,55 +505,27 @@ class TelegramBotController extends Controller
 
     private function sendInlineKeyboard(int|string $chatId, string $text, array $buttons): void
     {
-        $token = config('services.telegram.token');
-        Http::post("https://api.telegram.org/bot{$token}/sendMessage", [
-            'chat_id'      => $chatId,
-            'text'         => $text,
-            'parse_mode'   => 'Markdown',
-            'reply_markup' => json_encode(['inline_keyboard' => $buttons]),
-        ]);
+        $this->telegram->sendMessage($chatId, $text, $buttons);
     }
 
     private function editMessage(int|string $chatId, int $messageId, string $text): void
     {
-        $token = config('services.telegram.token');
-        Http::post("https://api.telegram.org/bot{$token}/editMessageText", [
-            'chat_id'    => $chatId,
-            'message_id' => $messageId,
-            'text'       => $text,
-            'parse_mode' => 'Markdown',
-        ]);
+        $this->telegram->editMessageText($chatId, $messageId, $text);
     }
 
     private function editMessageWithKeyboard(int|string $chatId, int $messageId, string $text, array $buttons): void
     {
-        $token = config('services.telegram.token');
-        Http::post("https://api.telegram.org/bot{$token}/editMessageText", [
-            'chat_id'      => $chatId,
-            'message_id'   => $messageId,
-            'text'         => $text,
-            'parse_mode'   => 'Markdown',
-            'reply_markup' => json_encode(['inline_keyboard' => $buttons]),
-        ]);
+        $this->telegram->editMessageText($chatId, $messageId, $text, $buttons);
     }
 
     private function answerCallback(string $callbackQueryId, string $text = ''): void
     {
-        $token = config('services.telegram.token');
-        Http::post("https://api.telegram.org/bot{$token}/answerCallbackQuery", [
-            'callback_query_id' => $callbackQueryId,
-            'text'              => $text,
-        ]);
+        $this->telegram->answerCallbackQuery($callbackQueryId, $text);
     }
 
     private function reply(int|string $chatId, string $text): void
     {
-        $token = config('services.telegram.token');
-        Http::post("https://api.telegram.org/bot{$token}/sendMessage", [
-            'chat_id'    => $chatId,
-            'text'       => $text,
-            'parse_mode' => 'Markdown',
-        ]);
+        $this->telegram->sendMessage($chatId, $text);
     }
 
     private function unknownCallback(int|string $chatId, int $messageId): JsonResponse
@@ -574,76 +553,11 @@ class TelegramBotController extends Controller
     }
 
     /**
-     * Parsea el caption a parámetros para PhotoUploadService.
-     * Formato: p, p 2, b A1, b 2 A1, t, t 12345
-     */
-    private function parseCommand(string $caption): ?array
-    {
-        $parts = preg_split('/\s+/', strtolower(trim($caption)));
-        $cmd   = $parts[0] ?? '';
-
-        $typeMap = [
-            'p' => 'pallet', 'pallet' => 'pallet',
-            'b' => 'base',   'base'   => 'base',
-            't' => 'ticket', 'ticket' => 'ticket',
-        ];
-
-        $type = $typeMap[$cmd] ?? null;
-        if (!$type) return null;
-
-        $params = ['type' => $type];
-
-        if ($type === 'pallet') {
-            $arg = $parts[1] ?? null;
-            if (!$arg || preg_match('/^\d{1,2}$/', $arg)) {
-                $params['pallet_index'] = (int) ($arg ?? 1);
-            } else {
-                $params['pallet_code'] = $arg;
-            }
-        } elseif ($type === 'base') {
-            $arg1 = $parts[1] ?? null;
-            $rest = implode(' ', array_slice($parts, 2));
-            if (!$arg1) {
-                $params['pallet_index'] = 1;
-            } elseif (preg_match('/^\d{1,2}$/', $arg1) && $rest) {
-                $params['pallet_index'] = (int) $arg1;
-                $params['base_name']    = $rest;
-            } else {
-                $params['pallet_index'] = 1;
-                $params['base_name']    = implode(' ', array_slice($parts, 1));
-            }
-        } elseif ($type === 'ticket') {
-            $arg = $parts[1] ?? null;
-            if (!$arg || preg_match('/^\d{1,2}$/', $arg)) {
-                $params['order_index'] = (int) ($arg ?? 1);
-            } else {
-                $params['order_code'] = $arg;
-            }
-        }
-
-        return $params;
-    }
-
-    /**
      * Descarga una foto de Telegram y la devuelve como UploadedFile temporal.
      */
     private function downloadPhoto(string $fileId): ?UploadedFile
     {
-        $token = config('services.telegram.token');
-
-        $meta = Http::get("https://api.telegram.org/bot{$token}/getFile", [
-            'file_id' => $fileId,
-        ]);
-
-        if (!$meta->ok()) return null;
-
-        $filePath = $meta->json('result.file_path');
-        $content  = Http::get("https://api.telegram.org/file/bot{$token}/{$filePath}")->body();
-
-        $tempPath = tempnam(sys_get_temp_dir(), 'tg_') . '.jpg';
-        file_put_contents($tempPath, $content);
-
-        return new UploadedFile($tempPath, 'photo.jpg', 'image/jpeg', null, true);
+        return $this->telegram->downloadPhoto($fileId);
     }
 
     private function helpText(): string
