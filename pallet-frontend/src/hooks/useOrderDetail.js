@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, apiDelete, apiPatch } from "../api/client";
 
@@ -78,14 +79,25 @@ export function useOrderDetail(orderId) {
   };
 }
 
-export function useAvailablePallets(excludeOrderId) {
+export function useAvailablePallets({ enabled = true, excludedIds = [] } = {}) {
+  const normalizedExcludedIds = useMemo(
+    () => [...new Set(excludedIds.map(Number).filter(Boolean))].sort((a, b) => a - b),
+    [excludedIds],
+  );
+
   return useQuery({
-    queryKey: ["pallets", "available", excludeOrderId],
+    queryKey: ["pallets", "available", normalizedExcludedIds],
     queryFn: async () => {
       const data = await apiGet(`/pallets?limit=200`);
       const allPallets = Array.isArray(data) ? data : data.data || [];
-      return allPallets;
+      if (normalizedExcludedIds.length === 0) {
+        return allPallets;
+      }
+
+      const excludedSet = new Set(normalizedExcludedIds);
+      return allPallets.filter((pallet) => !excludedSet.has(Number(pallet.id)));
     },
+    enabled,
     staleTime: 60000,
   });
 }
