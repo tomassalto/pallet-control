@@ -3,14 +3,28 @@ import { apiPost } from "../api/client";
 
 const STORAGE_KEY = (code) => `mir_${code}`;
 
+function readSubmittedFlag(orderCode) {
+  try {
+    return !!localStorage.getItem(STORAGE_KEY(orderCode));
+  } catch {
+    return false;
+  }
+}
+
+function persistSubmittedFlag(orderCode) {
+  try {
+    localStorage.setItem(STORAGE_KEY(orderCode), "1");
+  } catch {
+    // Ignorar bloqueos de storage en navegadores privados o embebidos.
+  }
+}
+
 export default function MissingItemsForm({ items, orderCode }) {
   const [selected, setSelected] = useState({}); // { order_item_id: qty }
   const [requesterName, setRequesterName] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(() => {
-    try { return !!localStorage.getItem(STORAGE_KEY(orderCode)); } catch { return false; }
-  });
+  const [submitted, setSubmitted] = useState(() => readSubmittedFlag(orderCode));
   const [error, setError] = useState(null);
 
   if (!items?.length) return null;
@@ -55,7 +69,7 @@ export default function MissingItemsForm({ items, orderCode }) {
           note: note.trim() || null,
         });
       }
-      try { localStorage.setItem(STORAGE_KEY(orderCode), "1"); } catch {}
+      persistSubmittedFlag(orderCode);
       setSubmitted(true);
     } catch (err) {
       const msg = err?.response?.data?.message || "Ocurrió un error al enviar la solicitud";

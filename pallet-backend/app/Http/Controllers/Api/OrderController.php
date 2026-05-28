@@ -10,21 +10,17 @@ use App\Models\ActivityLog;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Pallet;
+use App\Models\PendingItem;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class OrderController extends Controller
 {
     public function index(Request $request)
     {
-        // Verificar si la tabla pending_items existe
-        $hasPendingTable = false;
-        try {
-            $hasPendingTable = !empty(\Illuminate\Support\Facades\DB::select("SHOW TABLES LIKE 'pending_items'"));
-        } catch (\Exception $e) {
-            $hasPendingTable = false;
-        }
+        $hasPendingTable = Schema::hasTable('pending_items');
 
         $q = Order::with([
                 'customer',
@@ -45,9 +41,6 @@ class OrderController extends Controller
         if ($hasPendingTable) {
             $q->addSelect(DB::raw(
                 "(SELECT COUNT(*) FROM pending_items WHERE pending_items.order_id = orders.id AND pending_items.status = 'pending') as pending_items_count"
-            ))
-            ->addSelect(DB::raw(
-                "(SELECT GROUP_CONCAT(DISTINCT order_item_id) FROM pending_items WHERE pending_items.order_id = orders.id AND pending_items.status = 'pending') as pending_item_ids"
             ));
         }
 
@@ -88,6 +81,7 @@ class OrderController extends Controller
 
         $allItems = $collection->flatMap(fn ($o) => $o->items);
         OrderService::enrichWithProductInfo($allItems);
+        $this->appendPendingItemMetadata($collection, $hasPendingTable);
 
         return $result;
     }
@@ -140,14 +134,11 @@ class OrderController extends Controller
         $itemsWithLocations = OrderService::enrichItemsWithLocations($order);
         $highlightsReady = OrderService::isHighlightsReady($itemsWithLocations);
 
-        $pendingItemsCount = \App\Models\PendingItem::where('order_id', $order->id)
-            ->where('status', 'pending')
-            ->count();
+        $pendingQuery = PendingItem::where('order_id', $order->id)
+            ->where('status', 'pending');
 
-        $pendingItemIds = \App\Models\PendingItem::where('order_id', $order->id)
-            ->where('status', 'pending')
-            ->pluck('order_item_id')
-            ->toArray();
+        $pendingItemIds = $pendingQuery->pluck('order_item_id')->toArray();
+        $pendingItemsCount = count($pendingItemIds);
 
         return response()->json([
             'order'                => $order,
@@ -157,6 +148,33 @@ class OrderController extends Controller
             'pending_items_count'  => $pendingItemsCount,
             'pending_item_ids'     => $pendingItemIds,
         ]);
+    }
+
+    private function appendPendingItemMetadata($orders, bool $hasPendingTable): void
+    {
+        if (! $hasPendingTable || $orders->isEmpty()) {
+            foreach ($orders as $order) {
+                $order->pending_item_ids = null;
+            }
+            return;
+        }
+
+        $pendingByOrder = PendingItem::whereIn('order_id', $orders->pluck('id'))
+            ->where('status', 'pending')
+            ->get(['order_id', 'order_item_id'])
+            ->groupBy('order_id');
+
+        foreach ($orders as $order) {
+            $ids = $pendingByOrder
+                ->get($order->id, collect())
+                ->pluck('order_item_id')
+                ->unique()
+                ->values();
+
+            $order->pending_item_ids = $ids->isEmpty()
+                ? null
+                : $ids->implode(',');
+        }
     }
 
     public function updateStatus(Request $request, Order $order)

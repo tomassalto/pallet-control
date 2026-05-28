@@ -1,8 +1,43 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../api/client";
 import { TicketSection, OrderItemsTable, PalletCard } from "./OrderPublicViewSections";
 import MissingItemsForm from "./MissingItemsForm";
+
+function readThemePreference() {
+  try {
+    const saved = localStorage.getItem("theme");
+    if (saved !== null) return saved === "dark";
+  } catch {
+    // Ignorar storage bloqueado; usar preferencia del sistema.
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function persistThemePreference(isDark) {
+  try {
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+  } catch {
+    // Ignorar storage bloqueado; la clase dark ya refleja el estado actual.
+  }
+}
+
+async function copyTextWithFallback(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const el = document.createElement("textarea");
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+    return true;
+  }
+}
 
 // ── Íconos inline ─────────────────────────────────────────────────────────────
 const SunIcon = () => (
@@ -32,54 +67,44 @@ const CheckIcon = () => (
 // ── Vista principal ───────────────────────────────────────────────────────────
 export default function OrderPublicView() {
   const { code } = useParams();
-  const [order, setOrder] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  const [isDark, setIsDark] = useState(() => {
-    try {
-      const saved = localStorage.getItem("theme");
-      if (saved !== null) return saved === "dark";
-    } catch {}
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const [isDark, setIsDark] = useState(() => readThemePreference());
+  const {
+    data: order,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["public-order", code],
+    queryFn: () => apiGet(`/public/orders/${code}`),
+    retry: false,
   });
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
-    try { localStorage.setItem("theme", isDark ? "dark" : "light"); } catch {}
+    persistThemePreference(isDark);
   }, [isDark]);
-
-  useEffect(() => {
-    apiGet(`/public/orders/${code}`)
-      .then(setOrder)
-      .catch((e) => setError(e?.response?.data?.message || "Pedido no encontrado"))
-      .finally(() => setLoading(false));
-  }, [code]);
 
   async function handleShare() {
     const url = window.location.href;
     const title = `Pedido ${code} — Pallet Control`;
     const text = `Ver el contenido del pedido ${code}`;
     if (navigator.share) {
-      try { await navigator.share({ title, text, url }); } catch {}
-    } else {
       try {
-        await navigator.clipboard.writeText(url);
+        await navigator.share({ title, text, url });
+        return;
       } catch {
-        const el = document.createElement("textarea");
-        el.value = url;
-        document.body.appendChild(el);
-        el.select();
-        document.execCommand("copy");
-        document.body.removeChild(el);
+        return;
       }
+    } else {
+      await copyTextWithFallback(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <p className="text-gray-400 text-sm animate-pulse">Cargando…</p>
@@ -87,12 +112,15 @@ export default function OrderPublicView() {
     );
   }
 
-  if (error) {
+  if (isError) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-6">
         <div className="text-center">
           <p className="text-5xl mb-4">📭</p>
           <p className="text-lg font-semibold text-gray-700 dark:text-gray-200">Pedido no encontrado</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {error?.response?.data?.message || "No se pudo cargar la vista pÃºblica del pedido."}
+          </p>
           <p className="text-sm text-gray-400 mt-1">Código: {code}</p>
         </div>
       </div>
