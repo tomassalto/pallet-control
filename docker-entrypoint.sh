@@ -4,6 +4,29 @@ set -e
 cd pallet-backend
 
 php artisan package:discover --ansi
+php artisan config:clear
+
+# Render puede conservar comillas literales si la variable se cargó como texto.
+# Esto evita que Laravel ignore una DATABASE_URL válida por venir entre comillas.
+DATABASE_URL=${DATABASE_URL%\"}
+DATABASE_URL=${DATABASE_URL#\"}
+DB_URL=${DB_URL%\"}
+DB_URL=${DB_URL#\"}
+export DATABASE_URL DB_URL
+
+php -r '
+$url = getenv("DB_URL") ?: getenv("DATABASE_URL") ?: "";
+if ($url === "") {
+    echo ">>> DATABASE_URL/DB_URL: missing\n";
+    exit;
+}
+$parts = parse_url($url);
+$host = $parts["host"] ?? "unparseable";
+$db = isset($parts["path"]) ? ltrim($parts["path"], "/") : "";
+$scheme = $parts["scheme"] ?? "unknown";
+echo ">>> DB target: {$scheme}://{$host}/{$db}\n";
+'
+
 php artisan config:cache
 php artisan route:cache
 php artisan migrate --force
