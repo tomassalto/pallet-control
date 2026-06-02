@@ -139,6 +139,7 @@ export default function Home() {
   const lastOrder    = data?.last_open_order ?? null;
   const lastPallet   = data?.last_open_pallet ?? null;
   const pendingCount = data?.pending_count ?? 0;
+  const pendingRequestCount = data?.pending_request_count ?? 0;
   const ordersByDate = data?.orders_by_date ?? [];
 
   if (isLoading)
@@ -212,6 +213,28 @@ export default function Home() {
             </p>
           </div>
           <svg className="w-4 h-4 text-red-400 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+      )}
+
+      {pendingRequestCount > 0 && (
+        <Link
+          to="/pending-items?tab=requests"
+          className="flex items-center gap-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/50 rounded-2xl px-4 py-3 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
+        >
+          <span className="text-2xl shrink-0">📋</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-orange-700 dark:text-orange-400">
+              {pendingRequestCount === 1
+                ? "1 solicitud de faltante para revisar"
+                : `${pendingRequestCount} solicitudes de faltantes para revisar`}
+            </p>
+            <p className="text-xs text-orange-600 dark:text-orange-500 mt-0.5 truncate">
+              Clientes reportaron productos que no llegaron completos
+            </p>
+          </div>
+          <svg className="w-4 h-4 text-orange-400 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
         </Link>
