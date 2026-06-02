@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\MissingItemRequest;
 use App\Models\Order;
 use App\Models\OrderTicketPhoto;
 use App\Models\Pallet;
@@ -39,6 +40,7 @@ class DashboardController extends Controller
 
         // Pendientes (PendingItems sin resolver)
         $pendingCount = PendingItem::where('status', 'pending')->count();
+        $pendingRequestCount = MissingItemRequest::where('status', 'pending_review')->count();
 
         // ── Último pedido abierto ─────────────────────────────────────────
         $lastOpenOrder = Order::where('status', '!=', 'done')
@@ -71,10 +73,11 @@ class DashboardController extends Controller
                 'pending_units'  => $pendingUnits,
                 'ocr_this_month' => $ocrThisMonth,
             ],
-            'pending_count'   => $pendingCount,
-            'last_open_order'  => $lastOpenOrder,
-            'last_open_pallet' => $lastOpenPallet,
-            'orders_by_date'  => $ordersByDate,
+            'pending_count'         => $pendingCount,
+            'pending_request_count' => $pendingRequestCount,
+            'last_open_order'       => $lastOpenOrder,
+            'last_open_pallet'      => $lastOpenPallet,
+            'orders_by_date'        => $ordersByDate,
         ]);
     }
 }

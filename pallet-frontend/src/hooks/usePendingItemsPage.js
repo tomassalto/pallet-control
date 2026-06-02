@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { apiGet, apiPatch, apiDelete } from "../api/client";
 import { toastSuccess, toastError } from "../ui/toast";
 
 export function usePendingItemsPage() {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState("pending");
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") === "requests" ? "requests" : "pending";
+  const [tab, setTab] = useState(initialTab);
   const [showCreate, setShowCreate] = useState(false);
 
   const { data: items = [], isLoading: loading } = useQuery({
