@@ -1,0 +1,57 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+defaults:
+  run:
+    working-directory: pallet-backend
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, bcmath, gd, intl, exif, curl, dom, fileinfo
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: pallet-backend/vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('pallet-backend/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Preparar entorno de test
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      # 1. LINT — estilo de código
+      - name: Lint (Pint)
+        run: ./vendor/bin/pint --test
+
+      # 2. STATIC — análisis estático (nivel 5, con baseline de deuda pre-existente)
+      - name: Static analysis (Larastan / PHPStan)
+        run: ./vendor/bin/phpstan analyse --memory-limit=1G
+
+      # 3. TESTS — feature + unit, contra SQLite en memoria (ver phpunit.xml)
+      - name: Tests
+        run: php artisan test
+
+      # 4. SECURITY — dependencias vulnerables
+      - name: Security audit (composer audit)
+        run: composer audit
