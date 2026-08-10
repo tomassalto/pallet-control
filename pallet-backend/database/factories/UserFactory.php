@@ -41,4 +41,31 @@ class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    /**
+     * Usuario con rol asignado (puede escribir). Por defecto 'user'.
+     */
+    public function withRole(string $role = 'user'): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => $role,
+        ]);
+    }
+
+    public function admin(): static
+    {
+        return $this->withRole('admin');
+    }
+
+    public function superadmin(): static
+    {
+        return $this->withRole('superadmin');
+    }
+
+    public function inactive(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_active' => false,
+        ]);
+    }
 }
