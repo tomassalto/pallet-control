@@ -2,26 +2,29 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Models\Customer;
+use Illuminate\Console\Command;
 
 class ImportCustomersFromCsv extends Command
 {
     protected $signature = 'customers:import-csv {file : Ruta dentro de storage/app}';
+
     protected $description = 'Importa clientes desde CSV (nombre + quit) con upsert';
 
     public function handle(): int
     {
         $path = storage_path('app/' . $this->argument('file'));
 
-        if (!file_exists($path)) {
+        if (! file_exists($path)) {
             $this->error("Archivo no encontrado: $path");
+
             return self::FAILURE;
         }
 
         $handle = fopen($path, 'r');
-        if (!$handle) {
-            $this->error("No se pudo abrir el archivo.");
+        if (! $handle) {
+            $this->error('No se pudo abrir el archivo.');
+
             return self::FAILURE;
         }
 
@@ -36,7 +39,9 @@ class ImportCustomersFromCsv extends Command
             $name = trim((string) $nameRaw);
             $quit = trim((string) $quitRaw);
 
-            if ($name === '' || $quit === '') continue;
+            if ($name === '' || $quit === '') {
+                continue;
+            }
 
             $batch[] = [
                 'name' => $name,
@@ -61,6 +66,7 @@ class ImportCustomersFromCsv extends Command
         }
 
         $this->info("✅ Listo. Total importados/actualizados: $count");
+
         return self::SUCCESS;
     }
 }

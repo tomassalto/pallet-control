@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\Storage;
 
 class ResetForProduction extends Command
 {
-    protected $signature   = 'app:reset {--confirm : Confirmar que querés borrar todo}';
+    protected $signature = 'app:reset {--confirm : Confirmar que querés borrar todo}';
+
     protected $description = 'Limpia todos los datos operativos manteniendo la tabla products intacta.';
 
     // Orden correcto para respetar FK constraints
@@ -38,6 +39,7 @@ class ResetForProduction extends Command
     {
         if (! $this->option('confirm')) {
             $this->error('Usá --confirm para ejecutar este comando. BORRA TODOS LOS DATOS excepto productos.');
+
             return 1;
         }
 
@@ -58,7 +60,7 @@ class ResetForProduction extends Command
                 $files = Storage::disk($disk)->allFiles($dir);
                 if (! empty($files)) {
                     Storage::disk($disk)->delete($files);
-                    $this->line("  ✓ {$dir}/: " . count($files) . " archivos eliminados");
+                    $this->line("  ✓ {$dir}/: " . count($files) . ' archivos eliminados');
                 } else {
                     $this->line("  - {$dir}/: vacío");
                 }

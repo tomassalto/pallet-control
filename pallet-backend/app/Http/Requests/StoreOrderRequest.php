@@ -15,9 +15,9 @@ class StoreOrderRequest extends FormRequest
     {
         return [
             'customer_name' => ['nullable', 'string', 'max:255'],
-            'customer_id'   => ['nullable', 'integer', 'exists:customers,id'],
-            'code'          => ['required', 'string', 'max:255'],
-            'note'          => ['nullable', 'string'],
+            'customer_id' => ['nullable', 'integer', 'exists:customers,id'],
+            'code' => ['required', 'string', 'max:255'],
+            'note' => ['nullable', 'string'],
         ];
     }
 }

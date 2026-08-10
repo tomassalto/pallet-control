@@ -20,7 +20,7 @@ class PalletBaseService
             'note' => $data['note'] ?? null,
         ]);
 
-        if (!empty($data['items'])) {
+        if (! empty($data['items'])) {
             $pallet->loadMissing('orders');
             $requestedItemIds = collect($data['items'])->pluck('order_item_id');
 
@@ -121,15 +121,15 @@ class PalletBaseService
             $this->logItemChanges($pallet, $base, $syncResult['items'], $oldItems, $syncResult['removed'], $orderItemsMap);
         }
 
-        if (!empty($changeLog['descriptions'])) {
+        if (! empty($changeLog['descriptions'])) {
             ActivityLogger::log(
                 action: 'base_updated',
                 entityType: 'pallet_base',
                 entityId: $base->id,
                 description: "Base '" . ($base->name ?? 'Sin nombre') . "': " . implode(', ', $changeLog['descriptions']),
                 palletId: $pallet->id,
-                oldValues: !empty($changeLog['old']) ? $changeLog['old'] : null,
-                newValues: !empty($changeLog['new']) ? $changeLog['new'] : null,
+                oldValues: ! empty($changeLog['old']) ? $changeLog['old'] : null,
+                newValues: ! empty($changeLog['new']) ? $changeLog['new'] : null,
             );
         }
 
@@ -165,7 +165,7 @@ class PalletBaseService
         foreach ($items as $item) {
             $orderItem = $orderItemsMap->get($item['order_item_id']);
 
-            if (!$orderItem || !$pallet->orders->contains('id', $orderItem->order_id)) {
+            if (! $orderItem || ! $pallet->orders->contains('id', $orderItem->order_id)) {
                 continue;
             }
 
@@ -180,6 +180,7 @@ class PalletBaseService
                         'order_code' => $order->code,
                     ]];
                 }
+
                 continue;
             }
 
@@ -188,6 +189,7 @@ class PalletBaseService
                     $removedItemIds[] = $item['order_item_id'];
                 }
                 unset($itemsToSync[$item['order_item_id']]);
+
                 continue;
             }
 
@@ -280,8 +282,8 @@ class PalletBaseService
     private function fetchOrderData(Collection $itemIds): array
     {
         $orderItemsMap = OrderItem::whereIn('id', $itemIds)->get()->keyBy('id');
-        $orderIds      = $orderItemsMap->pluck('order_id')->unique()->values();
-        $ordersMap     = Order::whereIn('id', $orderIds)->get()->keyBy('id');
+        $orderIds = $orderItemsMap->pluck('order_id')->unique()->values();
+        $ordersMap = Order::whereIn('id', $orderIds)->get()->keyBy('id');
 
         return [$orderItemsMap, $ordersMap];
     }

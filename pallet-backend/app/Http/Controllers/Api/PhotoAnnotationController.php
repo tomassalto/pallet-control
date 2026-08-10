@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Pallet;
 use App\Models\PalletBase;
-use App\Models\PalletBasePhoto;
 use App\Models\PhotoAnnotation;
 use Illuminate\Http\Request;
 
@@ -20,7 +19,7 @@ class PhotoAnnotationController extends Controller
         }
 
         $photo = $base->photos()->find($photoId);
-        if (!$photo) {
+        if (! $photo) {
             return response()->json(['message' => 'Foto no encontrada'], 404);
         }
 
@@ -40,7 +39,7 @@ class PhotoAnnotationController extends Controller
         }
 
         $photo = $base->photos()->find($photoId);
-        if (!$photo) {
+        if (! $photo) {
             return response()->json(['message' => 'Foto no encontrada'], 404);
         }
 
@@ -82,7 +81,7 @@ class PhotoAnnotationController extends Controller
             action: 'photo_annotations_saved',
             entityType: 'photo_annotation',
             entityId: $photo->id,
-            description: "Anotaciones guardadas en foto de la base '{$baseName}' del pallet '{$pallet->code}': {$annotationsCount} anotación(es)" . ($existingCount > 0 ? " (reemplazaron {$existingCount} anterior(es))" : ""),
+            description: "Anotaciones guardadas en foto de la base '{$baseName}' del pallet '{$pallet->code}': {$annotationsCount} anotación(es)" . ($existingCount > 0 ? " (reemplazaron {$existingCount} anterior(es))" : ''),
             palletId: $pallet->id,
             oldValues: $existingCount > 0 ? ['annotations_count' => $existingCount] : null,
             newValues: ['annotations_count' => $annotationsCount],

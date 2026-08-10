@@ -3,10 +3,8 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Models\Order;
-use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
 use App\Models\Pallet;
-use App\Models\PalletBase;
 use App\Models\PalletBasePhoto;
 use App\Models\PalletPhoto;
 use Illuminate\Http\JsonResponse;
@@ -41,16 +39,16 @@ class StorageController extends Controller
     public function stats(): JsonResponse
     {
         $palletPhotosCount = PalletPhoto::count();
-        $basePhotosCount   = PalletBasePhoto::count();
+        $basePhotosCount = PalletBasePhoto::count();
         $ticketPhotosCount = OrderTicketPhoto::count();
 
         return response()->json([
             'pallet_photos_count' => $palletPhotosCount,
-            'base_photos_count'   => $basePhotosCount,
+            'base_photos_count' => $basePhotosCount,
             'ticket_photos_count' => $ticketPhotosCount,
             'activity_logs_count' => \App\Models\ActivityLog::count(),
-            'ocr_logs_count'      => OrderTicketPhoto::whereNotNull('ocr_log')->count(),
-            'total_photos'        => $palletPhotosCount + $basePhotosCount + $ticketPhotosCount,
+            'ocr_logs_count' => OrderTicketPhoto::whereNotNull('ocr_log')->count(),
+            'total_photos' => $palletPhotosCount + $basePhotosCount + $ticketPhotosCount,
         ]);
     }
 
@@ -69,13 +67,13 @@ class StorageController extends Controller
 
         $paginated->getCollection()->transform(function (Pallet $pallet) {
             return [
-                'id'           => $pallet->id,
-                'code'         => $pallet->code,
-                'status'       => $pallet->status,
-                'created_at'   => $pallet->created_at,
+                'id' => $pallet->id,
+                'code' => $pallet->code,
+                'status' => $pallet->status,
+                'created_at' => $pallet->created_at,
                 'orders_count' => $pallet->orders_count,
                 'photos_count' => $pallet->photos_count,
-                'bases_count'  => $pallet->bases_count,
+                'bases_count' => $pallet->bases_count,
             ];
         });
 
@@ -97,11 +95,11 @@ class StorageController extends Controller
 
         $paginated->getCollection()->transform(function (Order $order) {
             return [
-                'id'            => $order->id,
-                'code'          => $order->code,
-                'status'        => $order->status,
-                'created_at'    => $order->created_at,
-                'items_count'   => $order->items_count,
+                'id' => $order->id,
+                'code' => $order->code,
+                'status' => $order->status,
+                'created_at' => $order->created_at,
+                'items_count' => $order->items_count,
                 'tickets_count' => $order->tickets_count,
             ];
         });
@@ -134,7 +132,7 @@ class StorageController extends Controller
 
         return response()->json([
             'deleted' => true,
-            'code'    => $code,
+            'code' => $code,
         ]);
     }
 
@@ -158,7 +156,7 @@ class StorageController extends Controller
 
         return response()->json([
             'deleted' => true,
-            'code'    => $code,
+            'code' => $code,
         ]);
     }
 }

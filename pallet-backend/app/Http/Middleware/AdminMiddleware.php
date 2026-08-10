@@ -14,15 +14,15 @@ class AdminMiddleware
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['error' => 'No autenticado'], 401);
         }
 
-        if ($level === 'superadmin' && !$user->isSuperAdmin()) {
+        if ($level === 'superadmin' && ! $user->isSuperAdmin()) {
             return response()->json(['error' => 'Solo el superadmin puede hacer esto'], 403);
         }
 
-        if ($level === 'admin' && !$user->isAdmin()) {
+        if ($level === 'admin' && ! $user->isAdmin()) {
             return response()->json(['error' => 'Se requieren permisos de administrador'], 403);
         }
 

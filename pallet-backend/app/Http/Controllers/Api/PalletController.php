@@ -2,15 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Helpers\ActivityLogger;
 use App\Helpers\TelegramNotifier;
+use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Pallet;
 use App\Services\OrderService;
 use App\Services\PalletService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class PalletController extends Controller
@@ -44,7 +43,7 @@ class PalletController extends Controller
 
         $today = now()->format('Ymd');
         $countToday = Pallet::whereDate('created_at', now()->toDateString())->count() + 1;
-        $code = sprintf("PAL-%s-%04d", $today, $countToday);
+        $code = sprintf('PAL-%s-%04d', $today, $countToday);
 
         $pallet = Pallet::create([
             'code' => $code,
@@ -88,7 +87,7 @@ class PalletController extends Controller
             'pallet' => $pallet,
             'orders' => $pallet->orders,
             'photos' => $pallet->photos,   // url auto-incluida por el modelo
-            'bases'  => $pallet->bases,    // photos.url auto-incluida por el modelo
+            'bases' => $pallet->bases,    // photos.url auto-incluida por el modelo
             'activity_logs' => [],
         ]);
     }
@@ -138,7 +137,7 @@ class PalletController extends Controller
             'order_code' => ['required', 'regex:/^\d+$/'],
         ]);
 
-        $wasNewOrder = !Order::where('code', $data['order_code'])->exists();
+        $wasNewOrder = ! Order::where('code', $data['order_code'])->exists();
         $order = Order::firstOrCreate(
             ['code' => $data['order_code']],
             ['status' => 'open']
@@ -187,7 +186,7 @@ class PalletController extends Controller
             ->orderByDesc('id')
             ->first();
 
-        if (!$pallet) {
+        if (! $pallet) {
             return response()->json(['pallet' => null]);
         }
 

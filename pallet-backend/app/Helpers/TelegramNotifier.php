@@ -13,7 +13,7 @@ class TelegramNotifier
      */
     public static function send(string $message): void
     {
-        $token  = config('services.telegram.token');
+        $token = config('services.telegram.token');
         $chatId = config('services.telegram.chat_id');
 
         if (empty($token) || empty($chatId)) {
@@ -24,8 +24,8 @@ class TelegramNotifier
             Http::timeout(8)->post(
                 "https://api.telegram.org/bot{$token}/sendMessage",
                 [
-                    'chat_id'    => $chatId,
-                    'text'       => $message,
+                    'chat_id' => $chatId,
+                    'text' => $message,
                     'parse_mode' => 'Markdown',
                 ]
             );

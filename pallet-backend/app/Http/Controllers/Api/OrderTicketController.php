@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\ActivityLogger;
+use App\Helpers\ImageConverter;
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessTicketOcr;
 use App\Models\Order;
 use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
-use App\Jobs\ProcessTicketOcr;
 use App\Services\TicketOcrService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
-use App\Helpers\ImageConverter;
-use App\Helpers\ActivityLogger;
+use Illuminate\Support\Facades\Storage;
 
 class OrderTicketController extends Controller
 {
@@ -114,7 +114,7 @@ class OrderTicketController extends Controller
 
             return response()->json([
                 'message' => 'Error al subir la foto del ticket.',
-                'detail'  => $e->getMessage(),
+                'detail' => $e->getMessage(),
             ], 500);
         }
     }
@@ -128,10 +128,10 @@ class OrderTicketController extends Controller
         }
 
         return response()->json([
-            'id'               => $photo->id,
+            'id' => $photo->id,
             'ocr_processed_at' => $photo->ocr_processed_at,
-            'ocr_log'          => $photo->ocr_log,
-            'ocr_eans_count'   => count(($photo->ocr_data['eans'] ?? [])),
+            'ocr_log' => $photo->ocr_log,
+            'ocr_eans_count' => count(($photo->ocr_data['eans'] ?? [])),
         ]);
     }
 
@@ -154,13 +154,13 @@ class OrderTicketController extends Controller
         // Cargar ítems del pedido
         $order->load('items');
         $orderItems = $order->items->keyBy('ean');
-        $orderEans  = $orderItems->keys()->all();
+        $orderEans = $orderItems->keys()->all();
 
         // Distribución completa: por EAN, por pallet, por base
         $rows = DB::table('pallet_base_order_items as pboi')
             ->join('pallet_bases as pb', 'pb.id', '=', 'pboi.base_id')
-            ->join('pallets as p',       'p.id',  '=', 'pb.pallet_id')
-            ->join('order_items as oi',  'oi.id', '=', 'pboi.order_item_id')
+            ->join('pallets as p', 'p.id', '=', 'pb.pallet_id')
+            ->join('order_items as oi', 'oi.id', '=', 'pboi.order_item_id')
             ->where('oi.order_id', $order->id)
             ->select(
                 'oi.ean',
@@ -179,22 +179,22 @@ class OrderTicketController extends Controller
 
         foreach ($rows as $row) {
             $distributionByEan[$row->ean][] = [
-                'pallet_id'   => $row->pallet_id,
+                'pallet_id' => $row->pallet_id,
                 'pallet_code' => $row->pallet_code,
-                'base_name'   => $row->base_name ?? 'Base',
-                'qty'         => (int) $row->qty,
+                'base_name' => $row->base_name ?? 'Base',
+                'qty' => (int) $row->qty,
             ];
 
             if (! isset($palletMeta[$row->pallet_id])) {
                 $palletMeta[$row->pallet_id] = [
-                    'id'           => $row->pallet_id,
-                    'code'         => $row->pallet_code,
-                    'total_qty'    => 0,
+                    'id' => $row->pallet_id,
+                    'code' => $row->pallet_code,
+                    'total_qty' => 0,
                     'product_eans' => [],
-                    'base_ids'     => [],
+                    'base_ids' => [],
                 ];
             }
-            $palletMeta[$row->pallet_id]['total_qty']              += (int) $row->qty;
+            $palletMeta[$row->pallet_id]['total_qty'] += (int) $row->qty;
             $palletMeta[$row->pallet_id]['product_eans'][$row->ean] = true;
             $palletMeta[$row->pallet_id]['base_ids'][$row->base_id] = true;
         }
@@ -204,7 +204,7 @@ class OrderTicketController extends Controller
             $distQty = array_sum(array_column($distributionByEan[$ean] ?? [], 'qty'));
             if ($distQty < $item->qty) {
                 return response()->json([
-                    'ready'  => false,
+                    'ready' => false,
                     'reason' => "Hay productos sin organizar en bases. Por ejemplo: \"{$item->description}\" tiene {$distQty} de {$item->qty} u. distribuidas.",
                 ]);
             }
@@ -214,7 +214,7 @@ class OrderTicketController extends Controller
         $palletCount = count($palletMeta);
         if ($palletCount < 2) {
             return response()->json([
-                'ready'  => false,
+                'ready' => false,
                 'reason' => $palletCount === 0
                     ? 'Ningún producto está organizado en bases aún.'
                     : 'Todo el pedido está en un solo pallet. Usá la vista pública QR del pallet para ver los highlights.',
@@ -223,19 +223,19 @@ class OrderTicketController extends Controller
 
         // Asignar color_index estable (ordenado por pallet_id)
         ksort($palletMeta);
-        $colorIndex    = 0;
+        $colorIndex = 0;
         $palletColorMap = [];  // pallet_id => color_index
         $palletsResponse = [];
 
         foreach ($palletMeta as $palletId => $meta) {
             $palletColorMap[$palletId] = $colorIndex;
             $palletsResponse[] = [
-                'id'            => $palletId,
-                'code'          => $meta['code'],
-                'color_index'   => $colorIndex,
-                'base_count'    => count($meta['base_ids']),
+                'id' => $palletId,
+                'code' => $meta['code'],
+                'color_index' => $colorIndex,
+                'base_count' => count($meta['base_ids']),
                 'product_count' => count($meta['product_eans']),
-                'total_qty'     => $meta['total_qty'],
+                'total_qty' => $meta['total_qty'],
             ];
             $colorIndex++;
         }
@@ -252,25 +252,26 @@ class OrderTicketController extends Controller
             if (! $orderItem) {
                 // EAN detectado por OCR que no pertenece a este pedido
                 $highlights[] = [
-                    'ean'               => $ean,
-                    'detected_ean'      => $detection['detected_ean'],
-                    'description'       => null,
-                    'qty_order'         => null,
-                    'is_split'          => false,
-                    'pallet_color_index'=> null,
-                    'not_in_order'      => true,
-                    'pallet_breakdown'  => [],
-                    'bbox'              => $detection['bbox'],
-                    'ean_bbox'          => $detection['ean_bbox'],
-                    'img_w'             => $detection['img_w'],
-                    'img_h'             => $detection['img_h'],
+                    'ean' => $ean,
+                    'detected_ean' => $detection['detected_ean'],
+                    'description' => null,
+                    'qty_order' => null,
+                    'is_split' => false,
+                    'pallet_color_index' => null,
+                    'not_in_order' => true,
+                    'pallet_breakdown' => [],
+                    'bbox' => $detection['bbox'],
+                    'ean_bbox' => $detection['ean_bbox'],
+                    'img_w' => $detection['img_w'],
+                    'img_h' => $detection['img_h'],
                 ];
+
                 continue;
             }
 
-            $breakdown    = $distributionByEan[$ean] ?? [];
+            $breakdown = $distributionByEan[$ean] ?? [];
             $palletIdsHere = array_unique(array_column($breakdown, 'pallet_id'));
-            $isSplit       = count($palletIdsHere) > 1;
+            $isSplit = count($palletIdsHere) > 1;
 
             // Añadir color_index a cada entrada del breakdown
             $breakdownWithColors = array_map(fn ($b) => array_merge($b, [
@@ -278,27 +279,27 @@ class OrderTicketController extends Controller
             ]), $breakdown);
 
             $highlights[] = [
-                'ean'               => $ean,
-                'detected_ean'      => $detection['detected_ean'],
-                'description'       => $orderItem->description,
-                'qty_order'         => $orderItem->qty,
-                'is_split'          => $isSplit,
-                'pallet_color_index'=> $isSplit ? null : ($palletColorMap[$palletIdsHere[0]] ?? null),
-                'not_in_order'      => false,
-                'pallet_breakdown'  => $breakdownWithColors,
-                'bbox'              => $detection['bbox'],
-                'ean_bbox'          => $detection['ean_bbox'],
-                'img_w'             => $detection['img_w'],
-                'img_h'             => $detection['img_h'],
+                'ean' => $ean,
+                'detected_ean' => $detection['detected_ean'],
+                'description' => $orderItem->description,
+                'qty_order' => $orderItem->qty,
+                'is_split' => $isSplit,
+                'pallet_color_index' => $isSplit ? null : ($palletColorMap[$palletIdsHere[0]] ?? null),
+                'not_in_order' => false,
+                'pallet_breakdown' => $breakdownWithColors,
+                'bbox' => $detection['bbox'],
+                'ean_bbox' => $detection['ean_bbox'],
+                'img_w' => $detection['img_w'],
+                'img_h' => $detection['img_h'],
             ];
         }
 
         return response()->json([
-            'ready'      => true,
-            'pallets'    => $palletsResponse,
+            'ready' => true,
+            'pallets' => $palletsResponse,
             'highlights' => $highlights,
-            'img_w'      => $photo->ocr_data['img_w'] ?? null,
-            'img_h'      => $photo->ocr_data['img_h'] ?? null,
+            'img_w' => $photo->ocr_data['img_w'] ?? null,
+            'img_h' => $photo->ocr_data['img_h'] ?? null,
         ]);
     }
 

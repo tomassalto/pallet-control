@@ -1,34 +1,33 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
+use App\Http\Controllers\Api\ActivityLogController;
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BotController;
 use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\MissingItemRequestController;
 use App\Http\Controllers\Api\OrderController;
-use App\Http\Controllers\Api\PalletController;
-use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\OrderImportController;
 use App\Http\Controllers\Api\OrderItemController;
-use App\Http\Controllers\Api\PalletPhotoController;
+use App\Http\Controllers\Api\OrderTicketController;
 use App\Http\Controllers\Api\PalletBaseController;
 use App\Http\Controllers\Api\PalletBasePhotoController;
+use App\Http\Controllers\Api\PalletController;
+use App\Http\Controllers\Api\PalletPhotoController;
+use App\Http\Controllers\Api\PendingItemController;
 use App\Http\Controllers\Api\PhotoAnnotationController;
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\ActivityLogController;
-use App\Http\Controllers\Api\OrderTicketController;
-use App\Http\Controllers\Api\BotController;
+use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProductImageController;
+use App\Http\Controllers\Api\PublicOrderController;
 use App\Http\Controllers\Api\TelegramBotController;
 use App\Http\Controllers\Api\UserController;
-use App\Http\Controllers\Api\PendingItemController;
-use App\Http\Controllers\Api\DashboardController;
-use App\Http\Controllers\Api\PublicOrderController;
-use App\Http\Controllers\Api\MissingItemRequestController;
+use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
     // Rutas autenticadas con X-Bot-Secret (WhatsApp bot + scraper de imágenes)
     Route::middleware('bot.secret')->group(function () {
         Route::post('/bot/upload', [BotController::class, 'uploadPhoto']);
-        Route::post('/scraper/images/bulk-update',  [ProductImageController::class, 'bulkUpdate']);
+        Route::post('/scraper/images/bulk-update', [ProductImageController::class, 'bulkUpdate']);
         Route::post('/scraper/images/check-existing', [ProductImageController::class, 'checkExisting']);
     });
 
@@ -163,11 +162,11 @@ Route::prefix('v1')->group(function () {
             Route::patch('/missing-item-requests/{missingItemRequest}', [MissingItemRequestController::class, 'update']);
 
             // Storage cleanup
-            Route::get('/storage/stats',           [\App\Http\Controllers\Api\Admin\StorageController::class, 'stats']);
-            Route::get('/storage/pallets',         [\App\Http\Controllers\Api\Admin\StorageController::class, 'pallets']);
-            Route::get('/storage/orders',          [\App\Http\Controllers\Api\Admin\StorageController::class, 'orders']);
+            Route::get('/storage/stats', [\App\Http\Controllers\Api\Admin\StorageController::class, 'stats']);
+            Route::get('/storage/pallets', [\App\Http\Controllers\Api\Admin\StorageController::class, 'pallets']);
+            Route::get('/storage/orders', [\App\Http\Controllers\Api\Admin\StorageController::class, 'orders']);
             Route::delete('/storage/pallets/{id}', [\App\Http\Controllers\Api\Admin\StorageController::class, 'deletePallet']);
-            Route::delete('/storage/orders/{id}',  [\App\Http\Controllers\Api\Admin\StorageController::class, 'deleteOrder']);
+            Route::delete('/storage/orders/{id}', [\App\Http\Controllers\Api\Admin\StorageController::class, 'deleteOrder']);
         });
     });
 });

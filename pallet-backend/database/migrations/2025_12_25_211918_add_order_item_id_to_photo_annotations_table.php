@@ -4,7 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::table('photo_annotations', function (Blueprint $table) {
@@ -13,7 +14,7 @@ return new class extends Migration {
                 ->after('photo_id')
                 ->constrained('order_items')
                 ->nullOnDelete();
-            
+
             $table->index(['order_item_id']);
         });
     }

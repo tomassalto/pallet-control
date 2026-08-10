@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class OrderItem extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'order_id',
         'ean',
@@ -24,9 +26,9 @@ class OrderItem extends Model
     protected function casts(): array
     {
         return [
-            'price'           => 'float',
+            'price' => 'float',
             'desc_medio_pago' => 'float',
-            'is_controlled'   => 'boolean',
+            'is_controlled' => 'boolean',
         ];
     }
 

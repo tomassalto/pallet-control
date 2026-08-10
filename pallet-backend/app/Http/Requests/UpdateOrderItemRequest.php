@@ -14,8 +14,8 @@ class UpdateOrderItemRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status'   => ['nullable', 'in:pending,done,removed'],
-            'qty'      => ['nullable', 'integer', 'min:1'],
+            'status' => ['nullable', 'in:pending,done,removed'],
+            'qty' => ['nullable', 'integer', 'min:1'],
             'done_qty' => ['nullable', 'integer', 'min:0'],
         ];
     }

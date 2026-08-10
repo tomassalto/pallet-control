@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\ActivityLogger;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateOrderItemRequest;
-use App\Helpers\ActivityLogger;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -26,7 +26,7 @@ class OrderItemController extends Controller
         }
 
         // Normalizar last4: solo dígitos y padding a 4 caracteres
-        if (!empty($data['last4'])) {
+        if (! empty($data['last4'])) {
             $data['last4'] = preg_replace('/\D+/', '', $data['last4']);
             $data['last4'] = str_pad($data['last4'], 4, '0', STR_PAD_LEFT);
 
@@ -35,7 +35,7 @@ class OrderItemController extends Controller
             }
         }
 
-        if (!empty($data['ean'])) {
+        if (! empty($data['ean'])) {
             $ean = $data['ean'];
             $last4 = substr($ean, -4);
 
@@ -90,7 +90,7 @@ class OrderItemController extends Controller
         if ($matches->count() > 1) {
             return response()->json([
                 'message' => 'Hay más de un producto con esos últimos 4. Usá EAN completo.',
-                'candidates' => $matches->map(fn($p) => ['ean' => $p->ean, 'name' => $p->name]),
+                'candidates' => $matches->map(fn ($p) => ['ean' => $p->ean, 'name' => $p->name]),
             ], 409);
         }
 
@@ -159,7 +159,7 @@ class OrderItemController extends Controller
             $statusLabels = [
                 'pending' => 'Pendiente',
                 'done' => 'Listo',
-                'removed' => 'Quitado'
+                'removed' => 'Quitado',
             ];
             $oldLabel = $statusLabels[$item->status] ?? $item->status;
             $newLabel = $statusLabels[$data['status']] ?? $data['status'];
@@ -175,7 +175,7 @@ class OrderItemController extends Controller
         $item->update($data);
 
         // Registrar log si hubo cambios
-        if (!empty($descriptions)) {
+        if (! empty($descriptions)) {
             $action = isset($data['status']) && $data['status'] === 'removed' ? 'item_removed' : (isset($data['qty']) ? 'item_quantity_changed' : 'item_status_changed');
 
             ActivityLogger::log(
@@ -184,8 +184,8 @@ class OrderItemController extends Controller
                 entityId: $item->id,
                 description: "{$item->description} (EAN: {$item->ean}): " . implode(', ', $descriptions),
                 palletId: $palletId,
-                oldValues: !empty($oldValues) ? $oldValues : null,
-                newValues: !empty($newValues) ? $newValues : null,
+                oldValues: ! empty($oldValues) ? $oldValues : null,
+                newValues: ! empty($newValues) ? $newValues : null,
                 orderId: $item->order_id,
             );
         }

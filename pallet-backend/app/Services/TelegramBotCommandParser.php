@@ -20,7 +20,7 @@ class TelegramBotCommandParser
         ];
 
         $type = $typeMap[$cmd] ?? null;
-        if (!$type) {
+        if (! $type) {
             return null;
         }
 
@@ -28,7 +28,7 @@ class TelegramBotCommandParser
 
         if ($type === 'pallet') {
             $arg = $parts[1] ?? null;
-            if (!$arg || preg_match('/^\d{1,2}$/', $arg)) {
+            if (! $arg || preg_match('/^\d{1,2}$/', $arg)) {
                 $params['pallet_index'] = (int) ($arg ?? 1);
             } else {
                 $params['pallet_code'] = $arg;
@@ -36,7 +36,7 @@ class TelegramBotCommandParser
         } elseif ($type === 'base') {
             $arg1 = $parts[1] ?? null;
             $rest = implode(' ', array_slice($parts, 2));
-            if (!$arg1) {
+            if (! $arg1) {
                 $params['pallet_index'] = 1;
             } elseif (preg_match('/^\d{1,2}$/', $arg1) && $rest) {
                 $params['pallet_index'] = (int) $arg1;
@@ -47,7 +47,7 @@ class TelegramBotCommandParser
             }
         } elseif ($type === 'ticket') {
             $arg = $parts[1] ?? null;
-            if (!$arg || preg_match('/^\d{1,2}$/', $arg)) {
+            if (! $arg || preg_match('/^\d{1,2}$/', $arg)) {
                 $params['order_index'] = (int) ($arg ?? 1);
             } else {
                 $params['order_code'] = $arg;

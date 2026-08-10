@@ -50,22 +50,25 @@ class TicketOcrService
 
         $log("Iniciando OCR para foto #{$photo->id} — {$photo->original_name}");
         $log("Ruta: {$imagePath}");
-        $log("Existe: " . (file_exists($imagePath) ? 'SÍ' : 'NO'));
+        $log('Existe: ' . (file_exists($imagePath) ? 'SÍ' : 'NO'));
 
         if (! file_exists($imagePath)) {
-            $log("ERROR: imagen no encontrada en disco. Abortando.");
+            $log('ERROR: imagen no encontrada en disco. Abortando.');
             $photo->update(['ocr_processed_at' => now()]);
-            if ($tempOcrFile && file_exists($tempOcrFile)) @unlink($tempOcrFile);
+            if ($tempOcrFile && file_exists($tempOcrFile)) {
+                @unlink($tempOcrFile);
+            }
+
             return false;
         }
 
-        $log("Tamaño: " . number_format(filesize($imagePath) / 1024, 1) . " KB");
-        $log("Proveedor OCR: " . strtoupper((string) config('ocr.provider', 'tesseract')));
+        $log('Tamaño: ' . number_format(filesize($imagePath) / 1024, 1) . ' KB');
+        $log('Proveedor OCR: ' . strtoupper((string) config('ocr.provider', 'tesseract')));
 
         $result = $this->extractEans($imagePath, $log);
 
         if ($result === null) {
-            $log("RESULTADO: OCR devolvió null (Tesseract/PaddleOCR no disponible o falló).");
+            $log('RESULTADO: OCR devolvió null (Tesseract/PaddleOCR no disponible o falló).');
         } else {
             $eanCount = count($result['eans'] ?? []);
             $log("RESULTADO: OCR completado. EANs con checksum válido encontrados: {$eanCount}");
@@ -74,17 +77,17 @@ class TicketOcrService
                     $log("  → EAN: {$e['ean']} | fuente: " . ($e['source'] ?? '?'));
                 }
             } else {
-                $log("  No se encontraron EANs válidos. Los highlights NO aparecerán.");
+                $log('  No se encontraron EANs válidos. Los highlights NO aparecerán.');
             }
         }
 
-        $log("Guardando resultado en BD...");
+        $log('Guardando resultado en BD...');
         $photo->update([
-            'ocr_data'         => $result,
+            'ocr_data' => $result,
             'ocr_processed_at' => now(),
-            'ocr_log'          => $photo->ocr_log,
+            'ocr_log' => $photo->ocr_log,
         ]);
-        $log("Listo.");
+        $log('Listo.');
 
         // Limpiar archivo temporal si se creó para R2
         if ($tempOcrFile && file_exists($tempOcrFile)) {
@@ -125,7 +128,9 @@ class TicketOcrService
             'C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe',
         ];
         foreach ($windowsPaths as $p) {
-            if (file_exists($p)) return $p;
+            if (file_exists($p)) {
+                return $p;
+            }
         }
 
         // Asumir que está en el PATH (Linux / Docker / Railway / Render)
@@ -139,6 +144,7 @@ class TicketOcrService
         $info = @getimagesize($imagePath);
         if (! $info) {
             $log("WARN: getimagesize falló para '{$imagePath}'. Usando imagen original sin preprocesar.");
+
             return [['label' => 'original', 'path' => $imagePath, 'temporary' => false]];
         }
 
@@ -147,13 +153,14 @@ class TicketOcrService
 
         $src = match ($type) {
             IMAGETYPE_JPEG => @imagecreatefromjpeg($imagePath),
-            IMAGETYPE_PNG  => @imagecreatefrompng($imagePath),
+            IMAGETYPE_PNG => @imagecreatefrompng($imagePath),
             IMAGETYPE_WEBP => @imagecreatefromwebp($imagePath),
-            default        => null,
+            default => null,
         };
 
         if (! $src) {
             $log("WARN: No se pudo crear recurso GD (tipo {$type} no soportado o imagen corrupta). Usando original.");
+
             return [['label' => 'original', 'path' => $imagePath, 'temporary' => false]];
         }
 
@@ -199,7 +206,7 @@ class TicketOcrService
             }
 
             if ($recipe['sharp']) {
-                imageconvolution($dst, [[-1,-1,-1],[-1,16,-1],[-1,-1,-1]], 8, 0);
+                imageconvolution($dst, [[-1, -1, -1], [-1, 16, -1], [-1, -1, -1]], 8, 0);
             }
 
             if ($recipe['rotate'] !== 0) {
@@ -214,6 +221,7 @@ class TicketOcrService
             if ($tmpBase === false) {
                 $log("WARN: no se pudo crear temp para variante {$label}.");
                 imagedestroy($dst);
+
                 continue;
             }
 
@@ -233,7 +241,7 @@ class TicketOcrService
 
         imagedestroy($src);
 
-        $log("Variantes generadas: " . count($variants));
+        $log('Variantes generadas: ' . count($variants));
 
         return $variants ?: [['label' => 'original', 'path' => $imagePath, 'temporary' => false]];
     }
@@ -244,33 +252,37 @@ class TicketOcrService
         $provider = strtolower((string) config('ocr.provider', 'tesseract'));
 
         if ($provider === 'azure') {
-            $log("Usando Azure Computer Vision como proveedor.");
+            $log('Usando Azure Computer Vision como proveedor.');
             $result = $this->extractEansWithAzure($imagePath, $log);
             if ($result !== null) {
                 return $result;
             }
 
-            $log("Azure Vision falló. Sin resultado.");
+            $log('Azure Vision falló. Sin resultado.');
+
             return null;
         }
 
         if ($provider === 'paddle') {
-            $log("Usando PaddleOCR como proveedor principal.");
+            $log('Usando PaddleOCR como proveedor principal.');
             $result = $this->extractEansWithPaddle($imagePath, $log);
             if ($result !== null) {
                 return $result;
             }
 
             if (filter_var(config('ocr.fallback_tesseract', true), FILTER_VALIDATE_BOOL)) {
-                $log("PaddleOCR falló → usando Tesseract como fallback.");
+                $log('PaddleOCR falló → usando Tesseract como fallback.');
+
                 return $this->extractEansWithTesseract($imagePath, $log);
             }
 
-            $log("PaddleOCR falló y OCR_FALLBACK_TESSERACT=false. Sin resultado.");
+            $log('PaddleOCR falló y OCR_FALLBACK_TESSERACT=false. Sin resultado.');
+
             return null;
         }
 
-        $log("Usando Tesseract como proveedor.");
+        $log('Usando Tesseract como proveedor.');
+
         return $this->extractEansWithTesseract($imagePath, $log);
     }
 
@@ -284,10 +296,11 @@ class TicketOcrService
         $log ??= static fn (string $msg) => Log::info('OCR | ' . $msg);
 
         $endpoint = rtrim((string) config('ocr.azure.endpoint', ''), '/');
-        $key      = (string) config('ocr.azure.key', '');
+        $key = (string) config('ocr.azure.key', '');
 
         if (! $endpoint || ! $key) {
-            $log("ERROR: AZURE_VISION_ENDPOINT o AZURE_VISION_KEY no están configurados en .env");
+            $log('ERROR: AZURE_VISION_ENDPOINT o AZURE_VISION_KEY no están configurados en .env');
+
             return null;
         }
 
@@ -296,7 +309,8 @@ class TicketOcrService
         // Leer imagen como binario
         $imageData = @file_get_contents($imagePath);
         if ($imageData === false) {
-            $log("ERROR: No se pudo leer el archivo de imagen.");
+            $log('ERROR: No se pudo leer el archivo de imagen.');
+
             return null;
         }
 
@@ -311,18 +325,18 @@ class TicketOcrService
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $imageData,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $imageData,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 30,
-            CURLOPT_HTTPHEADER     => [
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => [
                 'Ocp-Apim-Subscription-Key: ' . $key,
                 'Content-Type: application/octet-stream',
             ],
         ]);
 
-        $response  = curl_exec($ch);
-        $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
         curl_close($ch);
 
@@ -331,21 +345,24 @@ class TicketOcrService
 
         if ($curlError) {
             $log("ERROR cURL: {$curlError}");
+
             return null;
         }
 
         if ($httpCode !== 200) {
             $log("ERROR HTTP {$httpCode}: " . mb_substr((string) $response, 0, 400));
+
             return null;
         }
 
         $payload = json_decode((string) $response, true);
         if (! is_array($payload)) {
-            $log("ERROR: respuesta JSON inválida.");
+            $log('ERROR: respuesta JSON inválida.');
+
             return null;
         }
 
-        $imgW = (int) ($payload['metadata']['width']  ?? 0);
+        $imgW = (int) ($payload['metadata']['width'] ?? 0);
         $imgH = (int) ($payload['metadata']['height'] ?? 0);
         $log("Dimensiones imagen: {$imgW}×{$imgH} px");
 
@@ -353,7 +370,7 @@ class TicketOcrService
         $lines = [];
         foreach ($payload['readResult']['blocks'] ?? [] as $block) {
             foreach ($block['lines'] ?? [] as $line) {
-                $text    = (string) ($line['text'] ?? '');
+                $text = (string) ($line['text'] ?? '');
                 $polygon = $line['boundingPolygon'] ?? [];
 
                 if ($text === '' || count($polygon) < 4) {
@@ -361,19 +378,19 @@ class TicketOcrService
                 }
 
                 // Convertir polígono a bbox rectangular
-                $xs   = array_column($polygon, 'x');
-                $ys   = array_column($polygon, 'y');
+                $xs = array_column($polygon, 'x');
+                $ys = array_column($polygon, 'y');
                 $bbox = [
-                    'left'   => (int) min($xs),
-                    'top'    => (int) min($ys),
-                    'right'  => (int) max($xs),
+                    'left' => (int) min($xs),
+                    'top' => (int) min($ys),
+                    'right' => (int) max($xs),
                     'bottom' => (int) max($ys),
                 ];
 
                 $lines[] = [
-                    'text'       => $text,
-                    'bbox'       => $bbox,
-                    'polygon'    => $polygon,
+                    'text' => $text,
+                    'bbox' => $bbox,
+                    'polygon' => $polygon,
                     'confidence' => $line['words'][0]['confidence'] ?? null,
                 ];
 
@@ -381,7 +398,7 @@ class TicketOcrService
             }
         }
 
-        $log("Total líneas reconocidas: " . count($lines));
+        $log('Total líneas reconocidas: ' . count($lines));
 
         // Buscar EAN-13 válidos en cada línea
         $eans = [];
@@ -392,7 +409,7 @@ class TicketOcrService
             foreach ($this->validEanWindows($digits) as $ean) {
                 $bucketKey = $ean
                     . '|' . (int) floor($line['bbox']['left'] / 20)
-                    . '|' . (int) floor($line['bbox']['top']  / 20);
+                    . '|' . (int) floor($line['bbox']['top'] / 20);
 
                 if (isset($seen[$bucketKey])) {
                     continue;
@@ -400,24 +417,24 @@ class TicketOcrService
                 $seen[$bucketKey] = true;
 
                 $eans[] = [
-                    'ean'        => $ean,
-                    'bbox'       => $line['bbox'],
-                    'source'     => 'azure_line',
-                    'text'       => $line['text'],
+                    'ean' => $ean,
+                    'bbox' => $line['bbox'],
+                    'source' => 'azure_line',
+                    'text' => $line['text'],
                     'confidence' => $line['confidence'] ?? null,
                 ];
                 $log("  → EAN válido: {$ean}");
             }
         }
 
-        $log("EANs con checksum válido: " . count($eans));
+        $log('EANs con checksum válido: ' . count($eans));
 
         return [
             'engine' => 'azure_vision',
-            'img_w'  => $imgW,
-            'img_h'  => $imgH,
-            'lines'  => $lines,
-            'eans'   => $eans,
+            'img_w' => $imgW,
+            'img_h' => $imgH,
+            'lines' => $lines,
+            'eans' => $eans,
         ];
     }
 
@@ -433,12 +450,13 @@ class TicketOcrService
         $verStr = implode(' ', array_slice($verOut, 0, 1));
         if ($verCode !== 0) {
             $log("ERROR: Tesseract no responde (exit {$verCode}). Output: " . implode(' ', $verOut));
+
             return null;
         }
         $log("Tesseract version: {$verStr}");
 
         $variants = $this->prepareImageVariantsForOcr($imagePath, $log);
-        $log("Variantes preparadas: " . implode(', ', array_column($variants, 'label')));
+        $log('Variantes preparadas: ' . implode(', ', array_column($variants, 'label')));
 
         $configs = [
             ['psm' => 6,  'whitelist' => true],
@@ -454,7 +472,8 @@ class TicketOcrService
                 foreach ($configs as $ocrConfig) {
                     $tmpBase = tempnam(sys_get_temp_dir(), 'pallet_ocr_');
                     if ($tmpBase === false) {
-                        $log("ERROR: no se pudo crear archivo temporal.");
+                        $log('ERROR: no se pudo crear archivo temporal.');
+
                         continue;
                     }
 
@@ -492,7 +511,7 @@ class TicketOcrService
                             $log("  TIMEOUT: Tesseract terminado por timeout (exit={$returnCode}, BusyBox usa 15, GNU usa 124).");
                         }
                         if ($output) {
-                            $log("  Output Tesseract: " . implode(' | ', array_slice($output, 0, 5)));
+                            $log('  Output Tesseract: ' . implode(' | ', array_slice($output, 0, 5)));
                         }
 
                         // BusyBox timeout (Alpine/Docker) mata con SIGTERM → exit 15, no 124.
@@ -500,6 +519,7 @@ class TicketOcrService
                         // Solo descartamos si el archivo no existe o está vacío (< 200 bytes).
                         if ($hocrSize < 200) {
                             $log("  → SKIP: hocr vacío o muy pequeño ({$hocrSize} bytes).");
+
                             continue;
                         }
                         if ($returnCode !== 0) {
@@ -508,7 +528,7 @@ class TicketOcrService
 
                         $ranAny = true;
                         $parsed = $this->parseHocr(file_get_contents($hocrFile));
-                        $log("  → hocr parseado: img={$parsed['img_w']}×{$parsed['img_h']} EANs={" . count($parsed['eans']) . "}");
+                        $log("  → hocr parseado: img={$parsed['img_w']}×{$parsed['img_h']} EANs={" . count($parsed['eans']) . '}');
 
                         if ($merged['img_w'] === 0 && $parsed['img_w'] > 0) {
                             $merged['img_w'] = $parsed['img_w'];
@@ -541,11 +561,13 @@ class TicketOcrService
         }
 
         if (! $ranAny) {
-            $log("ERROR CRÍTICO: Tesseract no corrió ninguna variante exitosamente.");
+            $log('ERROR CRÍTICO: Tesseract no corrió ninguna variante exitosamente.');
+
             return null;
         }
 
-        $log("Tesseract finalizado. Total EANs únicos: " . count($merged['eans']));
+        $log('Tesseract finalizado. Total EANs únicos: ' . count($merged['eans']));
+
         return $merged;
     }
 
@@ -553,17 +575,18 @@ class TicketOcrService
     {
         $log ??= static fn (string $msg) => Log::info('OCR | ' . $msg);
 
-        $script  = (string) config('ocr.paddle.script', base_path('scripts/paddle_ocr_ticket.py'));
-        $python  = (string) config('ocr.paddle.python_bin', 'python');
-        $lang    = (string) config('ocr.paddle.lang', 'en');
+        $script = (string) config('ocr.paddle.script', base_path('scripts/paddle_ocr_ticket.py'));
+        $python = (string) config('ocr.paddle.python_bin', 'python');
+        $lang = (string) config('ocr.paddle.lang', 'en');
         $timeout = max(10, (int) config('ocr.process_timeout', 120));
 
         $log("PaddleOCR — python: {$python}");
         $log("PaddleOCR — script: {$script}");
-        $log("PaddleOCR — script existe: " . (is_file($script) ? 'SÍ' : 'NO'));
+        $log('PaddleOCR — script existe: ' . (is_file($script) ? 'SÍ' : 'NO'));
 
         if (! is_file($script)) {
             $log("ERROR: script PaddleOCR no encontrado en '{$script}'. No se puede usar PaddleOCR.");
+
             return null;
         }
 
@@ -583,10 +606,11 @@ class TicketOcrService
             2 => ['pipe', 'w'],
         ];
 
-        $log("Iniciando proc_open PaddleOCR...");
+        $log('Iniciando proc_open PaddleOCR...');
         $process = proc_open($cmd, $descriptorSpec, $pipes);
         if (! is_resource($process)) {
-            $log("ERROR: proc_open falló (¿proc_open deshabilitado en PHP? ¿python no existe?).");
+            $log('ERROR: proc_open falló (¿proc_open deshabilitado en PHP? ¿python no existe?).');
+
             return null;
         }
         $log("Proceso PaddleOCR iniciado. Esperando resultado (timeout={$timeout}s)...");
@@ -624,13 +648,14 @@ class TicketOcrService
 
         $elapsed = round(microtime(true) - $started, 2);
         $log("PaddleOCR terminó en {$elapsed}s | exit_code={$exitCode} | timedOut=" . ($timedOut ? 'SÍ' : 'no'));
-        $log("stdout (" . strlen($stdout) . " bytes): " . mb_substr(trim($stdout), 0, 300));
+        $log('stdout (' . strlen($stdout) . ' bytes): ' . mb_substr(trim($stdout), 0, 300));
         if ($stderr) {
-            $log("stderr: " . mb_substr(trim($stderr), 0, 500));
+            $log('stderr: ' . mb_substr(trim($stderr), 0, 500));
         }
 
         if ($timedOut) {
             $log("ERROR: PaddleOCR excedió timeout de {$timeout}s.");
+
             return null;
         }
 
@@ -645,7 +670,7 @@ class TicketOcrService
         }
 
         if ($exitCode !== 0 || ! is_array($payload) || ! ($payload['ok'] ?? false)) {
-            $log("ERROR: PaddleOCR payload inválido (exit={$exitCode}, ok=" . ($payload['ok'] ?? 'null') . ").");
+            $log("ERROR: PaddleOCR payload inválido (exit={$exitCode}, ok=" . ($payload['ok'] ?? 'null') . ').');
             Log::warning('TicketOcrService: PaddleOCR falló.', [
                 'exit_code' => $exitCode,
                 'json_error' => json_last_error_msg(),
@@ -654,6 +679,7 @@ class TicketOcrService
                 'stderr' => mb_substr($stderr, 0, 2000),
                 'payload' => is_array($payload) ? $payload : null,
             ]);
+
             return null;
         }
 
@@ -706,6 +732,7 @@ class TicketOcrService
             $key = $ean['ean'];
             if (! isset($bestByEan[$key])) {
                 $bestByEan[$key] = $ean;
+
                 continue;
             }
 
@@ -753,11 +780,14 @@ class TicketOcrService
      */
     private function isValidEan13(string $ean): bool
     {
-        if (strlen($ean) !== 13) return false;
+        if (strlen($ean) !== 13) {
+            return false;
+        }
         $sum = 0;
         for ($i = 0; $i < 12; $i++) {
             $sum += (int) $ean[$i] * ($i % 2 === 0 ? 1 : 3);
         }
+
         return ((10 - ($sum % 10)) % 10) === (int) $ean[12];
     }
 
@@ -771,7 +801,8 @@ class TicketOcrService
         $xpath = new \DOMXPath($dom);
 
         // ── Dimensiones ───────────────────────────────────────────────────
-        $imgW = 0; $imgH = 0;
+        $imgW = 0;
+        $imgH = 0;
         $pages = $xpath->query("//*[contains(@class,'ocr_page')]");
         if ($pages && $pages->length > 0) {
             $title = $pages->item(0)->getAttribute('title');
@@ -789,22 +820,26 @@ class TicketOcrService
         // Con imagen torcida, Tesseract puede leer cada dígito como palabra
         // separada. Los agrupamos por proximidad espacial para reconstruir
         // los strings numéricos completos.
-        $words  = $xpath->query("//*[contains(@class,'ocrx_word')]");
+        $words = $xpath->query("//*[contains(@class,'ocrx_word')]");
         $tokens = [];
 
         if ($words) {
             foreach ($words as $word) {
                 $clean = preg_replace('/[^0-9]/', '', trim($word->textContent));
-                if ($clean === '') continue;
+                if ($clean === '') {
+                    continue;
+                }
 
                 $title = $word->getAttribute('title');
-                if (! preg_match('/bbox\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/', $title, $m)) continue;
+                if (! preg_match('/bbox\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/', $title, $m)) {
+                    continue;
+                }
 
                 $tokens[] = [
                     'digits' => $clean,
-                    'left'   => (int) $m[1],
-                    'top'    => (int) $m[2],
-                    'right'  => (int) $m[3],
+                    'left' => (int) $m[1],
+                    'top' => (int) $m[2],
+                    'right' => (int) $m[3],
                     'bottom' => (int) $m[4],
                 ];
             }
@@ -814,24 +849,28 @@ class TicketOcrService
         // En vez de words individuales, tomamos cada línea entera → sacamos
         // solo dígitos → buscamos secuencias de 13 con checksum EAN válido.
         // Esto es más robusto que agrupar words cuando la imagen está torcida.
-        $lines    = $xpath->query("//*[contains(@class,'ocr_line')]");
+        $lines = $xpath->query("//*[contains(@class,'ocr_line')]");
         $lineData = [];
 
         if ($lines) {
             foreach ($lines as $line) {
                 $fullText = trim($line->textContent);
-                $digits   = preg_replace('/[^0-9]/', '', $fullText);
-                if (strlen($digits) < 10) continue;
+                $digits = preg_replace('/[^0-9]/', '', $fullText);
+                if (strlen($digits) < 10) {
+                    continue;
+                }
 
                 $title = $line->getAttribute('title');
-                if (! preg_match('/bbox\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/', $title, $m)) continue;
+                if (! preg_match('/bbox\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/', $title, $m)) {
+                    continue;
+                }
 
                 $lineData[] = [
-                    'text'   => $fullText,
+                    'text' => $fullText,
                     'digits' => $digits,
-                    'left'   => (int) $m[1],
-                    'top'    => (int) $m[2],
-                    'right'  => (int) $m[3],
+                    'left' => (int) $m[1],
+                    'top' => (int) $m[2],
+                    'right' => (int) $m[3],
                     'bottom' => (int) $m[4],
                 ];
             }
@@ -841,9 +880,9 @@ class TicketOcrService
             Log::info('TicketOcrService: líneas con 10+ dígitos', [
                 'count' => count($lineData),
                 'lines' => array_map(fn ($l) => [
-                    'text'   => $l['text'],
+                    'text' => $l['text'],
                     'digits' => $l['digits'],
-                    'len'    => strlen($l['digits']),
+                    'len' => strlen($l['digits']),
                 ], $lineData),
             ]);
         }
@@ -854,11 +893,11 @@ class TicketOcrService
             $digits = $line['digits'];
             foreach ($this->validEanWindows($digits) as $candidate) {
                 $eans[] = [
-                    'ean'  => $candidate,
+                    'ean' => $candidate,
                     'bbox' => [
-                        'left'   => $line['left'],
-                        'top'    => $line['top'],
-                        'right'  => $line['right'],
+                        'left' => $line['left'],
+                        'top' => $line['top'],
+                        'right' => $line['right'],
                         'bottom' => $line['bottom'],
                     ],
                     'source' => 'line',
@@ -871,16 +910,20 @@ class TicketOcrService
         if (config('app.debug')) {
             Log::info('TicketOcrService: EANs con checksum válido', [
                 'count' => count($eans),
-                'eans'  => array_column($eans, 'ean'),
+                'eans' => array_column($eans, 'ean'),
                 'token_count' => count($tokens),
             ]);
         }
 
         // Deduplicar
-        $seen = []; $unique = [];
+        $seen = [];
+        $unique = [];
         foreach ($eans as $e) {
             $key = $e['ean'] . '|' . (int) floor($e['bbox']['left'] / 20) . '|' . (int) floor($e['bbox']['top'] / 20);
-            if (! isset($seen[$key])) { $seen[$key] = true; $unique[] = $e; }
+            if (! isset($seen[$key])) {
+                $seen[$key] = true;
+                $unique[] = $e;
+            }
         }
 
         return ['img_w' => $imgW, 'img_h' => $imgH, 'eans' => $unique];
@@ -967,6 +1010,7 @@ class TicketOcrService
 
         return array_map(function ($item) {
             unset($item['score']);
+
             return $item;
         }, array_values($bestByEan));
     }
@@ -1008,6 +1052,7 @@ class TicketOcrService
                     'count' => 1,
                     'tokens' => [$token],
                 ];
+
                 continue;
             }
 
@@ -1030,6 +1075,7 @@ class TicketOcrService
         foreach ($line as $token) {
             if ($current === []) {
                 $current[] = $token;
+
                 continue;
             }
 
@@ -1042,6 +1088,7 @@ class TicketOcrService
 
             if ($gap <= $maxGap || ($gap <= $medianDigitWidth * 4.2 && $overlapRatio >= 0.25)) {
                 $current[] = $token;
+
                 continue;
             }
 
@@ -1147,15 +1194,15 @@ class TicketOcrService
 
             foreach (self::allEanWindows($digits) as $candidate) {
                 $detections[] = [
-                    'ean'    => $candidate,
-                    'bbox'   => [
-                        'left'   => (int) $bbox['left'],
-                        'top'    => (int) $bbox['top'],
-                        'right'  => (int) $bbox['right'],
+                    'ean' => $candidate,
+                    'bbox' => [
+                        'left' => (int) $bbox['left'],
+                        'top' => (int) $bbox['top'],
+                        'right' => (int) $bbox['right'],
                         'bottom' => (int) $bbox['bottom'],
                     ],
                     'source' => 'line_raw',
-                    'text'   => $text,
+                    'text' => $text,
                 ];
             }
         }
@@ -1176,15 +1223,15 @@ class TicketOcrService
      */
     private static function expandBbox(array $rawBbox, int $imgW, int $imgH): array
     {
-        $eanHeight     = max(1, $rawBbox['bottom'] - $rawBbox['top']);
-        $eanWidth      = max(1, $rawBbox['right']  - $rawBbox['left']);
-        $verticalPad   = max(2, (int) round($eanHeight * 0.35));
+        $eanHeight = max(1, $rawBbox['bottom'] - $rawBbox['top']);
+        $eanWidth = max(1, $rawBbox['right'] - $rawBbox['left']);
+        $verticalPad = max(2, (int) round($eanHeight * 0.35));
         $horizontalPad = max(2, (int) round(min(10, $eanWidth * 0.08)));
 
         return [
-            'left'   => max(0,    $rawBbox['left']   - $horizontalPad),
-            'top'    => max(0,    $rawBbox['top']    - $verticalPad),
-            'right'  => min($imgW, $rawBbox['right']  + $horizontalPad),
+            'left' => max(0, $rawBbox['left'] - $horizontalPad),
+            'top' => max(0, $rawBbox['top'] - $verticalPad),
+            'right' => min($imgW, $rawBbox['right'] + $horizontalPad),
             'bottom' => min($imgH, $rawBbox['bottom'] + $verticalPad),
         ];
     }
@@ -1210,18 +1257,18 @@ class TicketOcrService
             $palletInfo = $palletEanMap[$ean];
 
             $highlight = [
-                'ean'             => $ean,
-                'detected_ean'    => $detectedEan,
-                'description'     => $palletInfo['description'],
-                'qty_in_pallet'   => $palletInfo['total_qty'],
-                'qty_order'       => $palletInfo['qty_order_total'] ?? $palletInfo['total_qty'],
+                'ean' => $ean,
+                'detected_ean' => $detectedEan,
+                'description' => $palletInfo['description'],
+                'qty_in_pallet' => $palletInfo['total_qty'],
+                'qty_order' => $palletInfo['qty_order_total'] ?? $palletInfo['total_qty'],
                 'units_per_bulto' => $palletInfo['units_per_bulto'] ?? null,
-                'orders'          => $palletInfo['orders'],
-                'bases'           => $palletInfo['bases'] ?? [],
-                'img_w'           => $ocrData['img_w'],
-                'img_h'           => $ocrData['img_h'],
-                'ean_bbox'        => $detected['bbox'],
-                'bbox'            => self::expandBbox($detected['bbox'], $ocrData['img_w'], $ocrData['img_h']),
+                'orders' => $palletInfo['orders'],
+                'bases' => $palletInfo['bases'] ?? [],
+                'img_w' => $ocrData['img_w'],
+                'img_h' => $ocrData['img_h'],
+                'ean_bbox' => $detected['bbox'],
+                'bbox' => self::expandBbox($detected['bbox'], $ocrData['img_w'], $ocrData['img_h']),
             ];
 
             $score = self::highlightScore($detected, $detectedEan, $ean);
@@ -1248,16 +1295,16 @@ class TicketOcrService
      * (incluso los que no están en $expectedEans) para que el llamador pueda
      * clasificarlos como "not_in_order". El fuzzy-matching se guía por $expectedEans.
      *
-     * @param array $ocrData      photo.ocr_data tal como se guarda en la DB
+     * @param array $ocrData photo.ocr_data tal como se guarda en la DB
      * @param array $expectedEans EANs del pedido (guían el fuzzy-matching)
-     * @return array              keyed by resolved EAN
+     * @return array keyed by resolved EAN
      */
     public static function extractBestDetections(array $ocrData, array $expectedEans): array
     {
         $detections = self::buildRawDetections($ocrData, $expectedEans);
-        $imgW       = (int) ($ocrData['img_w'] ?? 1);
-        $imgH       = (int) ($ocrData['img_h'] ?? 1);
-        $bestByEan  = [];
+        $imgW = (int) ($ocrData['img_w'] ?? 1);
+        $imgH = (int) ($ocrData['img_h'] ?? 1);
+        $bestByEan = [];
 
         foreach ($detections as $detected) {
             $detectedEan = (string) ($detected['ean'] ?? '');
@@ -1265,17 +1312,17 @@ class TicketOcrService
                 continue;
             }
 
-            $ean   = self::resolveDetectedEan($detectedEan, $expectedEans);
+            $ean = self::resolveDetectedEan($detectedEan, $expectedEans);
             $score = self::highlightScore($detected, $detectedEan, $ean);
 
             if (! isset($bestByEan[$ean]) || $score > $bestByEan[$ean]['score']) {
                 $bestByEan[$ean] = [
-                    'score'        => $score,
+                    'score' => $score,
                     'detected_ean' => $detectedEan,
-                    'ean_bbox'     => $detected['bbox'],
-                    'bbox'         => self::expandBbox($detected['bbox'], $imgW, $imgH),
-                    'img_w'        => $imgW,
-                    'img_h'        => $imgH,
+                    'ean_bbox' => $detected['bbox'],
+                    'bbox' => self::expandBbox($detected['bbox'], $imgW, $imgH),
+                    'img_w' => $imgW,
+                    'img_h' => $imgH,
                 ];
             }
         }
@@ -1283,10 +1330,10 @@ class TicketOcrService
         return array_map(
             fn ($d) => [
                 'detected_ean' => $d['detected_ean'],
-                'ean_bbox'     => $d['ean_bbox'],
-                'bbox'         => $d['bbox'],
-                'img_w'        => $d['img_w'],
-                'img_h'        => $d['img_h'],
+                'ean_bbox' => $d['ean_bbox'],
+                'bbox' => $d['bbox'],
+                'img_w' => $d['img_w'],
+                'img_h' => $d['img_h'],
             ],
             $bestByEan
         );
@@ -1562,6 +1609,7 @@ class TicketOcrService
                 $best = $candidate;
                 $bestDistance = $distance;
                 $isAmbiguous = false;
+
                 continue;
             }
 

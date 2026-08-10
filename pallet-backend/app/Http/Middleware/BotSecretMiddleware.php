@@ -17,6 +17,7 @@ class BotSecretMiddleware
                 'ip' => $request->ip(),
                 'uri' => $request->fullUrl(),
             ]);
+
             return response()->json(['message' => 'Unauthorized: Bot no configurado.'], 401);
         }
 
