@@ -1,0 +1,16 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    paths:
+        - app
+
+    # Nivel 5 hoy — subir gradualmente (ver DEVOPS-BIBLIA §3, PLAN.md).
+    level: 5
+
+    excludePaths:
+        - app/Console/Commands/*Csv.php
+
+    checkModelProperties: true
+    checkOctaneCompatibility: true
