@@ -19,16 +19,16 @@ class PublicOrderController extends Controller
     {
         $order = Order::with([
             'customer',
-            'items'                    => fn ($q) => $q->orderBy('description'),
+            'items' => fn ($q) => $q->orderBy('description'),
             'tickets.photos',
-            'pallets'                  => fn ($q) => $q->orderBy('created_at'),
-            'pallets.photos'           => fn ($q) => $q->orderBy('created_at'),
-            'pallets.bases'            => fn ($q) => $q->orderBy('created_at'),
-            'pallets.bases.photos'     => fn ($q) => $q->orderBy('created_at'),
+            'pallets' => fn ($q) => $q->orderBy('created_at'),
+            'pallets.photos' => fn ($q) => $q->orderBy('created_at'),
+            'pallets.bases' => fn ($q) => $q->orderBy('created_at'),
+            'pallets.bases.photos' => fn ($q) => $q->orderBy('created_at'),
             'pallets.bases.orderItems',
         ])
-        ->where('code', $code)
-        ->first();
+            ->where('code', $code)
+            ->first();
 
         if (! $order) {
             return response()->json(['message' => 'Pedido no encontrado'], 404);
@@ -43,19 +43,21 @@ class PublicOrderController extends Controller
             if ($item->price !== null) {
                 $carry += $item->price * $item->qty;
             }
+
             return $carry;
         }, 0.0);
 
         // ── Items del pedido ──────────────────────────────────────────────
         $items = $order->items->map(function ($item) use ($products) {
             $prod = $products[$item->ean] ?? null;
+
             return [
-                'id'              => $item->id,
-                'ean'             => $item->ean,
-                'description'     => $item->description,
-                'qty'             => $item->qty,
-                'price'           => $item->price,
-                'image_url'       => $prod?->image_url ?? null,
+                'id' => $item->id,
+                'ean' => $item->ean,
+                'description' => $item->description,
+                'qty' => $item->qty,
+                'price' => $item->price,
+                'image_url' => $prod?->image_url ?? null,
                 'units_per_bulto' => $prod?->units_per_bulto ?? null,
             ];
         })->values();
@@ -66,12 +68,12 @@ class PublicOrderController extends Controller
         foreach ($order->items as $item) {
             $prod = $products[$item->ean] ?? null;
             $orderEanMap[$item->ean] = [
-                'description'     => $item->description,
-                'total_qty'       => $item->qty,
+                'description' => $item->description,
+                'total_qty' => $item->qty,
                 'qty_order_total' => $item->qty,
                 'units_per_bulto' => $prod?->units_per_bulto ?? null,
-                'orders'          => [['code' => $order->code, 'qty' => $item->qty]],
-                'bases'           => [],
+                'orders' => [['code' => $order->code, 'qty' => $item->qty]],
+                'bases' => [],
             ];
         }
 
@@ -79,7 +81,7 @@ class PublicOrderController extends Controller
         $pallets = $order->pallets->map(function ($pallet) use ($products, $order) {
             $bases = $pallet->bases->map(function ($base) use ($products, $order) {
                 $basePhotos = $base->photos->map(fn ($p) => [
-                    'id'  => $p->id,
+                    'id' => $p->id,
                     'url' => $p->url,
                 ])->values();
 
@@ -89,34 +91,35 @@ class PublicOrderController extends Controller
                     ->sortBy('description')
                     ->map(function ($item) use ($products) {
                         $prod = $products[$item->ean] ?? null;
+
                         return [
-                            'ean'             => $item->ean,
-                            'description'     => $item->description,
-                            'qty'             => $item->pivot->qty,
-                            'image_url'       => $prod?->image_url ?? null,
+                            'ean' => $item->ean,
+                            'description' => $item->description,
+                            'qty' => $item->pivot->qty,
+                            'image_url' => $prod?->image_url ?? null,
                             'units_per_bulto' => $prod?->units_per_bulto ?? null,
                         ];
                     })->values();
 
                 return [
-                    'id'     => $base->id,
-                    'name'   => $base->name,
+                    'id' => $base->id,
+                    'name' => $base->name,
                     'photos' => $basePhotos,
-                    'items'  => $baseItems,
+                    'items' => $baseItems,
                 ];
             })->values();
 
             $palletPhotos = $pallet->photos->map(fn ($p) => [
-                'id'  => $p->id,
+                'id' => $p->id,
                 'url' => $p->url,
             ])->values();
 
             return [
-                'id'     => $pallet->id,
-                'code'   => $pallet->code,
+                'id' => $pallet->id,
+                'code' => $pallet->code,
                 'status' => $pallet->status,
                 'photos' => $palletPhotos,
-                'bases'  => $bases,
+                'bases' => $bases,
             ];
         })->values();
 
@@ -132,12 +135,13 @@ class PublicOrderController extends Controller
                             $orderEanMap
                         );
                     }
+
                     return [
-                        'id'              => $photo->id,
-                        'url'             => $photo->url,
-                        'ocr_processed'   => true,
+                        'id' => $photo->id,
+                        'url' => $photo->url,
+                        'ocr_processed' => true,
                         'highlight_count' => count($highlights),
-                        'highlights'      => $highlights,
+                        'highlights' => $highlights,
                     ];
                 })->values();
 
@@ -147,19 +151,19 @@ class PublicOrderController extends Controller
 
             return [
                 'ticket_id' => $ticket->id,
-                'code'      => $ticket->code,
-                'note'      => $ticket->note,
-                'photos'    => $photos,
+                'code' => $ticket->code,
+                'note' => $ticket->note,
+                'photos' => $photos,
             ];
         })->filter()->values();
 
         return response()->json([
-            'code'            => $order->code,
-            'status'          => $order->status,
-            'customer'        => $order->customer?->name,
-            'total_price'     => $totalPrice ?: null,
-            'items'           => $items,
-            'pallets'         => $pallets,
+            'code' => $order->code,
+            'status' => $order->status,
+            'customer' => $order->customer?->name,
+            'total_price' => $totalPrice ?: null,
+            'items' => $items,
+            'pallets' => $pallets,
             'ticket_sections' => $ticketSections,
         ]);
     }

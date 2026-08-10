@@ -28,25 +28,25 @@ class ActivityLogController extends Controller
             }
 
             return [
-                'id'                  => $log->id,
-                'action'              => $log->action,
-                'entity_type'         => $log->entity_type,
-                'description'         => $log->description,
-                'user_name'           => $log->user?->name ?? 'Sistema',
-                'context'             => implode(' | ', $context),
-                'created_at'          => $log->created_at->format('Y-m-d H:i:s'),
-                'created_at_formatted'=> $log->created_at->format('d/m/Y H:i:s'),
-                'pallet_id'           => $log->pallet_id,
-                'order_id'            => $log->order_id,
+                'id' => $log->id,
+                'action' => $log->action,
+                'entity_type' => $log->entity_type,
+                'description' => $log->description,
+                'user_name' => $log->user?->name ?? 'Sistema',
+                'context' => implode(' | ', $context),
+                'created_at' => $log->created_at->format('Y-m-d H:i:s'),
+                'created_at_formatted' => $log->created_at->format('d/m/Y H:i:s'),
+                'pallet_id' => $log->pallet_id,
+                'order_id' => $log->order_id,
             ];
         });
 
         return response()->json([
-            'logs'         => $logs,
-            'total'        => $paginator->total(),
+            'logs' => $logs,
+            'total' => $paginator->total(),
             'current_page' => $paginator->currentPage(),
-            'last_page'    => $paginator->lastPage(),
-            'per_page'     => $paginator->perPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
         ]);
     }
 }

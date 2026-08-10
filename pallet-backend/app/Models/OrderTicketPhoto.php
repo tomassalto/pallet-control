@@ -24,7 +24,7 @@ class OrderTicketPhoto extends Model
     protected function casts(): array
     {
         return [
-            'ocr_data'         => 'array',
+            'ocr_data' => 'array',
             'ocr_processed_at' => 'datetime',
         ];
     }

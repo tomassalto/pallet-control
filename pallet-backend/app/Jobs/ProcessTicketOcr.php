@@ -21,6 +21,7 @@ class ProcessTicketOcr implements ShouldQueue
         $photo = OrderTicketPhoto::find($this->photoId);
         if (! $photo) {
             Log::warning("ProcessTicketOcr: foto {$this->photoId} no encontrada.");
+
             return;
         }
 

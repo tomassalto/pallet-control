@@ -30,7 +30,7 @@ class UserController extends Controller
         $newRole = $data['role'] ?? null;
 
         // Solo superadmin puede dar rol superadmin
-        if ($newRole === 'superadmin' && !$request->user()->isSuperAdmin()) {
+        if ($newRole === 'superadmin' && ! $request->user()->isSuperAdmin()) {
             return response()->json(['error' => 'Solo el superadmin puede asignar ese rol'], 403);
         }
 
@@ -55,7 +55,7 @@ class UserController extends Controller
             return response()->json(['error' => 'No podés desactivar al superadmin'], 422);
         }
 
-        $user->update(['is_active' => !$user->is_active]);
+        $user->update(['is_active' => ! $user->is_active]);
 
         return response()->json(['ok' => true, 'is_active' => $user->fresh()->is_active]);
     }

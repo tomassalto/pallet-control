@@ -15,7 +15,7 @@ class AdjustPalletBaseItemRequest extends FormRequest
     {
         return [
             'order_item_id' => ['required', 'integer', 'exists:order_items,id'],
-            'qty'           => ['required', 'integer', 'min:0'],
+            'qty' => ['required', 'integer', 'min:0'],
         ];
     }
 }

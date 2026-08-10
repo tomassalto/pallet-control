@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\StoreOrderRequest;
 use App\Helpers\ActivityLogger;
 use App\Helpers\TelegramNotifier;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreOrderRequest;
 use App\Models\ActivityLog;
 use App\Models\Customer;
 use App\Models\Order;
@@ -23,10 +23,10 @@ class OrderController extends Controller
         $hasPendingTable = Schema::hasTable('pending_items');
 
         $q = Order::with([
-                'customer',
-                'pallets:id,code,status',
-                'items' => fn ($q) => $q->select('id', 'order_id', 'description', 'qty', 'status', 'ean'),
-            ])
+            'customer',
+            'pallets:id,code,status',
+            'items' => fn ($q) => $q->select('id', 'order_id', 'description', 'qty', 'status', 'ean'),
+        ])
             ->withCount(['items as total_items'])
             ->addSelect(DB::raw(
                 '(SELECT COALESCE(SUM(qty),0) FROM order_items WHERE order_items.order_id = orders.id) as total_qty'
@@ -93,7 +93,7 @@ class OrderController extends Controller
         $customerId = $data['customer_id'] ?? null;
 
         // Atajo: si pasás customer_name, lo crea/usa
-        if (!$customerId && !empty($data['customer_name'])) {
+        if (! $customerId && ! empty($data['customer_name'])) {
             $customer = Customer::firstOrCreate(['name' => $data['customer_name']]);
             $customerId = $customer->id;
         }
@@ -124,9 +124,9 @@ class OrderController extends Controller
         // Eager-load todo en 4 queries fijas (sin N+1 por items)
         $order->load([
             'pallets:id,code,status,created_at',
-            'pallets.bases'        => fn($q) => $q->with('photos')->orderBy('name'),
-            'items'                => fn($q) => $q->orderBy('description'),
-            'items.bases'          => fn($q) => $q->select('pallet_bases.id', 'pallet_bases.name', 'pallet_bases.pallet_id'),
+            'pallets.bases' => fn ($q) => $q->with('photos')->orderBy('name'),
+            'items' => fn ($q) => $q->orderBy('description'),
+            'items.bases' => fn ($q) => $q->select('pallet_bases.id', 'pallet_bases.name', 'pallet_bases.pallet_id'),
             'items.bases.pallet:id,code',
             'tickets.photos',
         ]);
@@ -141,12 +141,12 @@ class OrderController extends Controller
         $pendingItemsCount = count($pendingItemIds);
 
         return response()->json([
-            'order'                => $order,
-            'pallets'              => $order->pallets,
-            'items'                => $itemsWithLocations,
-            'highlights_ready'     => $highlightsReady,
-            'pending_items_count'  => $pendingItemsCount,
-            'pending_item_ids'     => $pendingItemIds,
+            'order' => $order,
+            'pallets' => $order->pallets,
+            'items' => $itemsWithLocations,
+            'highlights_ready' => $highlightsReady,
+            'pending_items_count' => $pendingItemsCount,
+            'pending_item_ids' => $pendingItemIds,
         ]);
     }
 
@@ -156,6 +156,7 @@ class OrderController extends Controller
             foreach ($orders as $order) {
                 $order->pending_item_ids = null;
             }
+
             return;
         }
 
@@ -197,7 +198,7 @@ class OrderController extends Controller
             ->with('pallets:id,code,status')
             ->first();
 
-        if (!$order) {
+        if (! $order) {
             return response()->json(['order' => null]);
         }
 
@@ -266,7 +267,7 @@ class OrderController extends Controller
     public function canFinalizeBatch(Request $request)
     {
         $data = $request->validate([
-            'order_ids'   => ['required', 'array', 'max:100'],
+            'order_ids' => ['required', 'array', 'max:100'],
             'order_ids.*' => ['integer'],
         ]);
 
@@ -329,7 +330,7 @@ class OrderController extends Controller
     public function detachPallet(Order $order, Pallet $pallet)
     {
         // Verificar que el pallet esté asociado al pedido
-        if (!$order->pallets()->where('pallets.id', $pallet->id)->exists()) {
+        if (! $order->pallets()->where('pallets.id', $pallet->id)->exists()) {
             return response()->json([
                 'message' => 'El pallet no está asociado a este pedido',
             ], 404);

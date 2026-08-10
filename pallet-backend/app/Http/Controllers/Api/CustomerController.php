@@ -17,13 +17,15 @@ class CustomerController extends Controller
             $search = $request->string('search')->toString();
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('quit', 'like', "%{$search}%");
+                    ->orWhere('quit', 'like', "%{$search}%");
             });
         }
 
         // Limitar resultados para autocomplete
         $limit = $request->integer('limit', 20);
-        if ($limit > 50) $limit = 50;
+        if ($limit > 50) {
+            $limit = 50;
+        }
 
         return $query->orderBy('name')->limit($limit)->get();
     }
@@ -33,6 +35,7 @@ class CustomerController extends Controller
         $customer->load(['orders' => function ($query) {
             $query->orderByDesc('created_at');
         }]);
+
         return response()->json($customer);
     }
 

@@ -22,8 +22,7 @@ class TelegramBotController extends Controller
     public function __construct(
         private readonly TelegramBotClient $telegram,
         private readonly TelegramBotCommandParser $commandParser,
-    ) {
-    }
+    ) {}
 
     // ─────────────────────────────────────────────────────
     // POST /api/v1/telegram/webhook
@@ -31,7 +30,7 @@ class TelegramBotController extends Controller
     public function webhook(Request $request): JsonResponse
     {
         $secret = config('services.telegram.webhook_secret');
-        if ($secret && !hash_equals(
+        if ($secret && ! hash_equals(
             (string) $secret,
             (string) $request->header('X-Telegram-Bot-Api-Secret-Token', ''),
         )) {
@@ -46,14 +45,14 @@ class TelegramBotController extends Controller
         }
 
         $message = $update['message'] ?? null;
-        if (!$message) {
+        if (! $message) {
             return response()->json(['ok' => true]);
         }
 
-        $chatId  = $message['chat']['id'];
-        $userId  = $message['from']['id'];
-        $text    = trim($message['text'] ?? '');
-        $photo   = $message['photo'] ?? null;
+        $chatId = $message['chat']['id'];
+        $userId = $message['from']['id'];
+        $text = trim($message['text'] ?? '');
+        $photo = $message['photo'] ?? null;
         $caption = trim($message['caption'] ?? '');
 
         // ── Comandos de texto ────────────────────────────────────────
@@ -61,14 +60,17 @@ class TelegramBotController extends Controller
             $lower = strtolower($text);
             if (in_array($lower, ['/start', '/menu', 'menu'])) {
                 $this->sendMainMenu($chatId);
+
                 return response()->json(['ok' => true]);
             }
             if (in_array($lower, ['ayuda', '?', '/ayuda', '/help'])) {
                 $this->reply($chatId, $this->helpText());
+
                 return response()->json(['ok' => true]);
             }
             if ($lower === '/vermas' || $lower === 'vermas') {
                 $this->sendRecentItems($chatId);
+
                 return response()->json(['ok' => true]);
             }
         }
@@ -76,12 +78,14 @@ class TelegramBotController extends Controller
         // ── Foto con caption → flujo original rápido ─────────────────
         if ($photo && $caption) {
             $this->handlePhotoWithCaption($chatId, $photo, $caption);
+
             return response()->json(['ok' => true]);
         }
 
         // ── Foto sin caption → flujo interactivo ─────────────────────
-        if ($photo && !$caption) {
+        if ($photo && ! $caption) {
             $this->handlePhotoWithoutCaption($chatId, $userId, $photo);
+
             return response()->json(['ok' => true]);
         }
 
@@ -103,7 +107,7 @@ class TelegramBotController extends Controller
         $pallets = Pallet::where('status', 'open')
             ->orderByDesc('id')
             ->with([
-                'bases'         => fn($q) => $q->orderBy('id'),
+                'bases' => fn ($q) => $q->orderBy('id'),
                 'bases.orderItems',   // para sumar unidades en pallet
                 'orders',
                 'orders.items',       // para sumar unidades totales del pedido
@@ -119,49 +123,50 @@ class TelegramBotController extends Controller
 
         if ($pallets->isEmpty() && $orders->isEmpty()) {
             $this->reply($chatId, '❌ No hay pallets ni pedidos abiertos en este momento.');
+
             return;
         }
 
         $numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣'];
-        $lines   = ["📸 *Foto recibida* — ¿A dónde la mando?\n"];
+        $lines = ["📸 *Foto recibida* — ¿A dónde la mando?\n"];
         $buttons = [];
 
         foreach ($pallets as $i => $pallet) {
-            $num       = $numberEmojis[$i] ?? (($i + 1) . '.');
+            $num = $numberEmojis[$i] ?? (($i + 1) . '.');
             $baseCount = $pallet->bases->count();
             $baseSuffix = match (true) {
                 $baseCount === 0 => 'sin bases',
                 $baseCount === 1 => '1 base',
-                default          => "{$baseCount} bases",
+                default => "{$baseCount} bases",
             };
 
             // Unidades organizadas en este pallet
             $qtyInPallet = $pallet->bases
-                ->flatMap(fn($b) => $b->orderItems)
-                ->sum(fn($item) => $item->pivot->qty ?? 0);
+                ->flatMap(fn ($b) => $b->orderItems)
+                ->sum(fn ($item) => $item->pivot->qty ?? 0);
 
             // Unidades totales de los pedidos asociados
             $qtyOrdered = $pallet->orders
-                ->flatMap(fn($o) => $o->items)
+                ->flatMap(fn ($o) => $o->items)
                 ->sum('qty');
 
             // Códigos de pedido
             $orderCodes = $pallet->orders->pluck('code')
-                ->map(fn($c) => "#{$c}")
+                ->map(fn ($c) => "#{$c}")
                 ->join(', ');
 
             $lines[] = "{$num} *{$pallet->code}* · {$baseSuffix}";
 
             if ($orderCodes) {
-                $uLabel  = $qtyOrdered > 0
+                $uLabel = $qtyOrdered > 0
                     ? "{$qtyInPallet}/{$qtyOrdered} u."
                     : "{$qtyInPallet} u.";
                 $lines[] = "   🧾 {$orderCodes} · {$uLabel}";
             } else {
-                $lines[] = "   Sin pedidos asignados";
+                $lines[] = '   Sin pedidos asignados';
             }
 
-            $lines[] = "   ⏱ " . $this->relativeTime($pallet->updated_at);
+            $lines[] = '   ⏱ ' . $this->relativeTime($pallet->updated_at);
             $lines[] = '';
 
             $buttons[] = [['text' => "{$num} {$pallet->code}", 'callback_data' => "sel_p:{$pallet->id}"]];
@@ -184,8 +189,13 @@ class TelegramBotController extends Controller
     private function relativeTime(\Carbon\Carbon $dt): string
     {
         $local = $dt->copy()->timezone('America/Argentina/Buenos_Aires');
-        if ($local->isToday())     return 'hoy ' . $local->format('H:i');
-        if ($local->isYesterday()) return 'ayer ' . $local->format('H:i');
+        if ($local->isToday()) {
+            return 'hoy ' . $local->format('H:i');
+        }
+        if ($local->isYesterday()) {
+            return 'ayer ' . $local->format('H:i');
+        }
+
         return $local->format('d/m H:i');
     }
 
@@ -196,29 +206,30 @@ class TelegramBotController extends Controller
     private function handleCallbackQuery(array $callbackQuery): JsonResponse
     {
         $callbackId = $callbackQuery['id'];
-        $chatId     = $callbackQuery['message']['chat']['id'];
-        $messageId  = $callbackQuery['message']['message_id'];
-        $userId     = $callbackQuery['from']['id'];
-        $data       = $callbackQuery['data'];
+        $chatId = $callbackQuery['message']['chat']['id'];
+        $messageId = $callbackQuery['message']['message_id'];
+        $userId = $callbackQuery['from']['id'];
+        $data = $callbackQuery['data'];
 
         $this->answerCallback($callbackId);
 
         if ($data === 'cancel') {
             Cache::forget("tg_photo_{$userId}");
             $this->editMessage($chatId, $messageId, '❌ Cancelado.');
+
             return response()->json(['ok' => true]);
         }
 
-        $parts  = explode(':', $data, 2);
+        $parts = explode(':', $data, 2);
         $prefix = $parts[0];
-        $id     = isset($parts[1]) ? (int) $parts[1] : null;
+        $id = isset($parts[1]) ? (int) $parts[1] : null;
 
         return match ($prefix) {
-            'sel_p'    => $this->handleSelectPallet($chatId, $messageId, $userId, $id),
-            'sel_t'    => $this->handleUploadTicket($chatId, $messageId, $userId, $id),
-            'base'     => $this->handleUploadToBase($chatId, $messageId, $userId, $id),
+            'sel_p' => $this->handleSelectPallet($chatId, $messageId, $userId, $id),
+            'sel_t' => $this->handleUploadTicket($chatId, $messageId, $userId, $id),
+            'base' => $this->handleUploadToBase($chatId, $messageId, $userId, $id),
             'new_base' => $this->handleCreateBaseAndUpload($chatId, $messageId, $userId, $id),
-            default    => $this->unknownCallback($chatId, $messageId),
+            default => $this->unknownCallback($chatId, $messageId),
         };
     }
 
@@ -228,21 +239,23 @@ class TelegramBotController extends Controller
 
     private function handleSelectPallet(
         int|string $chatId,
-        int        $messageId,
+        int $messageId,
         int|string $userId,
-        ?int       $palletId,
+        ?int $palletId,
     ): JsonResponse {
         $fileId = Cache::get("tg_photo_{$userId}");
-        if (!$fileId) {
+        if (! $fileId) {
             $this->editMessage($chatId, $messageId, '⏱ La sesión expiró. Mandá la foto de nuevo.');
+
             return response()->json(['ok' => true]);
         }
 
         try {
-            $pallet = Pallet::with(['bases' => fn($q) => $q->orderBy('id'), 'orders.customer'])
+            $pallet = Pallet::with(['bases' => fn ($q) => $q->orderBy('id'), 'orders.customer'])
                 ->findOrFail($palletId);
         } catch (\Throwable) {
             $this->editMessage($chatId, $messageId, '❌ Pallet no encontrado.');
+
             return response()->json(['ok' => true]);
         }
 
@@ -251,7 +264,7 @@ class TelegramBotController extends Controller
             ? "📦 *{$pallet->code}* · {$customerLabel}\n¿A qué base mando la foto?"
             : "📦 *{$pallet->code}*\n¿A qué base mando la foto?";
 
-        $bases   = $pallet->bases;
+        $bases = $pallet->bases;
         $nextNum = $bases->count() + 1;
         $buttons = [];
 
@@ -269,6 +282,7 @@ class TelegramBotController extends Controller
         $buttons[] = [['text' => '❌ Cancelar', 'callback_data' => 'cancel']];
 
         $this->editMessageWithKeyboard($chatId, $messageId, $header, $buttons);
+
         return response()->json(['ok' => true]);
     }
 
@@ -278,9 +292,9 @@ class TelegramBotController extends Controller
 
     private function handleUploadToBase(
         int|string $chatId,
-        int        $messageId,
+        int $messageId,
         int|string $userId,
-        ?int       $baseId,
+        ?int $baseId,
     ): JsonResponse {
         return $this->runUpload(
             chatId: $chatId, messageId: $messageId, userId: $userId,
@@ -294,13 +308,14 @@ class TelegramBotController extends Controller
 
     private function handleCreateBaseAndUpload(
         int|string $chatId,
-        int        $messageId,
+        int $messageId,
         int|string $userId,
-        ?int       $palletId,
+        ?int $palletId,
     ): JsonResponse {
         $fileId = Cache::get("tg_photo_{$userId}");
-        if (!$fileId) {
+        if (! $fileId) {
             $this->editMessage($chatId, $messageId, '⏱ La sesión expiró. Mandá la foto de nuevo.');
+
             return response()->json(['ok' => true]);
         }
 
@@ -308,18 +323,19 @@ class TelegramBotController extends Controller
 
         $uploadedFile = null;
         try {
-            $pallet  = Pallet::with(['bases', 'orders.customer'])->findOrFail($palletId);
+            $pallet = Pallet::with(['bases', 'orders.customer'])->findOrFail($palletId);
             $nextNum = $pallet->bases->count() + 1;
-            $base    = $pallet->bases()->create(['name' => "Base {$nextNum}"]);
+            $base = $pallet->bases()->create(['name' => "Base {$nextNum}"]);
 
             $uploadedFile = $this->downloadPhoto($fileId);
-            if (!$uploadedFile) {
+            if (! $uploadedFile) {
                 $this->editMessage($chatId, $messageId, '❌ No se pudo descargar la foto.');
+
                 return response()->json(['ok' => true]);
             }
 
             app(PhotoUploadService::class)->upload($uploadedFile, [
-                'type'    => 'base',
+                'type' => 'base',
                 'base_id' => $base->id,
             ]);
 
@@ -352,9 +368,9 @@ class TelegramBotController extends Controller
 
     private function handleUploadTicket(
         int|string $chatId,
-        int        $messageId,
+        int $messageId,
         int|string $userId,
-        ?int       $orderId,
+        ?int $orderId,
     ): JsonResponse {
         return $this->runUpload(
             chatId: $chatId, messageId: $messageId, userId: $userId,
@@ -368,13 +384,14 @@ class TelegramBotController extends Controller
 
     private function runUpload(
         int|string $chatId,
-        int        $messageId,
+        int $messageId,
         int|string $userId,
-        array      $params,
+        array $params,
     ): JsonResponse {
         $fileId = Cache::get("tg_photo_{$userId}");
-        if (!$fileId) {
+        if (! $fileId) {
             $this->editMessage($chatId, $messageId, '⏱ La sesión expiró. Mandá la foto de nuevo.');
+
             return response()->json(['ok' => true]);
         }
 
@@ -383,8 +400,9 @@ class TelegramBotController extends Controller
         $uploadedFile = null;
         try {
             $uploadedFile = $this->downloadPhoto($fileId);
-            if (!$uploadedFile) {
+            if (! $uploadedFile) {
                 $this->editMessage($chatId, $messageId, '❌ No se pudo descargar la foto.');
+
                 return response()->json(['ok' => true]);
             }
 
@@ -427,11 +445,11 @@ class TelegramBotController extends Controller
         $lines = ["🤖 *PalletBot* — Estado actual\n"];
 
         if ($pallets->isEmpty()) {
-            $lines[] = "📦 Sin pallets abiertos";
+            $lines[] = '📦 Sin pallets abiertos';
         } else {
             foreach ($pallets as $pallet) {
                 $customerLabel = $this->palletCustomerLabel($pallet);
-                $baseCount     = $pallet->bases->count();
+                $baseCount = $pallet->bases->count();
                 $info = $customerLabel ? " · {$customerLabel}" : '';
                 $info .= ' (' . ($baseCount === 1 ? '1 base' : "{$baseCount} bases") . ')';
                 $lines[] = "📦 *{$pallet->code}*{$info}";
@@ -441,13 +459,13 @@ class TelegramBotController extends Controller
         $lines[] = '';
 
         if ($orders->isEmpty()) {
-            $lines[] = "🧾 Sin pedidos abiertos";
+            $lines[] = '🧾 Sin pedidos abiertos';
         } else {
             foreach ($orders as $order) {
                 $customerName = $order->customer?->name ?? '';
                 $total = $order->items
                     ->whereNotNull('price')
-                    ->sum(fn($i) => $i->qty * $i->price);
+                    ->sum(fn ($i) => $i->qty * $i->price);
                 $info = $customerName ? " · {$customerName}" : '';
                 if ($total > 0) {
                     $info .= "\n   💰 " . $this->formatPeso($total);
@@ -457,7 +475,7 @@ class TelegramBotController extends Controller
         }
 
         $lines[] = "\n_Mandá una foto para elegir el destino con botones._";
-        $lines[] = "_Usá caption (p / b / t) para ir directo._";
+        $lines[] = '_Usá caption (p / b / t) para ir directo._';
 
         $this->reply($chatId, implode("\n", $lines));
     }
@@ -472,16 +490,18 @@ class TelegramBotController extends Controller
         string $caption,
     ): void {
         $params = $this->commandParser->parsePhotoCaption($caption);
-        if (!$params) {
+        if (! $params) {
             $this->reply($chatId, "❓ Comando no reconocido.\n\n" . $this->helpText());
+
             return;
         }
 
         $uploadedFile = null;
         try {
             $uploadedFile = $this->downloadPhoto(end($photoSizes)['file_id']);
-            if (!$uploadedFile) {
+            if (! $uploadedFile) {
                 $this->reply($chatId, '❌ No se pudo descargar la foto.');
+
                 return;
             }
             $result = app(PhotoUploadService::class)->upload($uploadedFile, $params);
@@ -531,6 +551,7 @@ class TelegramBotController extends Controller
     private function unknownCallback(int|string $chatId, int $messageId): JsonResponse
     {
         $this->editMessage($chatId, $messageId, '❌ Acción no reconocida.');
+
         return response()->json(['ok' => true]);
     }
 
@@ -545,7 +566,7 @@ class TelegramBotController extends Controller
     private function palletCustomerLabel(Pallet $pallet): string
     {
         return $pallet->orders
-            ->map(fn($o) => $o->customer?->name)
+            ->map(fn ($o) => $o->customer?->name)
             ->filter()
             ->unique()
             ->take(2)
@@ -596,8 +617,9 @@ TXT;
         $message = "📋 *Lista reciente*\n\n";
 
         if ($pallets->isEmpty() && $orders->isEmpty()) {
-            $message .= "No hay pallets ni pedidos registrados.";
+            $message .= 'No hay pallets ni pedidos registrados.';
             $this->reply($chatId, $message);
+
             return;
         }
 
@@ -605,7 +627,7 @@ TXT;
         foreach ($pallets as $p) {
             $status = $p->status === 'done' ? '✅' : '🔵';
             $customers = $p->orders->pluck('customer.name')->filter()->unique()->join(', ');
-            $productCount = $p->bases->flatMap(fn($b) => $b->orderItems ?? [])->count();
+            $productCount = $p->bases->flatMap(fn ($b) => $b->orderItems ?? [])->count();
 
             $message .= "{$status} *{$p->code}*\n";
             if ($p->note) {
@@ -623,7 +645,7 @@ TXT;
             $itemsCount = $o->items->count();
             $total = $o->items
                 ->whereNotNull('price')
-                ->sum(fn($i) => $i->qty * $i->price);
+                ->sum(fn ($i) => $i->qty * $i->price);
 
             $message .= "{$status} *#{$o->code}*\n";
             if ($o->customer?->name) {
@@ -631,7 +653,7 @@ TXT;
             }
             $message .= "   📦 {$itemsCount} productos";
             if ($total > 0) {
-                $message .= " · 💰 " . $this->formatPeso($total);
+                $message .= ' · 💰 ' . $this->formatPeso($total);
             }
             $palletsList = $o->pallets->pluck('code')->join(', ');
             if ($palletsList) {
@@ -640,7 +662,7 @@ TXT;
             $message .= "\n\n";
         }
 
-        $message .= "_Usá /menu para ver el estado actual_";
+        $message .= '_Usá /menu para ver el estado actual_';
 
         $this->reply($chatId, $message);
     }

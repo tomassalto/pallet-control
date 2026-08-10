@@ -18,31 +18,34 @@ class ImportBultoFromCsv extends Command
 
         if (! file_exists($path)) {
             $this->warn("uxbulto.csv no encontrado en {$path} — se omite el import.");
+
             return self::SUCCESS;
         }
 
         $handle = fopen($path, 'r');
         if (! $handle) {
-            $this->error("No se pudo abrir el archivo.");
+            $this->error('No se pudo abrir el archivo.');
+
             return self::FAILURE;
         }
 
         // Saltar encabezado
         fgetcsv($handle, 0, ';');
 
-        $matched  = 0;
+        $matched = 0;
         $notFound = 0;
-        $skipped  = 0;
+        $skipped = 0;
 
         while (($row = fgetcsv($handle, 0, ';')) !== false) {
             $eanRaw = $row[0] ?? null;
-            $bulto  = isset($row[2]) ? (int) trim($row[2]) : null;
+            $bulto = isset($row[2]) ? (int) trim($row[2]) : null;
 
             // Normalizar EAN: solo dígitos
             $ean = preg_replace('/\D+/', '', (string) $eanRaw);
 
             if ($ean === '' || ! $bulto || $bulto <= 0) {
                 $skipped++;
+
                 continue;
             }
 

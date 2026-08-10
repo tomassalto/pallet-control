@@ -34,12 +34,12 @@ class ArchiveOldData extends Command
         $this->info('Step 1: Scanning OCR logs to clear...');
 
         $threeMonthsAgo = now()->subMonths(3);
-        $sixMonthsAgo   = now()->subMonths(6);
+        $sixMonthsAgo = now()->subMonths(6);
 
         $ocrQuery = OrderTicketPhoto::whereNotNull('ocr_log')
             ->whereHas('ticket.order', function ($q) use ($threeMonthsAgo) {
                 $q->where('status', 'done')
-                  ->where('updated_at', '<', $threeMonthsAgo);
+                    ->where('updated_at', '<', $threeMonthsAgo);
             });
 
         $ocrCount = $ocrQuery->count();
@@ -58,9 +58,9 @@ class ArchiveOldData extends Command
         ];
 
         $results['ocr_clear'] = [
-            'task'   => 'Clear ocr_log',
+            'task' => 'Clear ocr_log',
             'target' => 'order_ticket_photos (done orders > 3 months)',
-            'count'  => $ocrCount,
+            'count' => $ocrCount,
             'action' => $dryRun ? 'would clear' : 'cleared',
         ];
 
@@ -80,7 +80,7 @@ class ArchiveOldData extends Command
             $photos = OrderTicketPhoto::whereIn('ticket_id', $ticketIds)->get();
             $photosDeleted = $photos->count();
 
-            $this->line("  Found {$photosDeleted} photo(s) to delete across " . $oldOrderIds->count() . " order(s).");
+            $this->line("  Found {$photosDeleted} photo(s) to delete across " . $oldOrderIds->count() . ' order(s).');
 
             if (! $dryRun && $photosDeleted > 0) {
                 $disk = Storage::disk(config('filesystems.default', 'public'));
@@ -100,9 +100,9 @@ class ArchiveOldData extends Command
         }
 
         $results['photos_delete'] = [
-            'task'   => 'Delete old ticket photos',
+            'task' => 'Delete old ticket photos',
             'target' => 'order_ticket_photos (done orders > 6 months)',
-            'count'  => $photosDeleted,
+            'count' => $photosDeleted,
             'action' => $dryRun ? 'would delete' : 'deleted',
         ];
 
@@ -119,9 +119,9 @@ class ArchiveOldData extends Command
         }
 
         $results['logs_purge'] = [
-            'task'   => 'Purge activity_logs',
+            'task' => 'Purge activity_logs',
             'target' => 'activity_logs (created > 6 months ago)',
-            'count'  => $logsCount,
+            'count' => $logsCount,
             'action' => $dryRun ? 'would delete' : 'deleted',
         ];
 

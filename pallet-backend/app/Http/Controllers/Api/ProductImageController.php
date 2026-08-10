@@ -20,18 +20,18 @@ class ProductImageController extends Controller
     public function bulkUpdate(Request $request)
     {
         $data = $request->validate([
-            'products'              => ['required', 'array', 'min:1', 'max:100'],
-            'products.*.ean'        => ['required', 'string'],
-            'products.*.image_url'  => ['required', 'url'],
-            'products.*.name'       => ['nullable', 'string', 'max:255'],
+            'products' => ['required', 'array', 'min:1', 'max:100'],
+            'products.*.ean' => ['required', 'string'],
+            'products.*.image_url' => ['required', 'url'],
+            'products.*.name' => ['nullable', 'string', 'max:255'],
         ]);
 
         $upserted = 0;
 
         foreach ($data['products'] as $row) {
-            $ean   = preg_replace('/\D+/', '', $row['ean']);
+            $ean = preg_replace('/\D+/', '', $row['ean']);
             $last4 = strlen($ean) >= 4 ? substr($ean, -4) : null;
-            $name  = trim($row['name'] ?? '') ?: $ean; // fallback al EAN si no hay nombre
+            $name = trim($row['name'] ?? '') ?: $ean; // fallback al EAN si no hay nombre
 
             Product::updateOrCreate(
                 ['ean' => $ean],
@@ -42,7 +42,7 @@ class ProductImageController extends Controller
 
         return response()->json([
             'updated' => $upserted,
-            'sent'    => count($data['products']),
+            'sent' => count($data['products']),
         ]);
     }
 
@@ -53,7 +53,7 @@ class ProductImageController extends Controller
     public function checkExisting(Request $request)
     {
         $data = $request->validate([
-            'eans'   => ['required', 'array'],
+            'eans' => ['required', 'array'],
             'eans.*' => ['required', 'string'],
         ]);
 

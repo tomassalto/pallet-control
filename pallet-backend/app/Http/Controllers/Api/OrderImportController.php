@@ -38,50 +38,60 @@ class OrderImportController extends Controller
             'raw' => ['required', 'string'],
         ]);
 
-        $raw   = $request->string('raw')->toString();
+        $raw = $request->string('raw')->toString();
         $lines = preg_split("/\r\n|\n|\r/", trim($raw));
 
         $parsed = [];
 
         foreach ($lines as $line) {
             $line = trim($line);
-            if ($line === '') continue;
+            if ($line === '') {
+                continue;
+            }
 
             // Dividir SOLO por TAB para preservar posiciones de columnas vacías
             $parts = explode("\t", $line);
 
             // Necesitamos al menos EAN, Descripción, Cant Pedida (índices 0-2)
-            if (count($parts) < 3) continue;
+            if (count($parts) < 3) {
+                continue;
+            }
 
             // ── Columna 0: EAN ─────────────────────────────────────────────
             $ean = preg_replace('/\D+/', '', trim($parts[0]));
-            if ($ean === '') continue;
+            if ($ean === '') {
+                continue;
+            }
 
             // ── Columna 1: Descripción ─────────────────────────────────────
             $desc = trim($parts[1] ?? '');
-            if ($desc === '') continue;
+            if ($desc === '') {
+                continue;
+            }
 
             // ── Columna 3: Cant Real (qty siempre = lo que realmente vino) ─
             $cantRealRaw = str_replace(',', '.', trim($parts[3] ?? '0'));
             $cantRealRaw = preg_replace('/[^0-9.]/', '', $cantRealRaw);
-            $cantReal    = (int) floor((float) $cantRealRaw);
+            $cantReal = (int) floor((float) $cantRealRaw);
 
             // Si no vino nada, no se importa
-            if ($cantReal <= 0) continue;
+            if ($cantReal <= 0) {
+                continue;
+            }
 
-            $qty     = $cantReal;
+            $qty = $cantReal;
             $doneQty = $cantReal;
-            $status  = 'done';
+            $status = 'done';
 
             // ── Columna 4: Precio Unitario ─────────────────────────────────
             $precioUnitarioRaw = str_replace(',', '.', trim($parts[4] ?? ''));
             $precioUnitarioRaw = preg_replace('/[^0-9.]/', '', $precioUnitarioRaw);
-            $precioUnitario    = $precioUnitarioRaw !== '' ? (float) $precioUnitarioRaw : null;
+            $precioUnitario = $precioUnitarioRaw !== '' ? (float) $precioUnitarioRaw : null;
 
             // ── Columna 5: Precio Base (prioridad si > 0) ──────────────────
             $precioBaseRaw = str_replace(',', '.', trim($parts[5] ?? ''));
             $precioBaseRaw = preg_replace('/[^0-9.]/', '', $precioBaseRaw);
-            $precioBase    = $precioBaseRaw !== '' ? (float) $precioBaseRaw : 0.0;
+            $precioBase = $precioBaseRaw !== '' ? (float) $precioBaseRaw : 0.0;
 
             // Precio final: precio_base tiene prioridad cuando es > 0
             $price = ($precioBase > 0) ? $precioBase : $precioUnitario;
@@ -97,15 +107,15 @@ class OrderImportController extends Controller
             $isControlled = trim($parts[8] ?? '') === '1';
 
             $parsed[] = [
-                'ean'             => $ean,
-                'ean_last4'       => strlen($ean) >= 4 ? substr($ean, -4) : null,
-                'description'     => $desc,
-                'qty'             => $qty,
-                'done_qty'        => $doneQty,
-                'status'          => $status,
-                'price'           => $price,
+                'ean' => $ean,
+                'ean_last4' => strlen($ean) >= 4 ? substr($ean, -4) : null,
+                'description' => $desc,
+                'qty' => $qty,
+                'done_qty' => $doneQty,
+                'status' => $status,
+                'price' => $price,
                 'desc_medio_pago' => $descMedioPago,
-                'is_controlled'   => $isControlled,
+                'is_controlled' => $isControlled,
             ];
         }
 
@@ -132,17 +142,17 @@ class OrderImportController extends Controller
                     OrderItem::updateOrCreate(
                         [
                             'order_id' => $order->id,
-                            'ean'      => $row['ean'],
+                            'ean' => $row['ean'],
                         ],
                         [
-                            'ean_last4'       => $row['ean_last4'],
-                            'description'     => $row['description'],
-                            'qty'             => $row['qty'],
-                            'done_qty'        => $row['done_qty'],
-                            'status'          => $row['status'],
-                            'price'           => $row['price'],
+                            'ean_last4' => $row['ean_last4'],
+                            'description' => $row['description'],
+                            'qty' => $row['qty'],
+                            'done_qty' => $row['done_qty'],
+                            'status' => $row['status'],
+                            'price' => $row['price'],
                             'desc_medio_pago' => $row['desc_medio_pago'],
-                            'is_controlled'   => $row['is_controlled'],
+                            'is_controlled' => $row['is_controlled'],
                         ]
                     );
                 }
@@ -150,8 +160,8 @@ class OrderImportController extends Controller
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('OrderImportController: Falló import', [
                 'order_id' => $order->id,
-                'error'    => $e->getMessage(),
-                'trace'    => $e->getTraceAsString(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
@@ -161,8 +171,8 @@ class OrderImportController extends Controller
 
         return response()->json([
             'message' => 'Pedido importado: ' . count($parsed) . ' productos encontrados.',
-            'count'   => count($parsed),
-            'done'    => count($parsed),
+            'count' => count($parsed),
+            'done' => count($parsed),
             'pending' => 0,
         ], 201);
     }

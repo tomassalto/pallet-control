@@ -17,8 +17,7 @@ class PalletBaseController extends Controller
 {
     public function __construct(
         private readonly PalletBaseService $palletBaseService
-    ) {
-    }
+    ) {}
 
     public function index(Pallet $pallet)
     {
@@ -53,7 +52,7 @@ class PalletBaseController extends Controller
     public function migrate(MigratePalletBaseRequest $request, Pallet $pallet, PalletBase $base)
     {
         $sourcePallet = $pallet;
-        $sourceBase   = $base;
+        $sourceBase = $base;
 
         if ($sourceBase->pallet_id !== $sourcePallet->id) {
             return response()->json(['message' => 'Base no encontrada en este pallet'], 404);
@@ -76,10 +75,11 @@ class PalletBaseController extends Controller
             ->keyBy('order_item_id');
 
         foreach ($data['items'] as $itemData) {
-            $record    = $sourceRecords->get($itemData['order_item_id']);
+            $record = $sourceRecords->get($itemData['order_item_id']);
             $available = $record ? $record->qty : 0;
             if ($available < $itemData['qty']) {
                 $item = $orderItemsMap->get($itemData['order_item_id']);
+
                 return response()->json([
                     'message' => "Cantidad insuficiente de '{$item?->description}'. Disponible: {$available}, solicitado: {$itemData['qty']}.",
                 ], 422);
@@ -87,30 +87,30 @@ class PalletBaseController extends Controller
         }
 
         $result = DB::transaction(function () use ($data, $sourcePallet, $sourceBase, $sourceRecords, $orderItemsMap) {
-            if (!empty($data['destination_pallet_id'])) {
+            if (! empty($data['destination_pallet_id'])) {
                 $destPallet = Pallet::findOrFail($data['destination_pallet_id']);
             } else {
-                $today      = now()->format('Ymd');
+                $today = now()->format('Ymd');
                 $countToday = Pallet::whereDate('created_at', now()->toDateString())->count() + 1;
                 $destPallet = Pallet::create([
-                    'code'   => sprintf('PAL-%s-%04d', $today, $countToday),
+                    'code' => sprintf('PAL-%s-%04d', $today, $countToday),
                     'status' => 'open',
                 ]);
             }
 
-            if (!empty($data['destination_base_id'])) {
+            if (! empty($data['destination_base_id'])) {
                 $destBase = PalletBase::findOrFail($data['destination_base_id']);
             } else {
-                $nextNum  = $destPallet->bases()->count() + 1;
+                $nextNum = $destPallet->bases()->count() + 1;
                 $destBase = $destPallet->bases()->create(['name' => "Base {$nextNum}"]);
             }
 
             $sourceName = ($sourcePallet->code . ' / ' . ($sourceBase->name ?? "Base #{$sourceBase->id}"));
-            $destName   = ($destPallet->code   . ' / ' . ($destBase->name   ?? "Base #{$destBase->id}"));
+            $destName = ($destPallet->code . ' / ' . ($destBase->name ?? "Base #{$destBase->id}"));
 
             foreach ($data['items'] as $itemData) {
                 $orderItemId = $itemData['order_item_id'];
-                $qtyToMove   = $itemData['qty'];
+                $qtyToMove = $itemData['qty'];
                 $sourceRecord = $sourceRecords->get($orderItemId);
 
                 $newSourceQty = $sourceRecord->qty - $qtyToMove;
@@ -138,16 +138,16 @@ class PalletBaseController extends Controller
                         ->update(['qty' => $destRecord->qty + $qtyToMove, 'updated_at' => now()]);
                 } else {
                     DB::table('pallet_base_order_items')->insert([
-                        'base_id'       => $destBase->id,
+                        'base_id' => $destBase->id,
                         'order_item_id' => $orderItemId,
-                        'qty'           => $qtyToMove,
-                        'created_at'    => now(),
-                        'updated_at'    => now(),
+                        'qty' => $qtyToMove,
+                        'created_at' => now(),
+                        'updated_at' => now(),
                     ]);
                 }
 
                 $orderItem = $orderItemsMap->get($orderItemId);
-                if ($orderItem && !$destPallet->orders()->where('orders.id', $orderItem->order_id)->exists()) {
+                if ($orderItem && ! $destPallet->orders()->where('orders.id', $orderItem->order_id)->exists()) {
                     $destPallet->orders()->attach($orderItem->order_id);
                 }
 
@@ -163,7 +163,7 @@ class PalletBaseController extends Controller
             }
 
             return [
-                'destination_pallet_id'   => $destPallet->id,
+                'destination_pallet_id' => $destPallet->id,
                 'destination_pallet_code' => $destPallet->code,
             ];
         });

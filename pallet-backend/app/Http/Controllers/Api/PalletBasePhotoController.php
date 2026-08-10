@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\ImageConverter;
 use App\Http\Controllers\Controller;
 use App\Models\Pallet;
 use App\Models\PalletBase;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
-use App\Helpers\ImageConverter;
+use Illuminate\Support\Facades\Storage;
 
 class PalletBasePhotoController extends Controller
 {
@@ -26,11 +26,11 @@ class PalletBasePhotoController extends Controller
             // Obtener el archivo — intentar campo 'photo' primero, luego primer archivo disponible
             $file = $request->file('photo') ?? (($all = $request->allFiles()) ? reset($all) : null);
 
-            if (!$file) {
+            if (! $file) {
                 return response()->json(['message' => 'No se recibió ningún archivo'], 422);
             }
 
-            if (!$file->isValid()) {
+            if (! $file->isValid()) {
                 return response()->json([
                     'message' => 'El archivo no es válido: ' . $file->getErrorMessage(),
                     'error_code' => $file->getError(),
@@ -39,7 +39,7 @@ class PalletBasePhotoController extends Controller
 
             $data = $request->validate([
                 'photo' => ['required', 'file', 'mimes:jpeg,jpg,png,webp', 'max:20480'],
-                'note'  => ['nullable', 'string', 'max:1000'],
+                'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
             $file = $data['photo'];
@@ -60,6 +60,7 @@ class PalletBasePhotoController extends Controller
                     'file_name' => $file->getClientOriginalName(),
                     'file_size' => $file->getSize(),
                 ]);
+
                 return response()->json([
                     'message' => 'Error al procesar la imagen: ' . $e->getMessage(),
                     'error_type' => get_class($e),
@@ -93,6 +94,7 @@ class PalletBasePhotoController extends Controller
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]);
+
             return response()->json([
                 'message' => 'Error al subir foto: ' . $e->getMessage(),
                 'error_type' => get_class($e),
@@ -111,7 +113,7 @@ class PalletBasePhotoController extends Controller
         }
 
         $photo = $base->photos()->find($photoId);
-        if (!$photo) {
+        if (! $photo) {
             return response()->json(['message' => 'Foto no encontrada'], 404);
         }
 

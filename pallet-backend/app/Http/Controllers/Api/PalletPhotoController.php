@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\ImageConverter;
 use App\Http\Controllers\Controller;
 use App\Models\Pallet;
 use App\Models\PalletPhoto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use App\Helpers\ImageConverter;
 
 class PalletPhotoController extends Controller
 {
@@ -26,7 +26,7 @@ class PalletPhotoController extends Controller
         ]);
 
         $file = $data['photo'];
-        
+
         // Convertir a WebP (solo se guarda WebP, no el original)
         // Opcional: redimensionar si la imagen es muy grande (máximo 4000px en el lado más largo)
         $path = ImageConverter::convertToWebP(
@@ -62,7 +62,7 @@ class PalletPhotoController extends Controller
     public function destroy(Pallet $pallet, $photoId)
     {
         $photo = $pallet->photos()->find($photoId);
-        if (!$photo) {
+        if (! $photo) {
             return response()->json(['message' => 'Foto no encontrada'], 404);
         }
 

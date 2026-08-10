@@ -14,7 +14,7 @@ class ProductController extends Controller
 
         $product = Product::where('ean', $clean)->first();
 
-        if (!$product) {
+        if (! $product) {
             return response()->json(['message' => 'Producto no encontrado'], 404);
         }
 
@@ -25,7 +25,7 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'ean'  => ['required', 'string', 'max:32'], // no unique si usás updateOrCreate
+            'ean' => ['required', 'string', 'max:32'], // no unique si usás updateOrCreate
             'name' => ['required', 'string', 'max:255'],
         ]);
 

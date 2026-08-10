@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\MissingItemRequest;
 use App\Models\Order;
-use App\Models\OrderTicketPhoto;
 use App\Models\Pallet;
 use App\Models\PendingItem;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +16,7 @@ class DashboardController extends Controller
     {
         // ── Contadores principales ────────────────────────────────────────
         $openPallets = Pallet::where('status', 'open')->count();
-        $openOrders  = Order::where('status', '!=', 'done')->count();
+        $openOrders = Order::where('status', '!=', 'done')->count();
 
         // Unidades pendientes de distribuir en bases (pedidos no finalizados)
         $pendingUnits = (int) DB::selectOne("
@@ -56,11 +55,11 @@ class DashboardController extends Controller
 
         // ── Pedidos por día (últimos 30 días) ─────────────────────────────
         $ordersByDate = Order::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as total'),
-                DB::raw("SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) as done"),
-                DB::raw("SUM(CASE WHEN status != 'done' THEN 1 ELSE 0 END) as open")
-            )
+            DB::raw('DATE(created_at) as date'),
+            DB::raw('COUNT(*) as total'),
+            DB::raw("SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) as done"),
+            DB::raw("SUM(CASE WHEN status != 'done' THEN 1 ELSE 0 END) as open")
+        )
             ->where('created_at', '>=', now()->subDays(29)->startOfDay())
             ->groupBy(DB::raw('DATE(created_at)'))
             ->orderBy('date', 'desc')
@@ -68,16 +67,16 @@ class DashboardController extends Controller
 
         return response()->json([
             'stats' => [
-                'open_pallets'   => $openPallets,
-                'open_orders'    => $openOrders,
-                'pending_units'  => $pendingUnits,
+                'open_pallets' => $openPallets,
+                'open_orders' => $openOrders,
+                'pending_units' => $pendingUnits,
                 'ocr_this_month' => $ocrThisMonth,
             ],
-            'pending_count'         => $pendingCount,
+            'pending_count' => $pendingCount,
             'pending_request_count' => $pendingRequestCount,
-            'last_open_order'       => $lastOpenOrder,
-            'last_open_pallet'      => $lastOpenPallet,
-            'orders_by_date'        => $ordersByDate,
+            'last_open_order' => $lastOpenOrder,
+            'last_open_pallet' => $lastOpenPallet,
+            'orders_by_date' => $ordersByDate,
         ]);
     }
 }

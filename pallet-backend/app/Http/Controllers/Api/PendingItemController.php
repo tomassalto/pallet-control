@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\ActivityLogger;
 use App\Http\Controllers\Controller;
 use App\Models\OrderItem;
 use App\Models\PendingItem;
-use App\Helpers\ActivityLogger;
 use Illuminate\Http\Request;
 
 class PendingItemController extends Controller
@@ -19,11 +19,11 @@ class PendingItemController extends Controller
             'creator',
             'resolver',
         ])
-            ->when($request->filled('status'), fn($q) => $q->where('status', $request->string('status')))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
             ->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
             ->orderBy('created_at', 'desc')
             ->get()
-            ->map(fn($item) => $this->format($item));
+            ->map(fn ($item) => $this->format($item));
 
         return response()->json($items);
     }
@@ -40,10 +40,10 @@ class PendingItemController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'order_id'      => ['required', 'exists:orders,id'],
+            'order_id' => ['required', 'exists:orders,id'],
             'order_item_id' => ['required', 'exists:order_items,id'],
-            'qty_missing'   => ['required', 'integer', 'min:1'],
-            'note'          => ['nullable', 'string', 'max:1000'],
+            'qty_missing' => ['required', 'integer', 'min:1'],
+            'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
         // Verificar que el item pertenece al pedido
@@ -54,7 +54,7 @@ class PendingItemController extends Controller
 
         $pending = PendingItem::create([
             ...$data,
-            'status'     => 'pending',
+            'status' => 'pending',
             'created_by' => $request->user()->id,
         ]);
 
@@ -77,9 +77,9 @@ class PendingItemController extends Controller
     public function update(Request $request, PendingItem $pendingItem)
     {
         $data = $request->validate([
-            'status'      => ['sometimes', 'in:pending,resolved'],
+            'status' => ['sometimes', 'in:pending,resolved'],
             'qty_missing' => ['sometimes', 'integer', 'min:1'],
-            'note'        => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'note' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ]);
 
         $wasResolved = $pendingItem->status === 'resolved';
@@ -114,8 +114,8 @@ class PendingItemController extends Controller
     public function destroy(PendingItem $pendingItem)
     {
         $description = $pendingItem->orderItem->description;
-        $orderId     = $pendingItem->order_id;
-        $qty         = $pendingItem->qty_missing;
+        $orderId = $pendingItem->order_id;
+        $qty = $pendingItem->qty_missing;
 
         ActivityLogger::log(
             action: 'pending_item_deleted',
@@ -136,22 +136,22 @@ class PendingItemController extends Controller
     private function format(PendingItem $item): array
     {
         return [
-            'id'               => $item->id,
-            'order_id'         => $item->order_id,
-            'order_code'       => $item->order?->code,
-            'order_item_id'    => $item->order_item_id,
-            'description'      => $item->orderItem?->description,
-            'ean'              => $item->orderItem?->ean,
-            'image_url'        => $item->orderItem?->product?->image_url ?? null,
-            'units_per_bulto'  => $item->orderItem?->product?->units_per_bulto ?? null,
-            'original_qty'     => $item->orderItem?->qty,
-            'qty_missing'      => $item->qty_missing,
-            'note'             => $item->note,
-            'status'           => $item->status,
-            'resolved_at'      => $item->resolved_at?->toISOString(),
+            'id' => $item->id,
+            'order_id' => $item->order_id,
+            'order_code' => $item->order?->code,
+            'order_item_id' => $item->order_item_id,
+            'description' => $item->orderItem?->description,
+            'ean' => $item->orderItem?->ean,
+            'image_url' => $item->orderItem?->product?->image_url ?? null,
+            'units_per_bulto' => $item->orderItem?->product?->units_per_bulto ?? null,
+            'original_qty' => $item->orderItem?->qty,
+            'qty_missing' => $item->qty_missing,
+            'note' => $item->note,
+            'status' => $item->status,
+            'resolved_at' => $item->resolved_at?->toISOString(),
             'resolved_by_name' => $item->resolver?->name,
-            'created_by_name'  => $item->creator?->name,
-            'created_at'       => $item->created_at?->toISOString(),
+            'created_by_name' => $item->creator?->name,
+            'created_at' => $item->created_at?->toISOString(),
         ];
     }
 }

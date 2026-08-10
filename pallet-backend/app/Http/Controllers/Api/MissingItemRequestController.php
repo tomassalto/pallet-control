@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Helpers\ActivityLogger;
+use App\Http\Controllers\Controller;
 use App\Models\MissingItemRequest;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -21,10 +21,10 @@ class MissingItemRequestController extends Controller
         }
 
         $data = $request->validate([
-            'order_item_id'  => ['required', 'exists:order_items,id'],
-            'qty_missing'    => ['required', 'integer', 'min:1'],
+            'order_item_id' => ['required', 'exists:order_items,id'],
+            'qty_missing' => ['required', 'integer', 'min:1'],
             'requester_name' => ['nullable', 'string', 'max:100'],
-            'note'           => ['nullable', 'string', 'max:500'],
+            'note' => ['nullable', 'string', 'max:500'],
         ]);
 
         $item = OrderItem::findOrFail($data['order_item_id']);
@@ -48,12 +48,12 @@ class MissingItemRequestController extends Controller
         }
 
         $req = MissingItemRequest::create([
-            'order_id'       => $order->id,
-            'order_item_id'  => $data['order_item_id'],
-            'qty_missing'    => $data['qty_missing'],
+            'order_id' => $order->id,
+            'order_item_id' => $data['order_item_id'],
+            'qty_missing' => $data['qty_missing'],
             'requester_name' => $data['requester_name'] ?? null,
-            'note'           => $data['note'] ?? null,
-            'status'         => 'pending_review',
+            'note' => $data['note'] ?? null,
+            'status' => 'pending_review',
         ]);
 
         return response()->json(['message' => 'Solicitud recibida', 'id' => $req->id], 201);
@@ -85,19 +85,19 @@ class MissingItemRequestController extends Controller
         $wasPendingReview = $missingItemRequest->status === 'pending_review';
 
         $missingItemRequest->update([
-            'status'      => $data['status'],
+            'status' => $data['status'],
             'reviewed_at' => now(),
             'reviewed_by' => $request->user()->id,
         ]);
 
         if ($data['status'] === 'approved' && $wasPendingReview) {
             $pending = PendingItem::create([
-                'order_id'      => $missingItemRequest->order_id,
+                'order_id' => $missingItemRequest->order_id,
                 'order_item_id' => $missingItemRequest->order_item_id,
-                'qty_missing'   => $missingItemRequest->qty_missing,
-                'note'          => $missingItemRequest->note,
-                'status'        => 'pending',
-                'created_by'    => $request->user()->id,
+                'qty_missing' => $missingItemRequest->qty_missing,
+                'note' => $missingItemRequest->note,
+                'status' => 'pending',
+                'created_by' => $request->user()->id,
             ]);
 
             ActivityLogger::log(
@@ -128,22 +128,22 @@ class MissingItemRequestController extends Controller
     private function format(MissingItemRequest $r): array
     {
         return [
-            'id'               => $r->id,
-            'order_id'         => $r->order_id,
-            'order_code'       => $r->order?->code,
-            'order_item_id'    => $r->order_item_id,
-            'description'      => $r->orderItem?->description,
-            'ean'              => $r->orderItem?->ean,
-            'image_url'        => $r->orderItem?->product?->image_url ?? null,
-            'units_per_bulto'  => $r->orderItem?->product?->units_per_bulto ?? null,
-            'original_qty'     => $r->orderItem?->qty,
-            'qty_missing'      => $r->qty_missing,
-            'requester_name'   => $r->requester_name,
-            'note'             => $r->note,
-            'status'           => $r->status,
-            'reviewed_at'      => $r->reviewed_at?->toISOString(),
+            'id' => $r->id,
+            'order_id' => $r->order_id,
+            'order_code' => $r->order?->code,
+            'order_item_id' => $r->order_item_id,
+            'description' => $r->orderItem?->description,
+            'ean' => $r->orderItem?->ean,
+            'image_url' => $r->orderItem?->product?->image_url ?? null,
+            'units_per_bulto' => $r->orderItem?->product?->units_per_bulto ?? null,
+            'original_qty' => $r->orderItem?->qty,
+            'qty_missing' => $r->qty_missing,
+            'requester_name' => $r->requester_name,
+            'note' => $r->note,
+            'status' => $r->status,
+            'reviewed_at' => $r->reviewed_at?->toISOString(),
             'reviewed_by_name' => $r->reviewer?->name,
-            'created_at'       => $r->created_at?->toISOString(),
+            'created_at' => $r->created_at?->toISOString(),
         ];
     }
 }

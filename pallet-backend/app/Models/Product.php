@@ -14,7 +14,10 @@ class Product extends Model
      */
     public static function infoByEans(array $eans): \Illuminate\Support\Collection
     {
-        if (empty($eans)) return collect();
+        if (empty($eans)) {
+            return collect();
+        }
+
         return static::whereIn('ean', $eans)
             ->get(['ean', 'image_url', 'units_per_bulto'])
             ->keyBy('ean');

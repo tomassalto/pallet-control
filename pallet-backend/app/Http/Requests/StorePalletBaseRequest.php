@@ -14,11 +14,11 @@ class StorePalletBaseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'                   => ['nullable', 'string', 'max:255'],
-            'note'                   => ['nullable', 'string', 'max:2000'],
-            'items'                  => ['nullable', 'array'],
-            'items.*.order_item_id'  => ['required', 'integer', 'exists:order_items,id'],
-            'items.*.qty'            => ['required', 'integer', 'min:0'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'items' => ['nullable', 'array'],
+            'items.*.order_item_id' => ['required', 'integer', 'exists:order_items,id'],
+            'items.*.qty' => ['required', 'integer', 'min:0'],
         ];
     }
 }

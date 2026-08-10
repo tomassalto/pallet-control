@@ -30,16 +30,16 @@ return [
     */
     'azure' => [
         'endpoint' => env('AZURE_VISION_ENDPOINT', ''),
-        'key'      => env('AZURE_VISION_KEY', ''),
+        'key' => env('AZURE_VISION_KEY', ''),
     ],
 
     /*
     | PaddleOCR (proceso Python externo).
     */
     'paddle' => [
-        'script'     => env('PADDLE_OCR_SCRIPT', base_path('scripts/paddle_ocr_ticket.py')),
+        'script' => env('PADDLE_OCR_SCRIPT', base_path('scripts/paddle_ocr_ticket.py')),
         'python_bin' => env('OCR_PYTHON_BIN', 'python'),
-        'lang'       => env('PADDLE_OCR_LANG', 'en'),
+        'lang' => env('PADDLE_OCR_LANG', 'en'),
     ],
 
 ];

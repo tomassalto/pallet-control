@@ -20,23 +20,25 @@ class BotController extends Controller
     {
         // Autenticación delegada a BotSecretMiddleware (bot.secret)
         $data = $request->validate([
-            'type'         => ['required', 'in:pallet,base,ticket'],
-            'pallet_code'  => ['nullable', 'string', 'max:255'],
+            'type' => ['required', 'in:pallet,base,ticket'],
+            'pallet_code' => ['nullable', 'string', 'max:255'],
             'pallet_index' => ['nullable', 'integer', 'min:1', 'max:99'],
-            'base_name'    => ['nullable', 'string', 'max:255'],
-            'order_code'   => ['nullable', 'string', 'max:255'],
-            'order_index'  => ['nullable', 'integer', 'min:1', 'max:99'],
-            'note'         => ['nullable', 'string', 'max:1000'],
-            'photo'        => ['required', 'file', 'image', 'max:20480'],
+            'base_name' => ['nullable', 'string', 'max:255'],
+            'order_code' => ['nullable', 'string', 'max:255'],
+            'order_index' => ['nullable', 'integer', 'min:1', 'max:99'],
+            'note' => ['nullable', 'string', 'max:1000'],
+            'photo' => ['required', 'file', 'image', 'max:20480'],
         ]);
 
         try {
             $result = app(PhotoUploadService::class)->upload($data['photo'], $data);
+
             return response()->json($result, 201);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
             return response()->json(['error' => 'No encontrado. Verificá el código.'], 404);
         } catch (\Throwable $e) {
             Log::error('[Bot] uploadPhoto error: ' . $e->getMessage());
+
             return response()->json(['error' => $e->getMessage()], 422);
         }
     }

@@ -2,13 +2,13 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Models\Product;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Console\Command;
 
 class UpdateProductLast4 extends Command
 {
     protected $signature = 'products:update-last4';
+
     protected $description = 'Actualiza el campo ean_last4 para productos que no lo tienen';
 
     public function handle(): int
@@ -36,6 +36,7 @@ class UpdateProductLast4 extends Command
             });
 
         $this->info("✅ Completado. Total actualizados: $updated");
+
         return self::SUCCESS;
     }
 }

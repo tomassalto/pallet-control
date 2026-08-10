@@ -14,7 +14,7 @@ class OrderService
      *  - Debe tener al menos 1 pallet asociado
      *  - Todos los ítems deben tener sus unidades distribuidas en bases de pallets
      *
-     * @param  Order  $order  Debe tener cargadas las relaciones: items, pallets.bases.orderItems
+     * @param Order $order Debe tener cargadas las relaciones: items, pallets.bases.orderItems
      * @return array{can: bool, reason: string|null}
      */
     public static function canFinalize(Order $order): array
@@ -53,8 +53,7 @@ class OrderService
     /**
      * Enriquece un pedido con información de productos y calcula done_qty y locations.
      *
-     * @param  Order  $order  Debe tener cargado: items.bases.pallet, items.bases.pivot
-     * @return \Illuminate\Support\Collection
+     * @param Order $order Debe tener cargado: items.bases.pallet, items.bases.pivot
      */
     public static function enrichItemsWithLocations(Order $order): \Illuminate\Support\Collection
     {
@@ -64,15 +63,15 @@ class OrderService
         return $order->items->map(function ($item) use ($productInfo) {
             $bases = $item->bases;
 
-            $locations = $bases->map(fn($base) => [
-                'pallet_id'   => $base->pallet->id,
+            $locations = $bases->map(fn ($base) => [
+                'pallet_id' => $base->pallet->id,
                 'pallet_code' => $base->pallet->code,
-                'base_id'     => $base->id,
-                'base_name'   => $base->name,
-                'qty'         => $base->pivot->qty,
+                'base_id' => $base->id,
+                'base_name' => $base->name,
+                'qty' => $base->pivot->qty,
             ]);
 
-            $calculatedDoneQty = $bases->sum(fn($base) => $base->pivot->qty ?? 0);
+            $calculatedDoneQty = $bases->sum(fn ($base) => $base->pivot->qty ?? 0);
 
             if ($item->status === 'done' && $calculatedDoneQty === 0 && $bases->isEmpty()) {
                 $calculatedDoneQty = $item->qty;
@@ -81,15 +80,15 @@ class OrderService
             $prod = $productInfo[$item->ean] ?? null;
 
             return [
-                'id'              => $item->id,
-                'ean'             => $item->ean,
-                'ean_last4'       => $item->ean_last4,
-                'description'     => $item->description,
-                'qty'             => $item->qty,
-                'status'          => $item->status,
-                'done_qty'        => $calculatedDoneQty,
-                'locations'       => $locations,
-                'image_url'       => $prod?->image_url ?? null,
+                'id' => $item->id,
+                'ean' => $item->ean,
+                'ean_last4' => $item->ean_last4,
+                'description' => $item->description,
+                'qty' => $item->qty,
+                'status' => $item->status,
+                'done_qty' => $calculatedDoneQty,
+                'locations' => $locations,
+                'image_url' => $prod?->image_url ?? null,
                 'units_per_bulto' => $prod?->units_per_bulto ?? null,
             ];
         });

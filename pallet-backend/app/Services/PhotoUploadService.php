@@ -25,9 +25,9 @@ class PhotoUploadService
 
         return match ($params['type']) {
             'pallet' => $this->toPallet($params),
-            'base'   => $this->toBase($params),
+            'base' => $this->toBase($params),
             'ticket' => $this->toTicket($params),
-            default  => throw new \InvalidArgumentException("Tipo inválido: {$params['type']}"),
+            default => throw new \InvalidArgumentException("Tipo inválido: {$params['type']}"),
         };
     }
 
@@ -37,29 +37,31 @@ class PhotoUploadService
 
     public function resolvePallet(array $data): Pallet
     {
-        if (!empty($data['pallet_id'])) {
+        if (! empty($data['pallet_id'])) {
             return Pallet::findOrFail($data['pallet_id']);
         }
-        if (!empty($data['pallet_index'])) {
+        if (! empty($data['pallet_index'])) {
             return Pallet::where('status', 'open')
                 ->orderByDesc('id')
                 ->skip($data['pallet_index'] - 1)
                 ->firstOrFail();
         }
+
         return Pallet::where('code', $data['pallet_code'])->firstOrFail();
     }
 
     public function resolveOrder(array $data): Order
     {
-        if (!empty($data['order_id'])) {
+        if (! empty($data['order_id'])) {
             return Order::findOrFail($data['order_id']);
         }
-        if (!empty($data['order_index'])) {
+        if (! empty($data['order_index'])) {
             return Order::where('status', 'open')
                 ->orderByDesc('id')
                 ->skip($data['order_index'] - 1)
                 ->firstOrFail();
         }
+
         return Order::where('code', $data['order_code'])->firstOrFail();
     }
 
@@ -76,10 +78,10 @@ class PhotoUploadService
         );
 
         $photo = PalletPhoto::create([
-            'pallet_id'     => $pallet->id,
-            'path'          => $path,
+            'pallet_id' => $pallet->id,
+            'path' => $path,
             'original_name' => 'bot-' . now()->format('Ymd_His') . '.jpg',
-            'note'          => $data['note'] ?? 'Subida vía bot',
+            'note' => $data['note'] ?? 'Subida vía bot',
         ]);
 
         ActivityLogger::log(
@@ -97,13 +99,13 @@ class PhotoUploadService
     private function toBase(array $data): array
     {
         // Ruta directa: base_id conocido (bot interactivo)
-        if (!empty($data['base_id'])) {
-            $base   = PalletBase::with('pallet')->findOrFail($data['base_id']);
+        if (! empty($data['base_id'])) {
+            $base = PalletBase::with('pallet')->findOrFail($data['base_id']);
             $pallet = $base->pallet;
         } else {
-            $pallet    = $this->resolvePallet($data);
+            $pallet = $this->resolvePallet($data);
             $baseQuery = $pallet->bases();
-            if (!empty($data['base_name'])) {
+            if (! empty($data['base_name'])) {
                 $base = $baseQuery->where('name', 'like', '%' . $data['base_name'] . '%')->firstOrFail();
             } else {
                 $base = $baseQuery->latest()->firstOrFail();
@@ -115,10 +117,10 @@ class PhotoUploadService
         );
 
         $photo = PalletBasePhoto::create([
-            'base_id'       => $base->id,
-            'path'          => $path,
+            'base_id' => $base->id,
+            'path' => $path,
             'original_name' => 'bot-' . now()->format('Ymd_His') . '.jpg',
-            'note'          => $data['note'] ?? 'Subida vía bot',
+            'note' => $data['note'] ?? 'Subida vía bot',
         ]);
 
         $baseName = $base->name ?? 'Sin nombre';
@@ -141,8 +143,8 @@ class PhotoUploadService
 
         $ticket = OrderTicket::create([
             'order_id' => $order->id,
-            'code'     => null,
-            'note'     => $data['note'] ?? 'Ticket vía bot',
+            'code' => null,
+            'note' => $data['note'] ?? 'Ticket vía bot',
         ]);
 
         $path = ImageConverter::convertToWebP(
@@ -150,11 +152,11 @@ class PhotoUploadService
         );
 
         $photo = OrderTicketPhoto::create([
-            'ticket_id'     => $ticket->id,
-            'path'          => $path,
+            'ticket_id' => $ticket->id,
+            'path' => $path,
             'original_name' => 'bot-' . now()->format('Ymd_His') . '.jpg',
-            'note'          => $data['note'] ?? null,
-            'order_index'   => 0,
+            'note' => $data['note'] ?? null,
+            'order_index' => 0,
         ]);
 
         ActivityLogger::log(
@@ -172,7 +174,7 @@ class PhotoUploadService
     private function buildSuccessResponse(string $path, string $message): array
     {
         return [
-            'ok'  => true,
+            'ok' => true,
             'msg' => "✅ {$message}",
             'url' => \Illuminate\Support\Facades\Storage::disk(config('filesystems.default', 'public'))->url($path),
         ];

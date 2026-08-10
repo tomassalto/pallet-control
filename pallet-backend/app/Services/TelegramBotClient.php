@@ -56,12 +56,12 @@ class TelegramBotClient
             'file_id' => $fileId,
         ]);
 
-        if (!$meta->ok()) {
+        if (! $meta->ok()) {
             return null;
         }
 
         $filePath = $meta->json('result.file_path');
-        if (!$filePath) {
+        if (! $filePath) {
             return null;
         }
 

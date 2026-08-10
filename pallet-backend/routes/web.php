@@ -3,19 +3,31 @@
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/up', function () {
+    return response()->json([
+        'ok' => true,
+        'service' => 'pallet-control',
+        'time' => now()->toIso8601String(),
+    ]);
+});
+
 // Ruta para verificar configuración PHP
 Route::get('/check-php-config.php', function () {
     ob_start();
     include public_path('check-php-config.php');
+
     return ob_get_clean();
 });
 
 // Ruta alternativa para servir imágenes del storage con headers CORS correctos
 Route::get('/storage/{path}', function (string $path) {
     $filePath = storage_path('app/public/' . $path);
-    if (!file_exists($filePath)) abort(404);
+    if (! file_exists($filePath)) {
+        abort(404);
+    }
 
     $mimeType = mime_content_type($filePath);
+
     return response(file_get_contents($filePath), 200)
         ->header('Content-Type', $mimeType)
         ->header('Access-Control-Allow-Origin', '*')
@@ -32,17 +44,17 @@ Route::get('/{any?}', function (string $any = '') {
         if (File::exists($filePath) && is_file($filePath)) {
             $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
             $mimes = [
-                'js'           => 'application/javascript',
-                'css'          => 'text/css',
-                'png'          => 'image/png',
-                'svg'          => 'image/svg+xml',
-                'webp'         => 'image/webp',
-                'ico'          => 'image/x-icon',
-                'woff'         => 'font/woff',
-                'woff2'        => 'font/woff2',
-                'ttf'          => 'font/ttf',
-                'json'         => 'application/json',
-                'webmanifest'  => 'application/manifest+json',
+                'js' => 'application/javascript',
+                'css' => 'text/css',
+                'png' => 'image/png',
+                'svg' => 'image/svg+xml',
+                'webp' => 'image/webp',
+                'ico' => 'image/x-icon',
+                'woff' => 'font/woff',
+                'woff2' => 'font/woff2',
+                'ttf' => 'font/ttf',
+                'json' => 'application/json',
+                'webmanifest' => 'application/manifest+json',
             ];
             $mime = $mimes[$ext] ?? mime_content_type($filePath);
 
@@ -61,4 +73,4 @@ Route::get('/{any?}', function (string $any = '') {
 
     // Todo lo demás → SPA
     return File::get(public_path('app/index.html'));
-})->where('any', '^(?!api|storage|check-php-config).*$');
+})->where('any', '^(?!api|storage|check-php-config|up).*$');

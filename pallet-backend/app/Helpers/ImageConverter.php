@@ -5,8 +5,8 @@ namespace App\Helpers;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Intervention\Image\ImageManager;
 use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\ImageManager;
 
 class ImageConverter
 {
@@ -20,7 +20,7 @@ class ImageConverter
         [$tmpPath, $useTempFile] = self::resolveReadablePath($file);
 
         try {
-            $manager = new ImageManager(new Driver());
+            $manager = new ImageManager(new Driver);
 
             $image = $manager->read($tmpPath);
 
@@ -53,11 +53,11 @@ class ImageConverter
     private static function resolveReadablePath(UploadedFile $file): array
     {
         $tmpPath = $file->getPathname();
-        if (!$tmpPath || !is_file($tmpPath) || !is_readable($tmpPath)) {
+        if (! $tmpPath || ! is_file($tmpPath) || ! is_readable($tmpPath)) {
             $tmpPath = $file->getRealPath();
         }
 
-        if (!$tmpPath || !is_file($tmpPath) || !is_readable($tmpPath)) {
+        if (! $tmpPath || ! is_file($tmpPath) || ! is_readable($tmpPath)) {
             $content = null;
 
             try {
@@ -65,12 +65,14 @@ class ImageConverter
                 if ($stream && is_resource($stream)) {
                     $content = stream_get_contents($stream);
                     $meta = stream_get_meta_data($stream);
-                    if (!empty($meta['seekable'])) rewind($stream);
+                    if (! empty($meta['seekable'])) {
+                        rewind($stream);
+                    }
                 }
             } catch (\Throwable $e) {
             }
 
-            if (!$content) {
+            if (! $content) {
                 throw new \RuntimeException('No se pudo leer el archivo subido.');
             }
 
@@ -79,7 +81,7 @@ class ImageConverter
                 throw new \RuntimeException('No se pudo crear un archivo temporal.');
             }
 
-            if (!file_put_contents($tempFile, $content)) {
+            if (! file_put_contents($tempFile, $content)) {
                 @unlink($tempFile);
                 throw new \RuntimeException('No se pudo escribir el archivo temporal.');
             }

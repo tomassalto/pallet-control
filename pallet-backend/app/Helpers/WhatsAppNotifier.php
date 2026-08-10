@@ -13,7 +13,7 @@ class WhatsAppNotifier
      */
     public static function send(string $message): void
     {
-        $url    = config('services.whatsapp_bot.url');
+        $url = config('services.whatsapp_bot.url');
         $secret = config('services.whatsapp_bot.secret', '');
 
         if (empty($url)) {
