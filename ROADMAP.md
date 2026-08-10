@@ -219,35 +219,15 @@ Estados: [ ] pendiente | [~] en progreso | [x] hecho | [!] bloqueado
 
 ## 💡 Ideas futuras / backlog
 
-[ ] **Bot Telegram — UX conversacional con teclados inline**
-    El bot actual requiere conocer comandos de texto (`p`, `b A1`, `t 12345`).
-    Poco intuitivo para compañeros que no crearon el sistema.
-
-    **Idea:** cuando el usuario manda una foto sin caption (o con caption inválido),
-    el bot responde con un *teclado inline* (botones adjuntos al mensaje del bot):
-
-    ```
-    ¿A dónde adjunto esta foto?
-    [ 📦 PLT-001 ]  [ 📦 PLT-002 ]
-    [ 🎫 ORD-045 ]  [ 🎫 ORD-046 ]
-    ```
-
-    El usuario toca un botón → el bot edita su propio mensaje a "✅ Foto guardada en PLT-001".
-    Si el destino es "base", aparece un segundo nivel de botones con las bases de ese pallet.
-
-    **Por qué no genera "basura" en el chat:**
-    - Los botones están adjuntos al mensaje del BOT, no al del usuario
-    - Tocar un botón no genera un mensaje nuevo en el chat (callback query, no mensaje de texto)
-    - El bot edita su propio mensaje en lugar de agregar uno nuevo → el chat queda limpio
-
-    **Requisito técnico:**
-    - Guardar la foto temporalmente con el `file_id` de Telegram mientras se espera el callback
-    - Usar `editMessageText` + `answerCallbackQuery` en lugar de `sendMessage`
-    - Agregar ruta `POST /telegram/callback` o manejar `callback_query` en el webhook existente
-    - Mostrar solo los últimos 4-6 pallets/pedidos abiertos para no saturar los botones
-
-    **Mantener comandos como atajo:** los que saben el comando siguen usándolo (`p`, `b A1`).
-    Los que no lo saben reciben el menú automáticamente.
+[x] **Bot Telegram — UX conversacional con teclados inline** _(2026-05-10)_
+    Foto sin caption → bot responde con botones inline (últimos 4 pallets + últimos 3 pedidos).
+    Tap en pallet → segundo nivel con bases existentes + "➕ Base N (nueva)".
+    Tap en pedido → sube como ticket directo.
+    Tap en "Nueva base" → crea la base y sube la foto en un solo paso.
+    Estado se guarda en Cache por `tg_photo_{userId}` con TTL de 5 minutos.
+    Comandos de caption (`p`, `b A1`, `t`) siguen funcionando como atajo.
+    Implementado en `TelegramBotController`: `handlePhotoWithoutCaption`, `handleCallbackQuery`,
+    `handleSelectPallet`, `handleUploadToBase`, `handleCreateBaseAndUpload`, `handleUploadTicket`.
 
 [ ] **Notificaciones Telegram cuando OCR termina**
     Ya hay bot de Telegram. Al finalizar un escaneo, notificar con el
