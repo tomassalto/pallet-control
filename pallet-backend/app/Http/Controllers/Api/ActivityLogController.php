@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 
 class ActivityLogController extends Controller
@@ -12,7 +13,7 @@ class ActivityLogController extends Controller
     {
         $perPage = min($request->integer('per_page', 50), 100);
 
-        $paginator = \App\Models\ActivityLog::with(['user:id,name', 'pallet:id,code', 'order:id,code'])
+        $paginator = ActivityLog::with(['user:id,name', 'pallet:id,code', 'order:id,code'])
             ->orderByDesc('created_at')
             ->paginate($perPage);
 

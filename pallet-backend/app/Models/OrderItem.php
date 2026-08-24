@@ -46,7 +46,7 @@ class OrderItem extends Model
     public function bases(): BelongsToMany
     {
         return $this->belongsToMany(
-            \App\Models\PalletBase::class,
+            PalletBase::class,
             'pallet_base_order_items',
             'order_item_id',
             'base_id'

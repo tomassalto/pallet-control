@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 
 class Product extends Model
 {
@@ -12,7 +13,7 @@ class Product extends Model
      * Devuelve un mapa EAN → Product (solo image_url + units_per_bulto)
      * para enriquecer ítems de pedido sin N+1.
      */
-    public static function infoByEans(array $eans): \Illuminate\Support\Collection
+    public static function infoByEans(array $eans): Collection
     {
         if (empty($eans)) {
             return collect();

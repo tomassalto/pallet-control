@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class BotSecretMiddleware
@@ -13,7 +14,7 @@ class BotSecretMiddleware
         $secret = config('services.whatsapp_bot.secret');
 
         if (empty($secret)) {
-            \Illuminate\Support\Facades\Log::warning('BotSecretMiddleware: Secret no configurado en producción', [
+            Log::warning('BotSecretMiddleware: Secret no configurado en producción', [
                 'ip' => $request->ip(),
                 'uri' => $request->fullUrl(),
             ]);

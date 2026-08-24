@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\ActivityLogger;
 use App\Helpers\ImageConverter;
 use App\Http\Controllers\Controller;
 use App\Models\Pallet;
 use App\Models\PalletBase;
+use App\Models\PalletBasePhoto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -67,14 +69,14 @@ class PalletBasePhotoController extends Controller
                 ], 422);
             }
 
-            $photo = \App\Models\PalletBasePhoto::create([
+            $photo = PalletBasePhoto::create([
                 'base_id' => $base->id,
                 'path' => $path,
                 'original_name' => $file->getClientOriginalName(),
                 'note' => $data['note'] ?? null,
             ]);
 
-            \App\Helpers\ActivityLogger::log(
+            ActivityLogger::log(
                 action: 'base_photo_uploaded',
                 entityType: 'pallet_base_photo',
                 entityId: $photo->id,
@@ -124,7 +126,7 @@ class PalletBasePhotoController extends Controller
         Storage::disk(config('filesystems.default', 'public'))->delete($photoPath);
         $photo->delete();
 
-        \App\Helpers\ActivityLogger::log(
+        ActivityLogger::log(
             action: 'base_photo_deleted',
             entityType: 'pallet_base_photo',
             entityId: null,

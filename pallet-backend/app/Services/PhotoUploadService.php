@@ -12,6 +12,7 @@ use App\Models\PalletBase;
 use App\Models\PalletBasePhoto;
 use App\Models\PalletPhoto;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 class PhotoUploadService
 {
@@ -176,7 +177,7 @@ class PhotoUploadService
         return [
             'ok' => true,
             'msg' => "✅ {$message}",
-            'url' => \Illuminate\Support\Facades\Storage::disk(config('filesystems.default', 'public'))->url($path),
+            'url' => Storage::disk(config('filesystems.default', 'public'))->url($path),
         ];
     }
 }

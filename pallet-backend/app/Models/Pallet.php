@@ -20,11 +20,11 @@ class Pallet extends Model
 
     public function photos()
     {
-        return $this->hasMany(\App\Models\PalletPhoto::class)->orderByDesc('created_at');
+        return $this->hasMany(PalletPhoto::class)->orderByDesc('created_at');
     }
 
     public function bases(): HasMany
     {
-        return $this->hasMany(\App\Models\PalletBase::class);
+        return $this->hasMany(PalletBase::class);
     }
 }

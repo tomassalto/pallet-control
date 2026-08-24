@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Models\ActivityLog;
 use App\Models\Order;
 use App\Models\OrderTicketPhoto;
 use App\Models\Pallet;
 use App\Models\PalletBasePhoto;
 use App\Models\PalletPhoto;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -16,7 +18,7 @@ class StorageController extends Controller
 {
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    private function storageDisk(): \Illuminate\Contracts\Filesystem\Filesystem
+    private function storageDisk(): Filesystem
     {
         return Storage::disk(config('filesystems.default', 'public'));
     }
@@ -46,7 +48,7 @@ class StorageController extends Controller
             'pallet_photos_count' => $palletPhotosCount,
             'base_photos_count' => $basePhotosCount,
             'ticket_photos_count' => $ticketPhotosCount,
-            'activity_logs_count' => \App\Models\ActivityLog::count(),
+            'activity_logs_count' => ActivityLog::count(),
             'ocr_logs_count' => OrderTicketPhoto::whereNotNull('ocr_log')->count(),
             'total_photos' => $palletPhotosCount + $basePhotosCount + $ticketPhotosCount,
         ]);

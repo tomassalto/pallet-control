@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\ActivityLogger;
 use App\Http\Controllers\Controller;
 use App\Models\Pallet;
 use App\Models\PalletBase;
@@ -77,7 +78,7 @@ class PhotoAnnotationController extends Controller
         $annotationsCount = count($created);
         $baseName = $base->name ?? "Base #{$base->id}";
 
-        \App\Helpers\ActivityLogger::log(
+        ActivityLogger::log(
             action: 'photo_annotations_saved',
             entityType: 'photo_annotation',
             entityId: $photo->id,

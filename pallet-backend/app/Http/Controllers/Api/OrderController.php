@@ -13,6 +13,7 @@ use App\Models\Pallet;
 use App\Models\PendingItem;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -75,7 +76,7 @@ class OrderController extends Controller
         }
 
         // Enriquecer items con image_url desde products
-        $collection = $result instanceof \Illuminate\Pagination\LengthAwarePaginator
+        $collection = $result instanceof LengthAwarePaginator
             ? $result->getCollection()
             : $result;
 

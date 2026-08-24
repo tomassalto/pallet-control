@@ -31,7 +31,7 @@ class PalletBase extends Model
     public function orderItems(): BelongsToMany
     {
         return $this->belongsToMany(
-            \App\Models\OrderItem::class,
+            OrderItem::class,
             'pallet_base_order_items',
             'base_id', // foreign key de PalletBase en la tabla pivot
             'order_item_id' // foreign key de OrderItem en la tabla pivot

@@ -8,6 +8,8 @@ use App\Models\Pallet;
 use App\Services\PhotoUploadService;
 use App\Services\TelegramBotClient;
 use App\Services\TelegramBotCommandParser;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -186,7 +188,7 @@ class TelegramBotController extends Controller
     }
 
     /** Formatea un timestamp como "hoy HH:MM", "ayer HH:MM" o "DD/MM HH:MM" */
-    private function relativeTime(\Carbon\Carbon $dt): string
+    private function relativeTime(Carbon $dt): string
     {
         $local = $dt->copy()->timezone('America/Argentina/Buenos_Aires');
         if ($local->isToday()) {
@@ -348,7 +350,7 @@ class TelegramBotController extends Controller
             }
             $this->editMessage($chatId, $messageId, $msg);
 
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        } catch (ModelNotFoundException) {
             $this->editMessage($chatId, $messageId, '❌ Pallet no encontrado.');
         } catch (\Throwable $e) {
             Log::error('[TelegramBot] createBaseAndUpload: ' . $e->getMessage());
@@ -410,7 +412,7 @@ class TelegramBotController extends Controller
             Cache::forget("tg_photo_{$userId}");
             $this->editMessage($chatId, $messageId, $result['msg'] ?? '✅ Foto guardada');
 
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        } catch (ModelNotFoundException) {
             $this->editMessage($chatId, $messageId, '❌ No encontrado. Puede que el destino haya sido cerrado.');
         } catch (\Throwable $e) {
             Log::error('[TelegramBot] runUpload: ' . $e->getMessage());
@@ -507,7 +509,7 @@ class TelegramBotController extends Controller
             $result = app(PhotoUploadService::class)->upload($uploadedFile, $params);
             $this->reply($chatId, $result['msg'] ?? '✅ Foto guardada');
 
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        } catch (ModelNotFoundException) {
             $this->reply($chatId, '❌ No encontrado. Verificá el código.');
         } catch (\Throwable $e) {
             Log::error('[TelegramBot] handlePhotoWithCaption: ' . $e->getMessage());

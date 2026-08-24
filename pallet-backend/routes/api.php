@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\ActivityLogController;
+use App\Http\Controllers\Api\Admin\StorageController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BotController;
 use App\Http\Controllers\Api\CustomerController;
@@ -162,11 +163,11 @@ Route::prefix('v1')->group(function () {
             Route::patch('/missing-item-requests/{missingItemRequest}', [MissingItemRequestController::class, 'update']);
 
             // Storage cleanup
-            Route::get('/storage/stats', [\App\Http\Controllers\Api\Admin\StorageController::class, 'stats']);
-            Route::get('/storage/pallets', [\App\Http\Controllers\Api\Admin\StorageController::class, 'pallets']);
-            Route::get('/storage/orders', [\App\Http\Controllers\Api\Admin\StorageController::class, 'orders']);
-            Route::delete('/storage/pallets/{id}', [\App\Http\Controllers\Api\Admin\StorageController::class, 'deletePallet']);
-            Route::delete('/storage/orders/{id}', [\App\Http\Controllers\Api\Admin\StorageController::class, 'deleteOrder']);
+            Route::get('/storage/stats', [StorageController::class, 'stats']);
+            Route::get('/storage/pallets', [StorageController::class, 'pallets']);
+            Route::get('/storage/orders', [StorageController::class, 'orders']);
+            Route::delete('/storage/pallets/{id}', [StorageController::class, 'deletePallet']);
+            Route::delete('/storage/orders/{id}', [StorageController::class, 'deleteOrder']);
         });
     });
 });

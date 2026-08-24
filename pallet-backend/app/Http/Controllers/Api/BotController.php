@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\PhotoUploadService;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -34,7 +35,7 @@ class BotController extends Controller
             $result = app(PhotoUploadService::class)->upload($data['photo'], $data);
 
             return response()->json($result, 201);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        } catch (ModelNotFoundException) {
             return response()->json(['error' => 'No encontrado. Verificá el código.'], 404);
         } catch (\Throwable $e) {
             Log::error('[Bot] uploadPhoto error: ' . $e->getMessage());

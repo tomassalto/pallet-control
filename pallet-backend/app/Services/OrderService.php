@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Models\Product;
+use Illuminate\Support\Collection;
 
 class OrderService
 {
@@ -55,10 +57,10 @@ class OrderService
      *
      * @param Order $order Debe tener cargado: items.bases.pallet, items.bases.pivot
      */
-    public static function enrichItemsWithLocations(Order $order): \Illuminate\Support\Collection
+    public static function enrichItemsWithLocations(Order $order): Collection
     {
         $eans = $order->items->pluck('ean')->filter()->unique()->values()->all();
-        $productInfo = empty($eans) ? [] : \App\Models\Product::infoByEans($eans);
+        $productInfo = empty($eans) ? [] : Product::infoByEans($eans);
 
         return $order->items->map(function ($item) use ($productInfo) {
             $bases = $item->bases;
@@ -98,7 +100,7 @@ class OrderService
      * Determina si el pedido está listo para mostrar el mapa de highlights.
      * Requiere: todas las unidades distribuidas Y al menos 2 pallets distintos.
      */
-    public static function isHighlightsReady(\Illuminate\Support\Collection $itemsWithLocations): bool
+    public static function isHighlightsReady(Collection $itemsWithLocations): bool
     {
         $allDistributed = $itemsWithLocations->every(fn ($i) => $i['done_qty'] >= $i['qty']);
         $distinctPalletIds = $itemsWithLocations
@@ -120,7 +122,7 @@ class OrderService
             return;
         }
 
-        $products = \App\Models\Product::infoByEans($eans);
+        $products = Product::infoByEans($eans);
 
         foreach ($items as $item) {
             $prod = $products[$item->ean] ?? null;

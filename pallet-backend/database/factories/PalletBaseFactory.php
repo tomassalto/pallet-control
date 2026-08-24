@@ -3,10 +3,11 @@
 namespace Database\Factories;
 
 use App\Models\Pallet;
+use App\Models\PalletBase;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\PalletBase>
+ * @extends Factory<PalletBase>
  */
 class PalletBaseFactory extends Factory
 {

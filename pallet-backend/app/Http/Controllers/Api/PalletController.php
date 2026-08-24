@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Helpers\ActivityLogger;
 use App\Helpers\TelegramNotifier;
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Order;
 use App\Models\Pallet;
 use App\Services\OrderService;
@@ -107,7 +108,7 @@ class PalletController extends Controller
     // GET /pallets/{pallet}/activity-logs
     public function activityLogs(Pallet $pallet)
     {
-        $logs = \App\Models\ActivityLog::where('pallet_id', $pallet->id)
+        $logs = ActivityLog::where('pallet_id', $pallet->id)
             ->with('user:id,name')
             ->orderByDesc('created_at')
             ->limit(200)

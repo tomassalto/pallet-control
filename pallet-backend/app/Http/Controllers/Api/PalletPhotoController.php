@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\ActivityLogger;
 use App\Helpers\ImageConverter;
 use App\Http\Controllers\Controller;
 use App\Models\Pallet;
@@ -44,7 +45,7 @@ class PalletPhotoController extends Controller
             'note' => $data['note'] ?? null,
         ]);
 
-        \App\Helpers\ActivityLogger::log(
+        ActivityLogger::log(
             action: 'pallet_photo_uploaded',
             entityType: 'pallet_photo',
             entityId: $photo->id,
@@ -73,7 +74,7 @@ class PalletPhotoController extends Controller
         Storage::disk(config('filesystems.default', 'public'))->delete($photoPath);
         $photo->delete();
 
-        \App\Helpers\ActivityLogger::log(
+        ActivityLogger::log(
             action: 'pallet_photo_deleted',
             entityType: 'pallet_photo',
             entityId: null,

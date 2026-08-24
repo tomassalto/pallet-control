@@ -8,6 +8,7 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Columnas fijas del archivo (separadas por TAB):
@@ -158,7 +159,7 @@ class OrderImportController extends Controller
                 }
             });
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('OrderImportController: Falló import', [
+            Log::error('OrderImportController: Falló import', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
