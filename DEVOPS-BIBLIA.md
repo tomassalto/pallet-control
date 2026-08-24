@@ -392,6 +392,45 @@ CANARY        → 5% del tráfico a la versión nueva, se monitorea, se escala.
 ```
 Para un VPS con Docker Compose, **rolling simple** ya es más que suficiente y suena profesional.
 
+## 3.6 Auditoría y remediación de dependencias
+
+La auditoría no termina al listar CVEs. El objetivo es volver a un lockfile reproducible
+sin vulnerabilidades conocidas y demostrar que la actualización no rompió el sistema.
+
+**Fuentes primarias:**
+- Composer CLI, `audit` y dependency policies: https://getcomposer.org/doc/03-cli.md#audit
+- npm CLI, `npm audit`: https://docs.npmjs.com/cli/audit/
+- npm, versionado semántico: https://docs.npmjs.com/about-semantic-versioning/
+
+### Política
+
+1. **Un lockfile por componente desplegable.** `composer.lock` o `package-lock.json`
+   define el árbol auditado y permite reproducir CI y producción.
+2. **Auditar runtime y desarrollo por separado.** Una vulnerabilidad en runtime tiene
+   exposición productiva directa; una de tooling sigue bloqueando CI si puede leer,
+   escribir o ejecutar sobre el repositorio.
+3. **Priorizar por severidad y exposición:** critical/high de runtime bloquean deploy;
+   medium/low se corrigen en la misma ronda o se documenta una excepción temporal.
+4. **Primero una simulación.** Usar `composer update ... --dry-run` o
+   `npm audit fix --dry-run`; revisar cambios directos, transitivos y de versión mayor.
+5. **No usar `--force` automáticamente.** En npm permite salir de los rangos declarados
+   e introducir cambios SemVer-major. Una actualización mayor es una migración separada.
+6. **Aplicar el menor cambio seguro:** actualizar primero dentro del rango compatible;
+   tocar requisitos directos sólo cuando el parche no cabe en el rango actual.
+7. **Un ecosistema por cambio.** PHP, frontend y bots se actualizan y validan por separado
+   para poder atribuir y revertir regresiones.
+8. **Repetir todos los gates:** instalación limpia desde lockfile, lint, análisis estático,
+   tests, build y nueva auditoría. El audit debe terminar con exit code 0.
+
+### Excepciones
+
+Ignorar una alerta requiere registrar: identificador CVE/GHSA/PKSA, paquete y versión,
+si llega a runtime, evidencia de que el camino vulnerable no es alcanzable, responsable,
+fecha de vencimiento y ticket de corrección. Nunca se ignora sólo para poner verde el CI.
+
+Composer y npm devuelven código distinto de cero cuando el audit supera la política
+configurada. Ese fallo es un gate real: no se desactiva ni se convierte en warning.
+
 ---
 
 # 4. 🖥️ EL SERVIDOR (VPS)

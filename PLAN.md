@@ -7,7 +7,7 @@
 **Última actualización:** 2026-08-24
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Rebanada actual:** cierre de Fase 1 — completar caracterización y validar todos los gates.
+**Rebanada actual:** cierre de Fase 1 — migración aislada del WhatsApp bot a Baileys 7 por H-042/D-001.
 
 ---
 
@@ -15,7 +15,7 @@
 
 ```
 Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b)
-Fase 1 — Red de seguridad      🟡 en progreso (CI/tooling hechos; caracterización parcial)
+Fase 1 — Red de seguridad      🟡 en progreso (CI/tooling y caracterización hechos; audit bloqueado)
 Fase 2 — Rebanadas verticales  🔲  (0 de 7 cerradas)
 Fase 3 — Dominio específico    🔲
 Fase 4 — Performance           🔲 (benchmarks/ armado, baseline sin correr — H-040)
@@ -31,8 +31,9 @@ _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código
 
 1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
-3. **Cerrar Fase 1** — validar CI/tooling y completar caracterización de `POST /orders/{order}/items` y `PATCH /order-items/{item}`. `H-039`.
-4. **Arrancar R-01** (`adjust-item`) — es el endpoint de escritura de stock con el gap más simple y más peligroso: escribe cantidad sin ningún techo contra lo pedido. `H-006b`.
+3. **Migrar WhatsApp bot a Baileys 7** — Composer, frontend y npm backend ya están en audit 0; quedan 3 vulnerabilidades en la cadena legacy de Baileys 6. `H-042`, `D-001`, DEVOPS-BIBLIA §3.6.
+4. **Cerrar Fase 1** — repetir instalación limpia, Pint, PHPStan, tests, lint, builds y audits.
+5. **Arrancar R-01** (`adjust-item`) — es el endpoint de escritura de stock con el gap más simple y más peligroso: escribe cantidad sin ningún techo contra lo pedido. `H-006b`.
 
 ---
 
@@ -232,9 +233,11 @@ Antes de tocar código de negocio (Fase 1 — red de seguridad):
 ✅ GitHub Actions: Pint → PHPStan → tests → composer audit      → H-031, DEVOPS §3.3
 ✅ Larastan/PHPStan nivel 5 con baseline legacy                 → H-041
 □ Branch protection en main                                     → DEVOPS §3.4
-🟡 Tests de caracterización de los 6 endpoints de stock ANTES   → Backend §6 (bases/adjust/migrate
-  de tocarlos — congelan el comportamiento actual para detectar   cubiertos; faltan los 2 endpoints
-  regresiones durante R-01 a R-05)                                de ítems de pedido)
+✅ Tests de caracterización de los 6 endpoints de stock ANTES   → Backend §6 (`f114458` + `c44cafd`)
+  de tocarlos — congelan el comportamiento actual para detectar
+  regresiones durante R-01 a R-05
+🟡 Remediar H-042 y obtener exit code 0 en todos los audits      → PHP/frontend/backend npm: ✅
+                                                                  WhatsApp bot: 🔲 Baileys 7
 □ Handler global de excepciones + respuesta de error estándar   → H-018, H-024
 □ Model::preventLazyLoading() en local                          → ✅ HECHO (esta sesión)
 □ Debugbar en dev                                                → ✅ HECHO (esta sesión)

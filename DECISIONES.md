@@ -46,3 +46,37 @@ _(Qué se resigna a cambio. Toda decisión resigna algo — si no encontrás qu�
 □ Postgres vs MySQL
 □ Dónde vive la lógica de negocio (controlador vs service vs action)
 ```
+
+---
+
+## D-001 — No forzar `protobufjs` dentro de Baileys 6
+
+**Fecha:** 2026-08-24
+**Estado:** ✅ vigente
+
+**Contexto**
+El audit del WhatsApp bot conserva una cadena crítica en
+`Baileys 6.7.24 → libsignal 2.0.1 → protobufjs 6.8.8`. El registry no ofrece una
+versión corregida de ese `libsignal`; Baileys 7 reemplaza la cadena, pero es una
+versión mayor con cambios incompatibles y todavía se distribuye como release candidate.
+
+**Opciones evaluadas**
+| Opción | A favor | En contra |
+|---|---|---|
+| Override de `protobufjs` 6→7 | Audit potencialmente verde | Fuerza una versión mayor no declarada por libsignal; riesgo criptográfico y de sesión |
+| Migrar Baileys 6→7 | Elimina la dependencia vulnerable y usa la línea soportada | Requiere migración, pruebas con sesión real y rollout separado |
+
+**Decisión**
+No usar `overrides` ni `npm audit fix --force`. Mantener R-01 sin iniciar hasta
+completar una rebanada específica de migración del bot a Baileys 7 y obtener audit 0.
+
+**Por qué**
+DEVOPS-BIBLIA §3.6 exige no forzar versiones mayores transitivas y validar cada
+ecosistema de forma aislada. La cadena maneja cifrado y estado de WhatsApp, por lo
+que una falsa corrección del lockfile es más peligrosa que un bloqueo explícito.
+
+**Trade-off aceptado**
+La modernización de negocio se demora hasta disponer de una migración verificable
+del bot; a cambio no se arriesgan sesiones ni mensajes productivos.
+
+**Referencia:** DEVOPS-BIBLIA §3.6

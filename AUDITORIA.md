@@ -311,7 +311,7 @@ Ubicación:   pallet-backend/tests/ (solo ejemplos default)
 Referencia:  BACKEND-BIBLIA §6 — CLAUDE.md regla dura #10
 ```
 **Por qué importa acá:** es la causa raíz por la que H-005 a H-011 llegaron a producción sin detectarse — no hay red de seguridad que los hubiera atrapado.
-**Estado:** 🟡 parcialmente cubierto en `f114458` — factories y 32 tests de caracterización incorporados; faltan los endpoints de escritura de ítems de pedido.
+**Estado:** ✅ resuelto en `f114458` + `c44cafd` — factories y 41 tests de caracterización propios cubren los seis endpoints de escritura priorizados.
 
 #### H-041 — Larastan/PHPStan no está instalado
 ```
@@ -319,6 +319,20 @@ Severidad:   🟡 medio · Categoría: calidad
 Ubicación:   composer.json (require-dev) — no está, pese a que CLAUDE.md lo lista como tooling obligatorio
 ```
 **Estado:** ✅ resuelto en `468b215` — Larastan/PHPStan nivel 5 con baseline de deuda legacy.
+
+#### H-042 — Dependencias con vulnerabilidades conocidas
+```
+Severidad:   🔴 crítico
+Categoría:   seguridad / supply chain
+Ubicación:   composer.lock y package-lock.json de frontend/bot
+Referencia:  DEVOPS-BIBLIA §3.6
+```
+**Qué está pasando:** el audit del 2026-08-24 reportó 38 advisories Composer en 14 paquetes,
+18 vulnerabilidades npm en frontend (14 high) y 11 en WhatsApp bot (2 critical, 5 high).
+El paquete npm auxiliar del backend no tiene lockfile y por eso no puede auditarse de forma reproducible.
+**Estado:** 🟡 parcialmente resuelto en `54eb1f7`, `a667f1a`, `d2df817` y `d5315f7`.
+Composer, frontend y npm auxiliar del backend quedaron en 0. El bot bajó a 3
+(1 critical, 2 high) por la cadena Baileys/libsignal/protobufjs; bloquea Fase 1 y deploy. Ver D-001.
 
 ---
 

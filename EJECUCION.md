@@ -90,7 +90,18 @@ en GitHub para branch protection sobre master.
 
 # 🥉 SESIÓN 3 — Red de seguridad: tests de caracterización
 
-**Estado actual:** 🟡 parcial — bases, `adjust-item` y `migrate` cubiertos; faltan `POST /orders/{order}/items` y `PATCH /order-items/{item}`.
+**Estado actual:** ✅ completo en `f114458` + `c44cafd`; 41 tests propios cubren los seis endpoints priorizados.
+
+# 🛡️ SESIÓN 3B — Dependencias vulnerables (H-042)
+
+Leer `ROUTER.md` y `DEVOPS-BIBLIA §3.6`. Resolver un ecosistema por vez:
+Composer → frontend → WhatsApp bot → npm auxiliar del backend. Antes de aplicar cambios,
+usar dry-run; no usar `--force`. Después de cada lockfile, repetir lint/static/tests/build/audit.
+No iniciar R-01 hasta que todos los audits terminen con exit code 0.
+
+**Estado actual:** 🟡 Composer, frontend y npm backend en 0. WhatsApp bot conserva
+3 vulnerabilidades por Baileys 6/libsignal/protobufjs. Continuar con una sesión
+aislada de migración a Baileys 7 según D-001; requiere prueba con una sesión real.
 
 `git checkout -b hardening/tests-caracterizacion`
 

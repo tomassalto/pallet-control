@@ -24,6 +24,16 @@ jobs:
           extensions: mbstring, pdo_sqlite, sqlite3, bcmath, gd, intl, exif, curl, dom, fileinfo
           coverage: none
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            pallet-backend/package-lock.json
+            pallet-frontend/package-lock.json
+            whatsapp-bot/package-lock.json
+
       - name: Cache Composer dependencies
         uses: actions/cache@v4
         with:
@@ -55,3 +65,14 @@ jobs:
       # 4. SECURITY — dependencias vulnerables
       - name: Security audit (composer audit)
         run: composer audit
+
+      - name: Security audit (backend npm)
+        run: npm ci && npm audit
+
+      - name: Security audit (frontend npm)
+        working-directory: pallet-frontend
+        run: npm ci && npm audit
+
+      - name: Security audit (WhatsApp bot npm)
+        working-directory: whatsapp-bot
+        run: npm ci --omit=dev && npm audit --omit=dev

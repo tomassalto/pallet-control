@@ -54,6 +54,7 @@ adaptación vigente y `PLAN.md` para el estado del trabajo.
 | Dockerfile, imagen, capas, usuario del contenedor | DevOps §1 Docker | Build de imagen y ejecución no-root |
 | `.env`, secretos, credenciales, configuración | DevOps §2 Variables y secretos | Sin secretos versionados; rotación si hubo exposición |
 | CI, GitHub Actions, branch protection | DevOps §3 CI/CD | Pipeline completo en push y pull request |
+| Dependencias, CVE, `composer audit`, `npm audit` | DevOps §3.6 Auditoría y remediación | Lockfile, dry-run, actualización mínima y todos los gates |
 | VPS, SSH, firewall, permisos | DevOps §4 Servidor | Checklist de hardening antes de publicar |
 | Nginx, proxy, HTTPS, headers | DevOps §5 Nginx y HTTPS | Config validada, TLS y headers comprobados |
 | Deploy, healthcheck, migración, rollback | DevOps §6 Deploy sin downtime | Plan de rollback y migración compatible |
@@ -93,4 +94,3 @@ implementación directa que todavía no esté respaldada por ella.
 - Actualizar fase, rebanada y siguiente acción en `PLAN.md`.
 - Agregar D-XXX si hubo una adaptación con trade-offs y citar la sección de la biblia.
 - Cambiar este router sólo cuando aparezca una ruta o sección nueva.
-
