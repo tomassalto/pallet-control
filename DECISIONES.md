@@ -52,7 +52,7 @@ _(Qué se resigna a cambio. Toda decisión resigna algo — si no encontrás qu�
 ## D-001 — No forzar `protobufjs` dentro de Baileys 6
 
 **Fecha:** 2026-08-24
-**Estado:** ✅ vigente
+**Estado:** ⚠️ superada parcialmente por la decisión operativa del 2026-08-24: WhatsApp es legado inactivo
 
 **Contexto**
 El audit del WhatsApp bot conserva una cadena crítica en
@@ -67,8 +67,9 @@ versión mayor con cambios incompatibles y todavía se distribuye como release c
 | Migrar Baileys 6→7 | Elimina la dependencia vulnerable y usa la línea soportada | Requiere migración, pruebas con sesión real y rollout separado |
 
 **Decisión**
-No usar `overrides` ni `npm audit fix --force`. Mantener R-01 sin iniciar hasta
-completar una rebanada específica de migración del bot a Baileys 7 y obtener audit 0.
+No usar `overrides` ni `npm audit fix --force`. El usuario confirmó que el bot de
+WhatsApp fue descartado: queda fuera de runtime, deploy y gates activos. Si alguna vez
+se reactiva, antes deberá migrarse a una versión soportada y obtener audit 0.
 
 **Por qué**
 DEVOPS-BIBLIA §3.6 exige no forzar versiones mayores transitivas y validar cada
@@ -76,7 +77,7 @@ ecosistema de forma aislada. La cadena maneja cifrado y estado de WhatsApp, por 
 que una falsa corrección del lockfile es más peligrosa que un bloqueo explícito.
 
 **Trade-off aceptado**
-La modernización de negocio se demora hasta disponer de una migración verificable
-del bot; a cambio no se arriesgan sesiones ni mensajes productivos.
+El código legado permanece en el repositorio con avisos conocidos, claramente marcado
+como inactivo; a cambio no se desvía la modernización activa hacia un componente descartado.
 
 **Referencia:** DEVOPS-BIBLIA §3.6

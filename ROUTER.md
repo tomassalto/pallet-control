@@ -68,7 +68,8 @@ adaptación vigente y `PLAN.md` para el estado del trabajo.
 | Área | Recorrido |
 |---|---|
 | Frontend que consume API | `AGENTS.md` → Backend §3–§4 → contrato actual → `ROADMAP.md` → lint/build |
-| Bot de Telegram o WhatsApp | Backend §1, §3, §4 y §7 + DevOps §2 y §7 → tests de secret/webhook |
+| Bot de Telegram | Backend §1, §3, §4 y §7 + DevOps §2 y §7 → tests de secret/webhook |
+| Componente legado/inactivo | Confirmar que no entra en build, deploy ni runtime; no bloquea gates activos |
 | OCR, imágenes y trabajos asíncronos | Backend §2, §3, §6 y §8.6 → costo, retry, storage y cleanup |
 | Stock y organización de pallets | `PLAN.md` R-01–R-05 → H-XXX → Backend §2.2, §3.1, §5.6 y §6.2 |
 | CI o deploy que toca código y plataforma | Backend §9 + DevOps §2, §3 y §6 |

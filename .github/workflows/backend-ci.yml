@@ -32,7 +32,6 @@ jobs:
           cache-dependency-path: |
             pallet-backend/package-lock.json
             pallet-frontend/package-lock.json
-            whatsapp-bot/package-lock.json
 
       - name: Cache Composer dependencies
         uses: actions/cache@v4
@@ -72,7 +71,3 @@ jobs:
       - name: Security audit (frontend npm)
         working-directory: pallet-frontend
         run: npm ci && npm audit
-
-      - name: Security audit (WhatsApp bot npm)
-        working-directory: whatsapp-bot
-        run: npm ci --omit=dev && npm audit --omit=dev

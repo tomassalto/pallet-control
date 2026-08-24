@@ -7,7 +7,7 @@
 **Última actualización:** 2026-08-24
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Rebanada actual:** cierre de Fase 1 — migración aislada del WhatsApp bot a Baileys 7 por H-042/D-001.
+**Rebanada actual:** R-01 — endurecer `adjust-item` según BACKEND-BIBLIA §2.2, §3.1, §5.6 y §6.2.
 
 ---
 
@@ -15,8 +15,8 @@
 
 ```
 Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b)
-Fase 1 — Red de seguridad      🟡 en progreso (CI/tooling y caracterización hechos; audit bloqueado)
-Fase 2 — Rebanadas verticales  🔲  (0 de 7 cerradas)
+Fase 1 — Red de seguridad      ✅ hecho (gates activos y caracterización completos)
+Fase 2 — Rebanadas verticales  🟡 R-01 en progreso (0 de 7 cerradas)
 Fase 3 — Dominio específico    🔲
 Fase 4 — Performance           🔲 (benchmarks/ armado, baseline sin correr — H-040)
 Fase 5 — Infraestructura       🔲
@@ -31,9 +31,7 @@ _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código
 
 1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
-3. **Migrar WhatsApp bot a Baileys 7** — Composer, frontend y npm backend ya están en audit 0; quedan 3 vulnerabilidades en la cadena legacy de Baileys 6. `H-042`, `D-001`, DEVOPS-BIBLIA §3.6.
-4. **Cerrar Fase 1** — repetir instalación limpia, Pint, PHPStan, tests, lint, builds y audits.
-5. **Arrancar R-01** (`adjust-item`) — es el endpoint de escritura de stock con el gap más simple y más peligroso: escribe cantidad sin ningún techo contra lo pedido. `H-006b`.
+3. **Cerrar R-01** (`adjust-item`) — agregar transacción, lock, techo contra lo pedido, 409 y audit log atómico. `H-006b`, `H-023`, `H-017`.
 
 ---
 
@@ -236,8 +234,8 @@ Antes de tocar código de negocio (Fase 1 — red de seguridad):
 ✅ Tests de caracterización de los 6 endpoints de stock ANTES   → Backend §6 (`f114458` + `c44cafd`)
   de tocarlos — congelan el comportamiento actual para detectar
   regresiones durante R-01 a R-05
-🟡 Remediar H-042 y obtener exit code 0 en todos los audits      → PHP/frontend/backend npm: ✅
-                                                                  WhatsApp bot: 🔲 Baileys 7
+✅ Remediar H-042 en todos los componentes activos               → PHP/frontend/backend npm: ✅
+  (`whatsapp-bot/` es legado inactivo y queda fuera de gates/deploy)
 □ Handler global de excepciones + respuesta de error estándar   → H-018, H-024
 □ Model::preventLazyLoading() en local                          → ✅ HECHO (esta sesión)
 □ Debugbar en dev                                                → ✅ HECHO (esta sesión)

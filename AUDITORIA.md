@@ -330,9 +330,10 @@ Referencia:  DEVOPS-BIBLIA §3.6
 **Qué está pasando:** el audit del 2026-08-24 reportó 38 advisories Composer en 14 paquetes,
 18 vulnerabilidades npm en frontend (14 high) y 11 en WhatsApp bot (2 critical, 5 high).
 El paquete npm auxiliar del backend no tiene lockfile y por eso no puede auditarse de forma reproducible.
-**Estado:** 🟡 parcialmente resuelto en `54eb1f7`, `a667f1a`, `d2df817` y `d5315f7`.
-Composer, frontend y npm auxiliar del backend quedaron en 0. El bot bajó a 3
-(1 critical, 2 high) por la cadena Baileys/libsignal/protobufjs; bloquea Fase 1 y deploy. Ver D-001.
+**Estado:** ✅ resuelto para el sistema activo en `54eb1f7`, `a667f1a` y `d2df817`.
+Composer, frontend y npm auxiliar del backend quedaron en 0. `whatsapp-bot/` fue
+confirmado por el usuario como legado descartado: no se despliega ni participa de los gates.
+Su árbol conserva 3 avisos y no debe reactivarse sin una migración y auditoría separadas. Ver D-001.
 
 ---
 

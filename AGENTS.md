@@ -6,7 +6,7 @@ Three-component monorepo:
 
 - `pallet-backend/` — Laravel 12 REST API (PHP 8.4)
 - `pallet-frontend/` — React 19 + Vite 7 PWA (builds into `pallet-backend/public/app/`)
-- `whatsapp-bot/` — Node.js WhatsApp bot (Baileys), HTTP API on port 3001
+- `whatsapp-bot/` — legacy/inactive WhatsApp bot; excluded from active gates and deploys
 
 ## Mandatory context routing
 
@@ -30,7 +30,7 @@ All run inside each subdirectory — there is no root `package.json`.
 | Frontend | `npm run dev` | Vite dev server, proxies `/api` and `/storage` to `localhost:8000` |
 | Frontend | `npm run build` | Outputs to `../pallet-backend/public/app/` |
 | Frontend | `npm run lint` | ESLint |
-| Bot | `npm start` | `node index.js`, visit `GET /qr` (port 3001) to scan WhatsApp QR |
+| Telegram | Laravel webhook | Active bot implementation lives in the backend |
 
 Laravel backend scripts (`composer.json` scripts section) are the source of truth for commands.
 

@@ -1,6 +1,8 @@
 # 📦 Pallet Control
 
-Warehouse logistics management system for tracking pallets, orders, customers, and deliveries. Supports photo documentation with canvas annotations, OCR receipt scanning, and automatic photo uploads via WhatsApp.
+Warehouse logistics management system for tracking pallets, orders, customers, and deliveries. Supports photo documentation, canvas annotations, OCR receipt scanning, and Telegram-assisted uploads.
+
+> `whatsapp-bot/` is retained only as legacy code. It is inactive, not deployed, and excluded from active quality gates; Telegram is the supported bot integration.
 
 ---
 

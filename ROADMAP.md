@@ -266,7 +266,7 @@ Estados: [ ] pendiente | [~] en progreso | [x] hecho | [!] bloqueado
 
 [x] Sistema de OCR con Azure Computer Vision + highlights en vista QR
 
-[x] Bot de WhatsApp para subir fotos desde el grupo
+[x] ~~Bot de WhatsApp para subir fotos desde el grupo~~ — legado descartado; Telegram es el canal activo
 
 [x] Auth con roles (user / admin / superadmin) + verificación de email
 
