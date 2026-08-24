@@ -311,14 +311,14 @@ Ubicación:   pallet-backend/tests/ (solo ejemplos default)
 Referencia:  BACKEND-BIBLIA §6 — CLAUDE.md regla dura #10
 ```
 **Por qué importa acá:** es la causa raíz por la que H-005 a H-011 llegaron a producción sin detectarse — no hay red de seguridad que los hubiera atrapado.
-**Estado:** 🔲 abierto
+**Estado:** 🟡 parcialmente cubierto en `f114458` — factories y 32 tests de caracterización incorporados; faltan los endpoints de escritura de ítems de pedido.
 
 #### H-041 — Larastan/PHPStan no está instalado
 ```
 Severidad:   🟡 medio · Categoría: calidad
 Ubicación:   composer.json (require-dev) — no está, pese a que CLAUDE.md lo lista como tooling obligatorio
 ```
-**Estado:** 🔲 abierto
+**Estado:** ✅ resuelto en `468b215` — Larastan/PHPStan nivel 5 con baseline de deuda legacy.
 
 ---
 
@@ -360,7 +360,7 @@ Severidad:   🟠 alto · Categoría: calidad / proceso
 Ubicación:   sin .github/workflows propio del proyecto
 Referencia:  DEVOPS-BIBLIA §3.2
 ```
-**Estado:** 🔲 abierto
+**Estado:** ✅ resuelto en `e431642` — GitHub Actions ejecuta Pint, PHPStan, PHPUnit y `composer audit`; falta validar el primer run remoto.
 
 #### H-032 — `pallet-frontend/.env` trackeado en git
 ```

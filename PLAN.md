@@ -4,8 +4,10 @@
 > **Se actualiza:** en cada sesión de trabajo. Es lo primero que lee la IA para saber dónde estamos.
 > **Referencia a teoría:** con `§`, nunca copiando texto de las biblias. El detalle de cada hallazgo vive en `AUDITORIA.md` (`H-XXX`) — acá solo se prioriza y se ordena el trabajo.
 
-**Última actualización:** 2026-08-05
-**Rebanada actual:** ninguna arrancada todavía — este plan es el resultado de cerrar Fase 0.
+**Última actualización:** 2026-08-24
+**Rama integradora:** `modernizacion/base`
+**Entrada obligatoria:** `ROUTER.md`
+**Rebanada actual:** cierre de Fase 1 — completar caracterización y validar todos los gates.
 
 ---
 
@@ -13,7 +15,7 @@
 
 ```
 Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b)
-Fase 1 — Red de seguridad      🔲 pendiente (tests de caracterización + CI antes de tocar nada)
+Fase 1 — Red de seguridad      🟡 en progreso (CI/tooling hechos; caracterización parcial)
 Fase 2 — Rebanadas verticales  🔲  (0 de 7 cerradas)
 Fase 3 — Dominio específico    🔲
 Fase 4 — Performance           🔲 (benchmarks/ armado, baseline sin correr — H-040)
@@ -29,7 +31,8 @@ _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código
 
 1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
-3. **Arrancar R-01** (`adjust-item`) — es el endpoint de escritura de stock con el gap más simple y más peligroso: escribe cantidad sin ningún techo contra lo pedido. `H-006b`.
+3. **Cerrar Fase 1** — validar CI/tooling y completar caracterización de `POST /orders/{order}/items` y `PATCH /order-items/{item}`. `H-039`.
+4. **Arrancar R-01** (`adjust-item`) — es el endpoint de escritura de stock con el gap más simple y más peligroso: escribe cantidad sin ningún techo contra lo pedido. `H-006b`.
 
 ---
 
@@ -226,12 +229,12 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 □ Verificar FILESYSTEM_DISK=r2 en Render                        → H-029
 
 Antes de tocar código de negocio (Fase 1 — red de seguridad):
-□ GitHub Actions: lint → static → tests → composer audit       → H-031, DEVOPS §3.3
-□ Larastan/PHPStan nivel 6+                                     → H-041
+✅ GitHub Actions: Pint → PHPStan → tests → composer audit      → H-031, DEVOPS §3.3
+✅ Larastan/PHPStan nivel 5 con baseline legacy                 → H-041
 □ Branch protection en main                                     → DEVOPS §3.4
-□ Tests de caracterización de los 6 endpoints de stock ANTES     → §6 (red de seguridad
-  de tocarlos — congelan el comportamiento actual para detectar    para refactors, no
-  regresiones durante R-01 a R-05)                                 solo tests nuevos)
+🟡 Tests de caracterización de los 6 endpoints de stock ANTES   → Backend §6 (bases/adjust/migrate
+  de tocarlos — congelan el comportamiento actual para detectar   cubiertos; faltan los 2 endpoints
+  regresiones durante R-01 a R-05)                                de ítems de pedido)
 □ Handler global de excepciones + respuesta de error estándar   → H-018, H-024
 □ Model::preventLazyLoading() en local                          → ✅ HECHO (esta sesión)
 □ Debugbar en dev                                                → ✅ HECHO (esta sesión)
@@ -274,10 +277,10 @@ Más adelante (Fase 3+):
 
 | Tooling | Reemplaza arreglo manual de | Estado |
 |---|---|---|
-| **GitHub Actions** (lint+static+test+audit en cada push) | Revisión manual de "¿esto rompe algo?" en cada PR — atrapa regresiones de TODO lo demás automáticamente a partir de ahora | 🔲 falta configurar (H-031) |
-| **Larastan/PHPStan nivel 6+** | Errores de tipos, nulls no chequeados, parte de la detección de `$request->all()` reintroducido | 🔲 falta instalar (H-041) |
-| **Pint** | Estilo de código (ya instalado, solo falta correrlo en CI) | 🟡 instalado, no forzado |
-| **`composer audit` / `npm audit` en CI** | Revisión manual de dependencias vulnerables (recordar: 32 advisories pendientes de triage, ver task spawneada) | 🔲 falta agregar al pipeline |
+| **GitHub Actions** (lint+static+test+audit en cada push) | Revisión manual de "¿esto rompe algo?" en cada PR — atrapa regresiones automáticamente | ✅ implementado; falta validar la ejecución remota (H-031) |
+| **Larastan/PHPStan nivel 5 + baseline** | Errores de tipos y nulls sin bloquear por deuda legacy | ✅ implementado (H-041) |
+| **Pint** | Estilo de código | ✅ ejecutado por CI en modo `--test` |
+| **`composer audit` en CI** | Revisión manual de dependencias PHP vulnerables | ✅ implementado; `npm audit` queda pendiente de definir por componente |
 | **Migración de índices** (una sola migración con varios `->index()`) | Arreglar cada FK sin índice una por una | 🔲 mecánico, H-012 |
 | **`Model::preventLazyLoading()`** | Revisión manual de cada endpoint buscando N+1 — tira excepción sola en desarrollo | ✅ activo desde esta sesión |
 | **Laravel Debugbar** | Contar queries a mano por endpoint | ✅ instalado desde esta sesión |
