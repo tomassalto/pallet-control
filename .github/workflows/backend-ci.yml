@@ -141,6 +141,9 @@ jobs:
 
   container-security:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
 
     steps:
       - name: Checkout
