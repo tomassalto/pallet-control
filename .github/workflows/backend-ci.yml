@@ -49,6 +49,10 @@ jobs:
           cp .env.example .env
           php artisan key:generate
 
+      - name: Build frontend for integration tests
+        working-directory: pallet-frontend
+        run: npm ci && npm run build
+
       # 1. LINT — estilo de código
       - name: Lint (Pint)
         run: ./vendor/bin/pint --test
@@ -70,7 +74,7 @@ jobs:
 
       - name: Security audit (frontend npm)
         working-directory: pallet-frontend
-        run: npm ci && npm audit
+        run: npm audit --audit-level=moderate
 
   postgres-concurrency:
     runs-on: ubuntu-latest

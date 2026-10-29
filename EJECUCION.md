@@ -44,11 +44,12 @@ Implementado:
 7. Dependencias afectadas por advisories actualizadas sin salto mayor; `composer audit` quedó en cero.
 8. Presupuesto de 9 queries constante con 20 bases, guardado en `benchmarks/results/2026-10-29-r01-adjust-item.md`.
 9. Gate PostgreSQL agregado a CI: dos servidores Laravel compiten por el mismo item; se exige un `200`, un `409`, total 6 y un solo activity log.
+10. Concurrencia PostgreSQL verde en Actions run `40826632779`. El CI general reveló que faltaba compilar la PWA antes de probar `/`; se agregó el build y se actualizaron lockfiles npm.
 
 Pendiente para cerrar la rebanada:
 
-1. Ejecutar el job `postgres-concurrency` en GitHub Actions; localmente se descubre y salta porque este runtime no tiene `pdo_pgsql` ni PostgreSQL.
-2. Si queda verde, registrar su ejecución y marcar R-01 terminada.
+1. Repetir Actions con el pipeline corregido.
+2. Si ambos jobs quedan verdes, marcar R-01 terminada.
 3. Avanzar a R-02.
 
 ## Sesiones R-02 a R-07

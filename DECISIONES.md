@@ -140,3 +140,32 @@ La fila de `order_items` existe antes de cualquier asignación y es compartida p
 Dos ajustes del mismo item se ejecutan en serie. SQLite verifica comportamiento, rollback y presupuesto de queries; la garantía del lock se acredita separadamente en CI mediante dos procesos Laravel contra PostgreSQL.
 
 **Referencia normativa:** `BE-VALID`, `BE-ERR`, `BE-TX`, `SEC-LOG`, `QA-INVARIANT`
+
+---
+
+## D-004 — Excepción temporal para `deepmerge` transitivo de Workbox
+
+**Fecha:** 2026-10-29
+**Estado:** ✅ vigente hasta 2027-01-29
+
+**Contexto**
+Tras actualizar el lockfile frontend sin saltos mayores, `npm audit` conserva cuatro hallazgos bajos del mismo advisory `GHSA-gcqx-w48m-w2h4`. La dependencia `deepmerge` llega por `vite-plugin-pwa → workbox-build → @rollup/plugin-node-resolve`. npm sólo propone bajar `vite-plugin-pwa` de 1.3.0 a 0.2.1 mediante `--force`.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| `npm audit fix --force` | Audit numéricamente vacío | Downgrade mayor incompatible y no revisado |
+| Excluir todos los dev advisories | Pipeline simple | Oculta hallazgos altos del tooling |
+| Bloquear desde moderado y revisar el bajo | Mantiene visibles los bajos y bloquea severidades relevantes | Requiere vencimiento y seguimiento |
+
+**Decisión**
+CI ejecuta `npm audit --audit-level=moderate` para frontend. Los cuatro bajos permanecen visibles. No se fuerza el downgrade. Responsable: mantenedor de Pallet Control. Vencimiento: 2027-01-29 o antes si Workbox publica una cadena corregida.
+
+**Por qué**
+La cadena afectada se usa al construir el service worker con fuentes controladas del repositorio y no forma parte del JavaScript servido en runtime. Los advisories altos y moderados sí fueron corregidos; backend npm y Composer quedan en cero.
+
+**Trade-off aceptado**
+El audit frontend informa cuatro bajos durante la excepción. A cambio se evita introducir una versión PWA incompatible y se siguen bloqueando hallazgos moderados, altos y críticos.
+
+**Referencia normativa:** `DO-SUPPLY`, `SEC-SUPPLY`, `QA-SEC`
