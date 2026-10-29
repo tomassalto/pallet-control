@@ -242,7 +242,8 @@ Severidad:   🟠 alto · Categoría: calidad
 Ubicación:   bootstrap/app.php:21-23 (closure vacío) — no existe app/Exceptions/
 Referencia:  `BE-ERR`, `SEC-LOG`
 ```
-**Estado:** 🔲 abierto
+**Resolución:** el handler final de Laravel conserva 4xx esperados y normaliza toda excepción API 5xx como `message` genérico + `error_id`, también enviado en `X-Error-Id` y agregado al contexto del log.
+**Estado:** ✅ resuelto en contrato global de errores, commit `ce48ca3`; Actions run `40966390873`.
 
 #### H-019 — `$e->getMessage()` devuelto al cliente sin importar `APP_DEBUG`
 ```
@@ -251,7 +252,8 @@ Ubicación:   PalletBasePhotoController.php:64,91-100 · OrderImportController.p
 Referencia:  `BE-ERR`
 ```
 **Qué está pasando:** varios `catch` devuelven el mensaje de excepción crudo (y en un caso, `get_class($e)`) al cliente, de forma incondicional — no depende de `APP_DEBUG=false`.
-**Estado:** 🔲 abierto
+**Resolución:** los cuatro controladores señalados dejaron de devolver texto o clase de la excepción; los fallos inesperados llegan al handler 5xx. Las respuestas visibles del bot activo de Telegram también usan texto genérico. Un test prueba que el detalle no aparece aun con debug habilitado.
+**Estado:** ✅ resuelto en contrato global de errores, commit `ce48ca3`; Actions run `40966390873`.
 
 #### H-020 — 16 controladores validan inline en vez de Form Request
 ```
@@ -291,7 +293,8 @@ Severidad:   🟡 medio · Categoría: calidad
 Ubicación:   todo app/Http/Controllers/Api/
 Referencia:  `BE-ERR`, `QA-CONTRACT`
 ```
-**Estado:** 🔲 abierto
+**Resolución:** `D-008` fija `message` como campo común, preserva `errors` y datos de conflicto para fallos esperados, y reserva `error_id` correlacionable para 5xx inesperados. El test de contrato acredita tanto el 5xx como la compatibilidad del 422 consumido por frontend.
+**Estado:** ✅ resuelto en contrato global de errores, commit `ce48ca3`; Actions run `40966390873`.
 
 #### H-025 — `APP_DEBUG` sin safeguard estructural en el deploy
 ```

@@ -250,3 +250,23 @@ Los cambios de estado y privilegio se bloquean por usuario, confirman junto con 
 Un cambio administrativo expulsa al usuario de todos sus dispositivos. `localStorage` mantiene exposición ante XSS; migrar a cookies `HttpOnly` requiere una decisión coordinada de dominios, CSRF y despliegue y no se improvisa dentro de R-07.
 
 **Referencia normativa:** `BE-AUTH`, `BE-ERR`, `SEC-IDENTITY`, `SEC-SECRET`, `SEC-LOG`, `QA-SEC`, `QA-CONTRACT`
+
+---
+
+## D-008 — Contrato de errores inesperados de API
+
+**Fecha:** 2026-10-29
+**Estado:** ✅ vigente
+
+**Contexto**
+La API combinaba respuestas esperadas de dominio con excepciones internas renderizadas por Laravel y varios controladores devolvían mensajes crudos. El frontend consume principalmente `message`; cambiar todos los errores a una envoltura nueva habría roto contratos 401/403/404/409/422 sin aportar valor al fallo interno.
+
+**Decisión**
+Conservar los contratos esperados actuales y normalizar en el handler global toda excepción que termine en 5xx bajo `/api/*`. La respuesta contiene sólo `message` genérico y un UUID `error_id`; la misma referencia se agrega al contexto del log y al header `X-Error-Id`. La normalización se aplica incluso con debug habilitado.
+
+Los controladores no capturan una excepción inesperada para convertirla en 422 ni exponen su texto. Las excepciones de dominio diseñadas para usuario mantienen su status y `message`. Telegram muestra un texto recuperable genérico y conserva el detalle únicamente en el log técnico. El endpoint legado de carga del bot queda sin desarrollo funcional, pero tampoco puede filtrar una excepción si recibe tráfico residual.
+
+**Trade-off aceptado**
+El contrato común mínimo es `message`; `errors`, campos de conflicto y `error_id` son extensiones según la categoría. No se fuerza una envoltura idéntica para todos los 4xx porque son contratos activos del frontend y requieren una migración separada si se desea cambiarlos.
+
+**Referencia normativa:** `BE-ERR`, `BE-API`, `SEC-LOG`, `QA-CONTRACT`, `QA-SEC`, `FE-DATA`

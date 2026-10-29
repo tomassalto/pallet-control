@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-29
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** Fase 2 cerrada; siguiente tarea transversal: contrato global de errores (`H-018`, `H-019`, `H-024`).
+**Trabajo actual:** contrato global de errores cerrado; siguiente bloque de código: hardening de deploy y contenedor (`H-025`, `H-030`, `H-032`).
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -34,7 +34,7 @@ _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código
 
 1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
-3. **Normalizar errores y evitar fugas internas** — handler global, contrato estable y retiro de `$e->getMessage()` al cliente. `H-018`, `H-019`, `H-024`.
+3. **Normalizar errores y evitar fugas internas** — ✅ cerrado en `ce48ca3`; contrato `D-008`, handler global y 5xx correlacionables. `H-018`, `H-019`, `H-024`.
 
 ---
 
@@ -51,7 +51,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | ID | Hallazgo | Esfuerzo | Impacto | Automatizable |
 |---|---|---|---|---|
 | H-001 | IDOR/enumeración en `GET /public/orders/{code}` | 🟡 medio | Alto | ❌ no (resuelto mediante decisión D-006) |
-| H-019 | `$e->getMessage()` filtrado al cliente en 4 controladores | 🟢 bajo | Medio | 🟡 parcial |
+| H-019 | `$e->getMessage()` filtrado al cliente en 4 controladores — ✅ resuelto | 🟢 bajo | Medio | 🟡 parcial |
 | H-030 | Contenedor corre como root | 🟢 bajo | Alto | ✅ sí |
 | H-032 | `pallet-frontend/.env` trackeado en git | 🟢 bajo | Medio | ✅ sí |
 | H-002 | Webhook Telegram falla abierto sin secret | 🟢 bajo | Medio | ✅ sí |
@@ -90,11 +90,11 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | ID | Hallazgo | Esfuerzo | Impacto | Automatizable |
 |---|---|---|---|---|
 | H-039 | Prácticamente sin tests | 🔴 alto | Alto | 🟡 parcial (scaffolding sí, tests de negocio no) |
-| H-018 | Sin handler global de excepciones | 🟡 medio | Medio | ❌ no |
+| H-018 | Sin handler global de excepciones — ✅ resuelto | 🟡 medio | Medio | ❌ no |
 | H-031 | Sin CI de ningún tipo | 🟢 bajo | Alto | ✅ sí |
 | H-020 | 16 controladores validan inline | 🔴 alto (son 16 archivos) | Bajo | 🟡 parcial |
 | H-021 / H-022 / H-023 / H-027 | Códigos HTTP inconsistentes (401/403/409 vs 422/400) | 🟢 bajo c/u | Bajo | 🟡 parcial (CI puede flaggear, no decidir) |
-| H-024 | Formato de error no estandarizado | 🟡 medio (depende de H-018) | Bajo | ❌ no |
+| H-024 | Formato de error no estandarizado — ✅ resuelto | 🟡 medio (depende de H-018) | Bajo | ❌ no |
 | H-041 | Larastan/PHPStan no instalado | 🟢 bajo | Medio | ✅ sí |
 | H-033 / H-034 / H-035 / H-036 | Docker: composer en imagen, dockerignore incompleto, versiones sin pinear a patch, sin healthcheck | 🟢 bajo c/u | Bajo | ✅ sí |
 | H-004 / H-014 / H-016 / H-026 / H-037 / H-038 | Varios ⚪ (rutas rotas, columna muerta, índice duplicado, etc.) | 🟢 bajo c/u | Bajo | ✅ sí (salvo H-038, es decisión) |

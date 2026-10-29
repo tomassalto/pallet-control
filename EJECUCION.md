@@ -153,9 +153,22 @@ Implementado localmente:
 
 Evidencia final: commit `9bd77b7`; Actions run `40965649678` con jobs `ci` y `postgres-concurrency` verdes. Con R-07 quedan cerradas las siete rebanadas verticales de Fase 2.
 
-## Próxima sesión — contrato global de errores
+## Última sesión cerrada — contrato global de errores
 
-Crear la rama desde el cierre documental de R-07, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `BE-ERR`, `BE-API`, `SEC-LOG`, `QA-CONTRACT`, `QA-SEC` y `FE-DATA`. Caracterizar primero los contratos consumidos por frontend; luego implementar handler global, respuesta 5xx genérica y retirar mensajes crudos señalados en H-019 sin ocultar errores de dominio esperados.
+Rama creada desde el cierre documental de R-07. Se aplicaron `BE-ERR`, `BE-API`, `SEC-LOG`, `QA-CONTRACT`, `QA-SEC` y `FE-DATA`.
+
+1. `D-008` conserva los contratos 4xx esperados y fija `message` como campo común.
+2. Toda excepción API 5xx devuelve mensaje genérico, UUID `error_id` y `X-Error-Id` aun con debug habilitado.
+3. La misma referencia se agrega al contexto del log para correlación.
+4. Los cuatro controladores de H-019 dejaron de exponer mensajes o clases de excepción; Telegram tampoco muestra el detalle técnico al usuario.
+5. Tests verifican forma, redacción, correlación y compatibilidad del 422 existente.
+6. Suite local verde: 92 tests, 272 assertions; Pint, PHPStan, Composer audit, backend npm audit, lint y build verdes. El audit frontend conserva los cuatro bajos aprobados por `D-004`.
+
+Evidencia funcional: commit `ce48ca3`; Actions run `40966390873` con jobs `ci` y `postgres-concurrency` verdes.
+
+## Próxima sesión — hardening de deploy y contenedor
+
+Crear la rama desde el cierre documental del contrato de errores, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `DO-ENV`, `DO-CONTAINER`, `DO-RELEASE`, `DO-SUPPLY`, `SEC-SECRET`, `SEC-SUPPLY`, `QA-SEC` y `QA-RESILIENCE`. Atender `H-025`, `H-030` y `H-032` sin asumir el estado del dashboard de Render; `H-028` y `H-029` siguen requiriendo verificación operativa separada.
 
 ## Sesiones R-02 a R-07
 
