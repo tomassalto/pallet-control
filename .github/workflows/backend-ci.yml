@@ -67,7 +67,27 @@ jobs:
 
       # 4. SECURITY — dependencias vulnerables
       - name: Security audit (composer audit)
-        run: composer audit
+        shell: bash
+        run: |
+          for intento in 1 2 3; do
+            set +e
+            composer audit
+            estado=$?
+            set -e
+
+            if [ "$estado" -eq 0 ]; then
+              exit 0
+            fi
+
+            # Composer usa 100 para fallos operativos (por ejemplo, red).
+            # Los códigos de vulnerabilidades fallan de inmediato y no se ocultan.
+            if [ "$estado" -ne 100 ] || [ "$intento" -eq 3 ]; then
+              exit "$estado"
+            fi
+
+            echo "Packagist no respondió (intento $intento/3); se reintentará el audit."
+            sleep $((intento * 5))
+          done
 
       - name: Security audit (backend npm)
         run: npm ci && npm audit
