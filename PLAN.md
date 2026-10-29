@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-29
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Rebanada actual:** R-01 — gate PostgreSQL verde; falta repetir CI general tras corregir build y lockfiles.
+**Rebanada actual:** R-02 — hacer atómicas la creación y actualización de bases con items.
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -19,7 +19,7 @@
 Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b)
 Fase 1 — Red de seguridad      ✅ hecho (gates activos y caracterización completos)
 Fase Fundacional — Normativa  ✅ cinco autoridades y router por IDs estables
-Fase 2 — Rebanadas verticales  🟡 R-01 en validación final (0 de 7 cerradas)
+Fase 2 — Rebanadas verticales  🟡 R-02 en curso (1 de 7 cerradas)
 Fase 3 — Dominio específico    🔲
 Fase 4 — Performance           🔲 (benchmarks/ armado, baseline sin correr — H-040)
 Fase 5 — Infraestructura       🔲
@@ -34,7 +34,7 @@ _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código
 
 1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
-3. **Cerrar el último run de R-01** — el gate PostgreSQL ya pasó; repetir CI general tras agregar el build frontend requerido por `ExampleTest` y actualizar los lockfiles npm. `H-006b`, `H-023`, `H-017`.
+3. **Implementar R-02** — `POST/PATCH bases` con transacción, locks por `order_item`, validación global, `409` y auditoría atómica. Reutilizar D-003. `H-005`, `H-006`, `H-011`.
 
 ---
 
@@ -117,6 +117,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 ✅ 7. Tests                 → SQLite verde y concurrencia PostgreSQL verde en Actions run `40826632779`
 ✅ 8. Medición              → 9 queries constantes con 20 bases; `benchmarks/results/2026-10-29-r01-adjust-item.md`
 ```
+**Estado:** ✅ cerrada. CI general y PostgreSQL concurrente verdes en Actions run `40827127268` sobre `78786b1`.
 **Por qué primero:** es el endpoint con el gap más simple de cerrar (una sola escritura, sin la complejidad de `sync()` de los otros) y establece el patrón (lock + transacción + constraint) que R-02 y R-03 van a reusar.
 **Hallazgos que resuelve:** H-006b, H-005 (patrón), H-006 (si se agrega constraint acá), H-023, H-017.
 

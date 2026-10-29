@@ -21,7 +21,7 @@ Resultado: gobierno común, Backend/Frontend/DevOps/Security/Quality, dominio, p
 
 No reabrir teoría durante una feature: si falta, aplicar `GAP-XXX` según `BIBLIAS-GOBERNANZA.md`.
 
-## Sesión R-01 — `adjust-item` en validación final
+## Sesión R-01 — `adjust-item` cerrada
 
 Rama: `hardening/r01-adjust-item`.
 
@@ -46,11 +46,13 @@ Implementado:
 9. Gate PostgreSQL agregado a CI: dos servidores Laravel compiten por el mismo item; se exige un `200`, un `409`, total 6 y un solo activity log.
 10. Concurrencia PostgreSQL verde en Actions run `40826632779`. El CI general reveló que faltaba compilar la PWA antes de probar `/`; se agregó el build y se actualizaron lockfiles npm.
 
-Pendiente para cerrar la rebanada:
+Evidencia final: Actions run `40827127268`, commit `78786b1`, jobs `ci` y `postgres-concurrency` verdes.
 
-1. Repetir Actions con el pipeline corregido.
-2. Si ambos jobs quedan verdes, marcar R-01 terminada.
-3. Avanzar a R-02.
+## Próxima sesión — R-02 bases con items
+
+Crear la rama desde el cierre de R-01, nunca desde `master`. Aplicar `DOMINIO.md`, `BE-VALID`, `BE-ERR`, `BE-TX`, `SEC-AUTHZ`, `SEC-LOG`, `QA-INVARIANT`, `QA-RISK` y `BE-GATE`.
+
+Objetivo: `PalletBaseService::createBase()` y `updateBase()` no deben persistir nombre/base/items parcialmente ni sobreasignar ante concurrencia. Reutilizar el orden de locks definido en D-003 y acreditar rollback, límite global, `409`, auditoría y PostgreSQL concurrente.
 
 ## Sesiones R-02 a R-07
 

@@ -116,7 +116,7 @@ Referencia:  `BE-TX`, `QA-INVARIANT`
 ```
 **Resolución R-01:** el endpoint bloquea el `order_item`, suma las asignaciones globales excluyendo la base actual y rechaza con `409` cualquier cantidad superior al disponible. La pertenencia del pedido al pallet se valida dentro de la misma transacción.
 **Evidencia:** `PalletBaseStockMovementTest` cubre exceso, asignaciones en otros pallets, límite exacto, repetición, pertenencia y presupuesto constante de queries. `AdjustItemConcurrencyTest` acredita dos procesos contra PostgreSQL mediante el job `postgres-concurrency`.
-**Estado:** ✅ resuelto en `dea6631` sobre la rama `hardening/r01-adjust-item`.
+**Estado:** ✅ resuelto en `dea6631`; CI SQLite/PostgreSQL cerrado en Actions run `40827127268` sobre `78786b1`.
 
 #### H-007 — `migrate` tiene transacción pero lee stock antes de abrirla
 ```
