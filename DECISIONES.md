@@ -111,3 +111,32 @@ Separa responsabilidades sin impedir rutas transversales y permite cargar sólo 
 Una tarea puede requerir varias secciones de distintos documentos; a cambio cada regla tiene una única autoridad y evidencia definida.
 
 **Referencia:** `BIBLIAS-GOBERNANZA.md`, `ROUTER.md`
+
+---
+
+## D-003 — Serializar ajustes de stock por `order_item`
+
+**Fecha:** 2026-10-29
+**Estado:** ✅ vigente
+
+**Contexto**
+`adjust-item` podía asignar más unidades que las pedidas y dejar el cambio aplicado si fallaba su auditoría. La cantidad de un item puede estar distribuida entre bases de distintos pallets, por lo que bloquear sólo la fila pivot actual no protege la invariante global.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Lock de la asignación actual | Menor contención | No existe al crear y no coordina otros pallets |
+| Lock pesimista de `order_items` | Un punto común por item; implementación directa | Serializa los ajustes concurrentes del mismo producto |
+| Versión optimista | Menos espera | Requiere versión, reintentos y cambio de contrato |
+
+**Decisión**
+En R-01 se bloquea `order_items` con `lockForUpdate()` y, dentro de la misma transacción, se leen en orden de `base_id` todas sus asignaciones, se valida `SUM(asignado) ≤ pedido`, se escribe y se crea el activity log. Un exceso o una pertenencia inválida devuelven `409`.
+
+**Por qué**
+La fila de `order_items` existe antes de cualquier asignación y es compartida por todas las bases y pallets. Esto evita el hueco de bloquear filas pivot inexistentes y define un orden reproducible.
+
+**Trade-off aceptado**
+Dos ajustes del mismo item se ejecutan en serie. SQLite verifica comportamiento y rollback, pero la garantía de bloqueo concurrente debe acreditarse además sobre PostgreSQL antes de cerrar completamente R-01.
+
+**Referencia normativa:** `BE-VALID`, `BE-ERR`, `BE-TX`, `SEC-LOG`, `QA-INVARIANT`

@@ -114,9 +114,9 @@ Categoría:   integridad de datos
 Ubicación:   app/Http/Controllers/Api/PalletBaseController.php:179-223
 Referencia:  `BE-TX`, `QA-INVARIANT`
 ```
-**Qué está pasando:** `PATCH .../bases/{base}/adjust-item` escribe la `qty` directo (delete/upsert) sin llamar a `fetchAllocations()` ni comparar contra `order_item.qty` — a diferencia de `createBase`/`updateBase`, este endpoint no tiene NINGÚN techo.
-**Por qué importa acá:** es la vía más directa y sin fricción para romper la invariante "asignado ≤ pedido" — ni siquiera hace falta una race condition, un solo request mal armado alcanza. Es el endpoint de escritura de stock con el gap más simple de cerrar primero (candado + validación de disponible).
-**Estado:** 🔲 abierto
+**Resolución R-01:** el endpoint bloquea el `order_item`, suma las asignaciones globales excluyendo la base actual y rechaza con `409` cualquier cantidad superior al disponible. La pertenencia del pedido al pallet se valida dentro de la misma transacción.
+**Evidencia:** `PalletBaseStockMovementTest` cubre exceso, asignaciones en otros pallets, límite exacto, repetición y pertenencia.
+**Estado:** ✅ resuelto en `dea6631` sobre la rama `hardening/r01-adjust-item`.
 
 #### H-007 — `migrate` tiene transacción pero lee stock antes de abrirla
 ```
@@ -222,7 +222,7 @@ Severidad:   ⚪ bajo · Categoría: integridad de datos
 Ubicación:   app/Helpers/ActivityLogger.php
 ```
 **Qué está pasando:** al no correr dentro de la misma transacción que el cambio de negocio (ver H-011), una falla del insert de auditoría después de un commit ya aplicado pierde esa entrada del log silenciosamente.
-**Estado:** 🔲 abierto
+**Estado:** 🟡 resuelto para `adjust-item` en R-01; abierto en las demás escrituras citadas por H-011. Un test fuerza la falla de `activity_logs` y acredita el rollback del stock.
 
 ---
 
@@ -273,7 +273,7 @@ Severidad:   🟡 medio · Categoría: calidad
 Ubicación:   PalletBaseController.php:63,85,186 — PalletBaseService.php:48
 Referencia:  `BE-ERR`
 ```
-**Estado:** 🔲 abierto
+**Estado:** 🟡 resuelto para el conflicto de disponibilidad de `adjust-item` en R-01; resta normalizar los demás endpoints señalados.
 
 #### H-024 — Formato de respuesta de error no estandarizado
 ```

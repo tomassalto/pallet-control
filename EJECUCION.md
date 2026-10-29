@@ -21,7 +21,7 @@ Resultado: gobierno común, Backend/Frontend/DevOps/Security/Quality, dominio, p
 
 No reabrir teoría durante una feature: si falta, aplicar `GAP-XXX` según `BIBLIAS-GOBERNANZA.md`.
 
-## Próxima sesión — R-01 `adjust-item`
+## Sesión R-01 — `adjust-item` en validación final
 
 Rama: `hardening/r01-adjust-item`.
 
@@ -33,15 +33,22 @@ Ruta obligatoria:
 - `QA-INVARIANT`, `QA-RISK`, `BE-GATE`.
 - `PLAN.md` R-01 y `AUDITORIA.md` H-006b, H-023, H-017.
 
-Orden:
+Implementado:
 
-1. Revisar el test pendiente sin modificarlo para ocultar una regresión.
-2. Probar techo global, límite exacto, 409 y rollback del audit log.
-3. Implementar lectura/validación/escritura bajo transacción y locks deterministas.
-4. Mantener el activity log dentro de la misma transacción.
-5. Ejecutar tests focales y gates backend completos.
-6. Registrar en `DECISIONES.md` locking, ubicación de invariantes, 409 y auditoría.
-7. Cerrar hallazgos con hash y actualizar `PLAN.md`.
+1. Techo global y pertenencia bajo transacción.
+2. Lock del `order_item` y locks pivot por `base_id`.
+3. Conflictos de disponibilidad y pertenencia con `409`.
+4. Activity log atómico con rollback acreditado.
+5. Suite focal SQLite: 27 tests, 58 assertions.
+6. Decisión registrada en D-003.
+7. Dependencias afectadas por advisories actualizadas sin salto mayor; `composer audit` quedó en cero.
+
+Pendiente para cerrar la rebanada:
+
+1. Ejecutar gates backend completos.
+2. Acreditar dos ajustes concurrentes sobre PostgreSQL; SQLite no demuestra locks de fila.
+3. Guardar la medición antes/después en `benchmarks/`.
+4. Al cerrar esos gates, marcar R-01 terminada y avanzar a R-02.
 
 ## Sesiones R-02 a R-07
 

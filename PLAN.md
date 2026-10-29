@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-29
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Rebanada actual:** R-01 — reanudar `adjust-item` según `BE-VALID`, `BE-ERR`, `BE-TX` y `QA-INVARIANT`.
+**Rebanada actual:** R-01 — implementación funcional completa; faltan concurrencia PostgreSQL y medición para el cierre de gates.
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -19,7 +19,7 @@
 Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b)
 Fase 1 — Red de seguridad      ✅ hecho (gates activos y caracterización completos)
 Fase Fundacional — Normativa  ✅ cinco autoridades y router por IDs estables
-Fase 2 — Rebanadas verticales  🟡 R-01 listo para reanudar (0 de 7 cerradas)
+Fase 2 — Rebanadas verticales  🟡 R-01 en validación final (0 de 7 cerradas)
 Fase 3 — Dominio específico    🔲
 Fase 4 — Performance           🔲 (benchmarks/ armado, baseline sin correr — H-040)
 Fase 5 — Infraestructura       🔲
@@ -34,7 +34,7 @@ _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código
 
 1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
-3. **Reanudar y cerrar R-01** (`adjust-item`) — aplicar `BE-TX` y `QA-INVARIANT`: transacción, lock, techo contra lo pedido, 409 y audit log atómico. `H-006b`, `H-023`, `H-017`.
+3. **Cerrar gates restantes de R-01** — acreditar concurrencia sobre PostgreSQL y guardar medición antes/después. La transacción, lock, techo global, `409` y audit log atómico ya están implementados. `H-006b`, `H-023`, `H-017`.
 
 ---
 
@@ -108,14 +108,13 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 
 ### R-01 · `PATCH /pallets/{pallet}/bases/{base}/adjust-item`
 ```
-□ 1. Auth (ya tiene has.role — verificar que sea suficiente)
-□ 2. Validación            → tiene AdjustPalletBaseItemRequest, revisar techo según `BE-VALID`
-□ 3. Negocio (tx + lock)   → HOY NO VALIDA CONTRA EL TOTAL PEDIDO. Agregar fetchAllocations()
-                              + lockForUpdate() + DB::transaction() → `BE-TX`
-□ 4. Datos (constraint)    → evaluar CHECK/trigger que respalde la invariante en DB
-□ 5. Respuesta (HTTP)      → "sin stock" hoy es 422, debería ser 409 → `BE-ERR`
-□ 6. Audit log             → ya existe, mover adentro de la transacción
-□ 7. Tests (feliz+límite+concurrencia) → caso clave: 2 requests concurrentes al límite exacto
+✅ 1. Auth                  → auth:sanctum + has.role; 401 acreditado
+✅ 2. Validación            → pertenencia y techo global dentro de la transacción
+✅ 3. Negocio (tx + lock)   → lockForUpdate sobre order_items + locks pivot ordenados
+🟡 4. Datos                 → invariante agregada protegida por lock; defensa DB transversal sigue en H-006
+✅ 5. Respuesta (HTTP)      → conflicto de estado devuelve 409 con available/requested
+✅ 6. Audit log             → misma transacción; rollback forzado acreditado
+🟡 7. Tests                 → SQLite verde; falta prueba concurrente real sobre PostgreSQL
 □ 8. Medición antes/después → benchmarks/
 ```
 **Por qué primero:** es el endpoint con el gap más simple de cerrar (una sola escritura, sin la complejidad de `sync()` de los otros) y establece el patrón (lock + transacción + constraint) que R-02 y R-03 van a reusar.
