@@ -188,38 +188,82 @@ class PalletBaseController extends Controller
 
         $data = $request->validated();
 
-        $orderItem = OrderItem::findOrFail($data['order_item_id']);
+        $result = DB::transaction(function () use ($data, $pallet, $base) {
+            // El bloqueo del item serializa todos sus ajustes, aunque estén en pallets distintos.
+            $orderItem = OrderItem::query()
+                ->lockForUpdate()
+                ->findOrFail($data['order_item_id']);
 
-        $oldRecord = DB::table('pallet_base_order_items')
-            ->where('base_id', $base->id)
-            ->where('order_item_id', $data['order_item_id'])
-            ->first();
+            $belongsToPallet = $pallet->orders()
+                ->whereKey($orderItem->order_id)
+                ->exists();
 
-        $oldQty = $oldRecord?->qty ?? 0;
+            if (! $belongsToPallet) {
+                return [
+                    'error' => [
+                        'message' => 'El producto no pertenece a un pedido asociado a este pallet.',
+                    ],
+                    'status' => 409,
+                ];
+            }
 
-        if ($data['qty'] === 0) {
-            DB::table('pallet_base_order_items')
-                ->where('base_id', $base->id)
-                ->where('order_item_id', $data['order_item_id'])
-                ->delete();
-        } else {
-            DB::table('pallet_base_order_items')->updateOrInsert(
-                ['base_id' => $base->id, 'order_item_id' => $data['order_item_id']],
-                ['qty' => $data['qty'], 'updated_at' => now()]
+            $allocations = DB::table('pallet_base_order_items')
+                ->where('order_item_id', $orderItem->id)
+                ->orderBy('base_id')
+                ->lockForUpdate()
+                ->get();
+
+            $oldQty = (int) ($allocations->firstWhere('base_id', $base->id)?->qty ?? 0);
+            $allocatedElsewhere = (int) $allocations
+                ->where('base_id', '!=', $base->id)
+                ->sum('qty');
+            $available = max(0, (int) $orderItem->qty - $allocatedElsewhere);
+
+            if ($data['qty'] > $available) {
+                return [
+                    'error' => [
+                        'message' => "Cantidad solicitada superior a la disponible. Disponible: {$available}, solicitado: {$data['qty']}.",
+                        'available' => $available,
+                        'requested' => $data['qty'],
+                    ],
+                    'status' => 409,
+                ];
+            }
+
+            if ($data['qty'] === 0) {
+                DB::table('pallet_base_order_items')
+                    ->where('base_id', $base->id)
+                    ->where('order_item_id', $orderItem->id)
+                    ->delete();
+            } else {
+                DB::table('pallet_base_order_items')->updateOrInsert(
+                    ['base_id' => $base->id, 'order_item_id' => $orderItem->id],
+                    ['qty' => $data['qty'], 'updated_at' => now()]
+                );
+            }
+
+            ActivityLogger::log(
+                action: 'item_base_qty_adjusted',
+                entityType: 'order_item',
+                entityId: $orderItem->id,
+                description: "Cantidad de '{$orderItem->description}' en base '" . ($base->name ?? 'Sin nombre') . "' ajustada de {$oldQty} a {$data['qty']}",
+                palletId: $pallet->id,
+                oldValues: ['base_id' => $base->id, 'qty' => $oldQty],
+                newValues: ['base_id' => $base->id, 'qty' => $data['qty']],
             );
+
+            return ['old_qty' => $oldQty];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json($result['error'], $result['status']);
         }
 
-        ActivityLogger::log(
-            action: 'item_base_qty_adjusted',
-            entityType: 'order_item',
-            entityId: $orderItem->id,
-            description: "Cantidad de '{$orderItem->description}' en base '" . ($base->name ?? 'Sin nombre') . "' ajustada de {$oldQty} a {$data['qty']}",
-            palletId: $pallet->id,
-            oldValues: ['base_id' => $base->id, 'qty' => $oldQty],
-            newValues: ['base_id' => $base->id, 'qty' => $data['qty']],
-        );
-
-        return response()->json(['ok' => true, 'old_qty' => $oldQty, 'new_qty' => $data['qty']]);
+        return response()->json([
+            'ok' => true,
+            'old_qty' => $result['old_qty'],
+            'new_qty' => $data['qty'],
+        ]);
     }
 
     public function destroy(Pallet $pallet, PalletBase $base)

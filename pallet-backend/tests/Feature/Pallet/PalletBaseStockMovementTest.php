@@ -208,6 +208,17 @@ class PalletBaseStockMovementTest extends TestCase
     // PATCH /pallets/{pallet}/bases/{base}/adjust-item
     // ───────────────────────────────────────────────────────────
 
+    public function test_adjust_item_requiere_autenticacion(): void
+    {
+        [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+
+        $this->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/adjust-item", [
+            'order_item_id' => $item->id,
+            'qty' => 4,
+        ])->assertUnauthorized();
+    }
+
     public function test_adjust_item_en_base_de_otro_pallet_devuelve_404(): void
     {
         $pallet = Pallet::factory()->create();
@@ -243,8 +254,9 @@ class PalletBaseStockMovementTest extends TestCase
     {
         [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);
         $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+        $user = $this->actingUser();
 
-        $response = $this->actingAs($this->actingUser())
+        $response = $this->actingAs($user)
             ->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/adjust-item", [
                 'order_item_id' => $item->id,
                 'qty' => 4,
@@ -255,6 +267,32 @@ class PalletBaseStockMovementTest extends TestCase
         $this->assertDatabaseHas('pallet_base_order_items', [
             'base_id' => $base->id, 'order_item_id' => $item->id, 'qty' => 4,
         ]);
+        $this->assertDatabaseHas('activity_logs', [
+            'user_id' => $user->id,
+            'action' => 'item_base_qty_adjusted',
+            'entity_type' => 'order_item',
+            'entity_id' => $item->id,
+            'pallet_id' => $pallet->id,
+        ]);
+    }
+
+    public function test_adjust_item_recalcula_el_total_al_repetir_el_ajuste(): void
+    {
+        [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+        $base->orderItems()->attach($item->id, ['qty' => 4]);
+
+        $this->actingAs($this->actingUser())
+            ->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/adjust-item", [
+                'order_item_id' => $item->id,
+                'qty' => 6,
+            ])
+            ->assertOk()
+            ->assertJson(['old_qty' => 4, 'new_qty' => 6]);
+
+        $this->assertSame(6, (int) DB::table('pallet_base_order_items')
+            ->where('order_item_id', $item->id)
+            ->sum('qty'));
     }
 
     public function test_adjust_item_con_qty_cero_elimina_la_fila_pivot(): void
@@ -275,14 +313,7 @@ class PalletBaseStockMovementTest extends TestCase
         ]);
     }
 
-    /**
-     * H-006b (AUDITORIA.md, 🔴 crítico): adjust-item NO valida contra
-     * order_item.qty ni contra lo ya asignado en otras bases. Se puede
-     * asignar cualquier cantidad, sin techo. Documentado a propósito —
-     * este test debe empezar a FALLAR el día que R-01 (PLAN.md) agregue
-     * la validación, y ahí se actualiza/borra.
-     */
-    public function test_bug_adjust_item_permite_superar_la_cantidad_pedida(): void
+    public function test_adjust_item_rechaza_superar_la_cantidad_pedida(): void
     {
         [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);
         $base = PalletBase::factory()->for($pallet, 'pallet')->create();
@@ -293,18 +324,15 @@ class PalletBaseStockMovementTest extends TestCase
                 'qty' => 999, // el pedido tiene qty=10
             ]);
 
-        $response->assertOk(); // hoy NO rechaza — este es el bug
-        $this->assertDatabaseHas('pallet_base_order_items', [
-            'base_id' => $base->id, 'order_item_id' => $item->id, 'qty' => 999,
+        $response->assertConflict()
+            ->assertJsonPath('available', 10)
+            ->assertJsonPath('requested', 999);
+        $this->assertDatabaseMissing('pallet_base_order_items', [
+            'base_id' => $base->id, 'order_item_id' => $item->id,
         ]);
     }
 
-    /**
-     * adjust-item tampoco valida que el order_item pertenezca a un pedido
-     * asociado a este pallet (a diferencia de createBase, que al menos lo
-     * ignora en silencio — ver arriba). Acá directamente lo acepta.
-     */
-    public function test_bug_adjust_item_acepta_item_de_pedido_no_asociado_al_pallet(): void
+    public function test_adjust_item_rechaza_item_de_pedido_no_asociado_al_pallet(): void
     {
         $pallet = Pallet::factory()->create(); // sin pedidos asociados
         $base = PalletBase::factory()->for($pallet, 'pallet')->create();
@@ -316,9 +344,77 @@ class PalletBaseStockMovementTest extends TestCase
                 'qty' => 5,
             ]);
 
-        $response->assertOk();
-        $this->assertDatabaseHas('pallet_base_order_items', [
-            'base_id' => $base->id, 'order_item_id' => $unrelatedItem->id, 'qty' => 5,
+        $response->assertConflict()
+            ->assertJsonPath('message', 'El producto no pertenece a un pedido asociado a este pallet.');
+        $this->assertDatabaseMissing('pallet_base_order_items', [
+            'base_id' => $base->id, 'order_item_id' => $unrelatedItem->id,
+        ]);
+    }
+
+    public function test_adjust_item_considera_asignaciones_en_otros_pallets(): void
+    {
+        [$pallet, $order, $item] = $this->palletWithAssignableItem(qty: 10);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+        $otherPallet = Pallet::factory()->create();
+        $otherPallet->orders()->attach($order->id);
+        $otherBase = PalletBase::factory()->for($otherPallet, 'pallet')->create();
+        $otherBase->orderItems()->attach($item->id, ['qty' => 7]);
+
+        $this->actingAs($this->actingUser())
+            ->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/adjust-item", [
+                'order_item_id' => $item->id,
+                'qty' => 4,
+            ])
+            ->assertConflict()
+            ->assertJsonPath('available', 3);
+
+        $this->assertDatabaseMissing('pallet_base_order_items', [
+            'base_id' => $base->id, 'order_item_id' => $item->id,
+        ]);
+    }
+
+    public function test_adjust_item_acepta_el_limite_exacto_global(): void
+    {
+        [$pallet, $order, $item] = $this->palletWithAssignableItem(qty: 10);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+        $otherPallet = Pallet::factory()->create();
+        $otherPallet->orders()->attach($order->id);
+        $otherBase = PalletBase::factory()->for($otherPallet, 'pallet')->create();
+        $otherBase->orderItems()->attach($item->id, ['qty' => 7]);
+
+        $this->actingAs($this->actingUser())
+            ->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/adjust-item", [
+                'order_item_id' => $item->id,
+                'qty' => 3,
+            ])
+            ->assertOk();
+
+        $this->assertSame(10, (int) DB::table('pallet_base_order_items')
+            ->where('order_item_id', $item->id)
+            ->sum('qty'));
+    }
+
+    public function test_adjust_item_revierte_stock_si_falla_el_audit_log(): void
+    {
+        [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+        DB::statement(<<<'SQL'
+            CREATE TRIGGER fail_activity_log
+            BEFORE INSERT ON activity_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'forced audit failure');
+            END
+        SQL);
+
+        $this->actingAs($this->actingUser())
+            ->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/adjust-item", [
+                'order_item_id' => $item->id,
+                'qty' => 4,
+            ])
+            ->assertStatus(500);
+
+        $this->assertDatabaseMissing('pallet_base_order_items', [
+            'base_id' => $base->id, 'order_item_id' => $item->id,
         ]);
     }
 
