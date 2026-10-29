@@ -15,9 +15,9 @@ class MigratePalletBaseRequest extends FormRequest
     {
         return [
             'items' => ['required', 'array', 'min:1'],
-            'items.*.order_item_id' => ['required', 'integer', 'exists:order_items,id'],
+            'items.*.order_item_id' => ['required', 'integer', 'distinct', 'exists:order_items,id'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
-            'destination_pallet_id' => ['nullable', 'integer', 'exists:pallets,id'],
+            'destination_pallet_id' => ['nullable', 'required_with:destination_base_id', 'integer', 'exists:pallets,id'],
             'destination_base_id' => ['nullable', 'integer', 'exists:pallet_bases,id'],
         ];
     }

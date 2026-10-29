@@ -125,9 +125,9 @@ Categoría:   integridad de datos
 Ubicación:   app/Http/Controllers/Api/PalletBaseController.php:52-175
 Referencia:  `BE-TX`, `QA-INVARIANT`
 ```
-**Qué está pasando:** `$sourceRecords` (cantidades disponibles) se lee en líneas 72-76, **antes** de que arranque el `DB::transaction()` de la línea 89. La transacción da atomicidad a la escritura pero no aísla contra una lectura ya obsoleta.
-**Por qué importa acá:** dos migraciones concurrentes sobre la misma base+item pueden ambas leer el mismo disponible y, aunque cada una sea atómica por separado, el resultado combinado viola la invariante igual.
-**Estado:** 🔲 abierto
+**Resolución R-03:** disponibilidad, origen, destino, asociación de pedido y auditoría se leen/escriben dentro de una transacción. Pallets, bases, items y pivots se bloquean en orden determinista; el segundo retiro concurrente debe reevaluar el stock ya confirmado.
+**Evidencia local:** `PalletBaseStockMovementTest` cubre 401, pertenencia, stock insuficiente, destinos incoherentes/finalizados, duplicados, acumulación, asociación, rollback de auditoría y presupuesto constante. El gate PostgreSQL incorpora dos migraciones simultáneas sobre el mismo origen.
+**Estado:** 🟡 implementación local verde; pendiente acreditación PostgreSQL remota.
 
 #### H-008 — Race check-then-insert al agregar producto a un pedido
 ```
@@ -273,7 +273,7 @@ Severidad:   🟡 medio · Categoría: calidad
 Ubicación:   PalletBaseController.php:63,85,186 — PalletBaseService.php:48
 Referencia:  `BE-ERR`
 ```
-**Estado:** 🟡 resuelto para disponibilidad/pertenencia en `adjust-item` (R-01) y crear/actualizar bases (R-02); resta normalizar los demás endpoints señalados.
+**Estado:** 🟡 resuelto para disponibilidad/pertenencia en `adjust-item` (R-01), crear/actualizar bases (R-02) y migración (R-03); resta normalizar los demás endpoints señalados.
 
 #### H-024 — Formato de respuesta de error no estandarizado
 ```

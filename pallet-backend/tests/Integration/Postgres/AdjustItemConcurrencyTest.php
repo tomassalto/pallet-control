@@ -126,6 +126,58 @@ class AdjustItemConcurrencyTest extends TestCase
         $this->assertDatabaseCount('activity_logs', 2);
     }
 
+    public function test_dos_migraciones_concurrentes_no_extraen_mas_del_origen(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $token = $user->createToken('postgres-concurrency')->plainTextToken;
+        $order = Order::factory()->create();
+        $item = OrderItem::factory()->for($order)->create(['qty' => 10]);
+        $sourcePallet = Pallet::factory()->create();
+        $sourcePallet->orders()->attach($order->id);
+        $sourceBase = PalletBase::factory()->for($sourcePallet, 'pallet')->create();
+        $sourceBase->orderItems()->attach($item->id, ['qty' => 10]);
+        $destinationPallet = Pallet::factory()->create();
+        $destinationBase = PalletBase::factory()->for($destinationPallet, 'pallet')->create();
+        $payload = [
+            'items' => [['order_item_id' => $item->id, 'qty' => 6]],
+            'destination_pallet_id' => $destinationPallet->id,
+            'destination_base_id' => $destinationBase->id,
+        ];
+
+        $responses = $this->sendJsonConcurrently([
+            [
+                'port' => 18001,
+                'method' => 'POST',
+                'path' => "/api/v1/pallets/{$sourcePallet->id}/bases/{$sourceBase->id}/migrate",
+                'payload' => $payload,
+                'token' => $token,
+            ],
+            [
+                'port' => 18002,
+                'method' => 'POST',
+                'path' => "/api/v1/pallets/{$sourcePallet->id}/bases/{$sourceBase->id}/migrate",
+                'payload' => $payload,
+                'token' => $token,
+            ],
+        ]);
+
+        $statuses = array_column($responses, 'status');
+        sort($statuses);
+
+        $this->assertSame([200, 409], $statuses, json_encode($responses, JSON_PRETTY_PRINT));
+        $this->assertDatabaseHas('pallet_base_order_items', [
+            'base_id' => $sourceBase->id,
+            'order_item_id' => $item->id,
+            'qty' => 4,
+        ]);
+        $this->assertDatabaseHas('pallet_base_order_items', [
+            'base_id' => $destinationBase->id,
+            'order_item_id' => $item->id,
+            'qty' => 6,
+        ]);
+        $this->assertDatabaseCount('activity_logs', 1);
+    }
+
     private function startServer(int $port): void
     {
         $server = new Process([

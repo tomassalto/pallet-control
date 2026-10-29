@@ -601,6 +601,19 @@ class PalletBaseStockMovementTest extends TestCase
         return [$pallet, $order, $item, $base];
     }
 
+    public function test_migrate_requiere_autenticacion(): void
+    {
+        [$pallet, , $item, $base] = $this->baseWithStock(10);
+
+        $this->postJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/migrate", [
+            'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+        ])->assertUnauthorized();
+
+        $this->assertDatabaseHas('pallet_base_order_items', [
+            'base_id' => $base->id, 'order_item_id' => $item->id, 'qty' => 10,
+        ]);
+    }
+
     public function test_migrate_en_base_de_otro_pallet_devuelve_404(): void
     {
         $pallet = Pallet::factory()->create();
@@ -626,10 +639,10 @@ class PalletBaseStockMovementTest extends TestCase
                 'items' => [['order_item_id' => $item->id, 'qty' => 5]],
             ]);
 
-        $response->assertStatus(422);
+        $response->assertConflict();
     }
 
-    public function test_migrate_con_cantidad_insuficiente_en_la_base_origen_devuelve_422_sin_cambios(): void
+    public function test_migrate_con_cantidad_insuficiente_en_la_base_origen_devuelve_409_sin_cambios(): void
     {
         [$pallet, , $item, $base] = $this->baseWithStock(10);
 
@@ -638,7 +651,9 @@ class PalletBaseStockMovementTest extends TestCase
                 'items' => [['order_item_id' => $item->id, 'qty' => 11]],
             ]);
 
-        $response->assertStatus(422);
+        $response->assertConflict()
+            ->assertJsonPath('available', 10)
+            ->assertJsonPath('requested', 11);
         $this->assertDatabaseHas('pallet_base_order_items', [
             'base_id' => $base->id, 'order_item_id' => $item->id, 'qty' => 10,
         ]);
@@ -702,6 +717,168 @@ class PalletBaseStockMovementTest extends TestCase
         $this->assertDatabaseHas('pallet_base_order_items', [
             'base_id' => $destBase->id, 'order_item_id' => $item->id, 'qty' => 8, // 3 + 5
         ]);
+        $this->assertDatabaseHas('activity_logs', [
+            'action' => 'item_migrated',
+            'entity_type' => 'order_item',
+            'entity_id' => $item->id,
+            'pallet_id' => $pallet->id,
+        ]);
+    }
+
+    public function test_migrate_rechaza_base_que_no_pertenece_al_pallet_destino(): void
+    {
+        [$pallet, , $item, $base] = $this->baseWithStock(10);
+        $destPallet = Pallet::factory()->create();
+        $otherPallet = Pallet::factory()->create();
+        $otherBase = PalletBase::factory()->for($otherPallet, 'pallet')->create();
+
+        $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/migrate", [
+                'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+                'destination_pallet_id' => $destPallet->id,
+                'destination_base_id' => $otherBase->id,
+            ])
+            ->assertConflict()
+            ->assertJsonPath('message', 'La base destino no pertenece al pallet destino.');
+
+        $this->assertDatabaseHas('pallet_base_order_items', [
+            'base_id' => $base->id, 'order_item_id' => $item->id, 'qty' => 10,
+        ]);
+        $this->assertDatabaseMissing('pallet_base_order_items', [
+            'base_id' => $otherBase->id, 'order_item_id' => $item->id,
+        ]);
+    }
+
+    public function test_migrate_exige_pallet_cuando_se_envia_una_base_destino(): void
+    {
+        [$pallet, , $item, $base] = $this->baseWithStock(10);
+        $destPallet = Pallet::factory()->create();
+        $destBase = PalletBase::factory()->for($destPallet, 'pallet')->create();
+
+        $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/migrate", [
+                'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+                'destination_base_id' => $destBase->id,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('destination_pallet_id');
+
+        $this->assertDatabaseHas('pallet_base_order_items', [
+            'base_id' => $base->id, 'order_item_id' => $item->id, 'qty' => 10,
+        ]);
+    }
+
+    public function test_migrate_rechaza_la_misma_base_como_destino(): void
+    {
+        [$pallet, , $item, $base] = $this->baseWithStock(10);
+
+        $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/migrate", [
+                'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+                'destination_pallet_id' => $pallet->id,
+                'destination_base_id' => $base->id,
+            ])
+            ->assertConflict()
+            ->assertJsonPath('message', 'La base destino debe ser distinta de la base origen.');
+
+        $this->assertDatabaseHas('pallet_base_order_items', [
+            'base_id' => $base->id, 'order_item_id' => $item->id, 'qty' => 10,
+        ]);
+    }
+
+    public function test_migrate_rechaza_pallet_destino_finalizado(): void
+    {
+        [$pallet, , $item, $base] = $this->baseWithStock(10);
+        $destPallet = Pallet::factory()->create(['status' => 'done']);
+
+        $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/migrate", [
+                'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+                'destination_pallet_id' => $destPallet->id,
+            ])
+            ->assertConflict();
+
+        $this->assertDatabaseCount('pallet_bases', 1);
+        $this->assertDatabaseHas('pallet_base_order_items', [
+            'base_id' => $base->id, 'order_item_id' => $item->id, 'qty' => 10,
+        ]);
+    }
+
+    public function test_migrate_rechaza_items_duplicados(): void
+    {
+        [$pallet, , $item, $base] = $this->baseWithStock(10);
+
+        $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/migrate", [
+                'items' => [
+                    ['order_item_id' => $item->id, 'qty' => 2],
+                    ['order_item_id' => $item->id, 'qty' => 3],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('items.0.order_item_id');
+
+        $this->assertDatabaseHas('pallet_base_order_items', [
+            'base_id' => $base->id, 'order_item_id' => $item->id, 'qty' => 10,
+        ]);
+    }
+
+    public function test_migrate_revierte_origen_destino_y_asociacion_si_falla_el_audit_log(): void
+    {
+        [$pallet, $order, $item, $base] = $this->baseWithStock(10);
+        $destPallet = Pallet::factory()->create();
+        $destBase = PalletBase::factory()->for($destPallet, 'pallet')->create();
+        $this->forzarFalloDeAuditoria();
+
+        $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/migrate", [
+                'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+                'destination_pallet_id' => $destPallet->id,
+                'destination_base_id' => $destBase->id,
+            ])
+            ->assertStatus(500);
+
+        $this->assertDatabaseHas('pallet_base_order_items', [
+            'base_id' => $base->id, 'order_item_id' => $item->id, 'qty' => 10,
+        ]);
+        $this->assertDatabaseMissing('pallet_base_order_items', [
+            'base_id' => $destBase->id, 'order_item_id' => $item->id,
+        ]);
+        $this->assertDatabaseMissing('order_pallet', [
+            'pallet_id' => $destPallet->id, 'order_id' => $order->id,
+        ]);
+    }
+
+    public function test_migrate_mantiene_un_numero_acotado_de_queries_con_muchas_bases(): void
+    {
+        [$pallet, $order, $item, $base] = $this->baseWithStock(100);
+        $item->update(['qty' => 200]);
+        $destPallet = Pallet::factory()->create();
+        $destBase = PalletBase::factory()->for($destPallet, 'pallet')->create();
+        PalletBase::factory()
+            ->for($pallet, 'pallet')
+            ->count(20)
+            ->create()
+            ->each(fn (PalletBase $otherBase) => $otherBase->orderItems()->attach($item->id, ['qty' => 1]));
+
+        $this->actingAs($this->actingUser());
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->postJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/migrate", [
+            'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+            'destination_pallet_id' => $destPallet->id,
+            'destination_base_id' => $destBase->id,
+        ])->assertOk();
+
+        $queryCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertDatabaseHas('order_pallet', [
+            'pallet_id' => $destPallet->id,
+            'order_id' => $order->id,
+        ]);
+        $this->assertSame(15, $queryCount, "La migración ejecutó {$queryCount} queries.");
     }
 
     public function test_migrate_asocia_automaticamente_el_pedido_al_pallet_destino(): void

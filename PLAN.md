@@ -142,16 +142,16 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 
 ### R-03 · `POST /pallets/{pallet}/bases/{base}/migrate`
 ```
-□ 1. Auth                  → ok
-□ 2. Validación            → MigratePalletBaseRequest, ok
-□ 3. Negocio (tx + lock)   → mover la lectura de $sourceRecords DE ADENTRO del DB::transaction()
-                              existente, agregar lockForUpdate() → `BE-TX`
-□ 4. Datos                 → revisar índices usados en el join de pallet_base_order_items
-□ 5. Respuesta (HTTP)      → ok
-□ 6. Audit log             → ya existe
-□ 7. Tests                 → caso clave: migrate concurrente con adjustItem sobre la misma fila
-□ 8. Medición              → benchmarks/
+✅ 1. Auth                  → auth:sanctum + has.role; 401 y pertenencia origen acreditados
+✅ 2. Validación            → items distintos y coherencia pallet/base destino
+✅ 3. Negocio (tx + lock)   → pallets, bases, order_items y pivots bloqueados en orden determinista
+✅ 4. Datos                 → débito, crédito y asociación del pedido confirman como una operación
+✅ 5. Respuesta (HTTP)      → conflictos de estado, destino y stock devuelven 409
+✅ 6. Audit log             → misma transacción; rollback forzado acreditado
+🟡 7. Tests                 → 65 tests/165 assertions locales; gate PostgreSQL agregado, pendiente CI
+✅ 8. Medición              → 15 queries constantes con 20 bases; `benchmarks/results/2026-10-29-r03-migrate-base.md`
 ```
+**Estado:** 🟡 implementación local verde; pendiente CI y concurrencia PostgreSQL.
 **Hallazgos que resuelve:** H-007.
 
 ---

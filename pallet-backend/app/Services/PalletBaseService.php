@@ -12,6 +12,190 @@ use Illuminate\Support\Facades\DB;
 
 class PalletBaseService
 {
+    public function migrateBase(Pallet $sourcePallet, PalletBase $sourceBase, array $data): array
+    {
+        if ($sourceBase->pallet_id !== $sourcePallet->id) {
+            return ['error' => ['message' => 'Base no encontrada en este pallet'], 'status' => 404];
+        }
+
+        return DB::transaction(function () use ($sourcePallet, $sourceBase, $data) {
+            $itemIds = collect($data['items'])
+                ->pluck('order_item_id')
+                ->unique()
+                ->sort()
+                ->values();
+            $palletIds = collect([$sourcePallet->id, $data['destination_pallet_id'] ?? null])
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values();
+            $baseIds = collect([$sourceBase->id, $data['destination_base_id'] ?? null])
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values();
+
+            $pallets = Pallet::query()
+                ->whereIn('id', $palletIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id')
+                ->all();
+            $bases = PalletBase::query()
+                ->whereIn('id', $baseIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id')
+                ->all();
+            $orderItems = OrderItem::query()
+                ->whereIn('id', $itemIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id')
+                ->all();
+            $allocations = DB::table('pallet_base_order_items')
+                ->whereIn('order_item_id', $itemIds)
+                ->orderBy('order_item_id')
+                ->orderBy('base_id')
+                ->lockForUpdate()
+                ->get();
+
+            $lockedSourcePallet = $pallets[$sourcePallet->id] ?? null;
+            $lockedSourceBase = $bases[$sourceBase->id] ?? null;
+            if (! $lockedSourcePallet || ! $lockedSourceBase || $lockedSourceBase->pallet_id !== $lockedSourcePallet->id) {
+                return ['error' => ['message' => 'Base no encontrada en este pallet'], 'status' => 404];
+            }
+            if ($lockedSourcePallet->status === 'done') {
+                return [
+                    'error' => ['message' => 'El pallet está finalizado. Reabrilo antes de migrar productos.'],
+                    'status' => 409,
+                ];
+            }
+
+            $destinationPallet = isset($data['destination_pallet_id'])
+                ? ($pallets[$data['destination_pallet_id']] ?? null)
+                : null;
+            $destinationBase = isset($data['destination_base_id'])
+                ? ($bases[$data['destination_base_id']] ?? null)
+                : null;
+
+            if (isset($data['destination_pallet_id']) && ! $destinationPallet) {
+                return ['error' => ['message' => 'Pallet destino no encontrado.'], 'status' => 404];
+            }
+            if (isset($data['destination_base_id']) && ! $destinationBase) {
+                return ['error' => ['message' => 'Base destino no encontrada.'], 'status' => 404];
+            }
+            if ($destinationPallet && $destinationPallet->status === 'done') {
+                return [
+                    'error' => ['message' => 'El pallet destino está finalizado. Reabrilo antes de migrar productos.'],
+                    'status' => 409,
+                ];
+            }
+            if ($destinationBase && (! $destinationPallet || $destinationBase->pallet_id !== $destinationPallet->id)) {
+                return [
+                    'error' => ['message' => 'La base destino no pertenece al pallet destino.'],
+                    'status' => 409,
+                ];
+            }
+            if ($destinationBase?->id === $lockedSourceBase->id) {
+                return [
+                    'error' => ['message' => 'La base destino debe ser distinta de la base origen.'],
+                    'status' => 409,
+                ];
+            }
+
+            $sourceAllocations = $allocations
+                ->where('base_id', $lockedSourceBase->id)
+                ->keyBy('order_item_id');
+            $sourceQuantities = [];
+            foreach ($data['items'] as $itemData) {
+                $sourceRecord = $sourceAllocations->firstWhere('order_item_id', $itemData['order_item_id']);
+                $available = $sourceRecord ? (int) $sourceRecord->qty : 0;
+                $sourceQuantities[$itemData['order_item_id']] = $available;
+                if ($available < $itemData['qty']) {
+                    $item = $orderItems[$itemData['order_item_id']] ?? null;
+
+                    return [
+                        'error' => [
+                            'message' => "Cantidad insuficiente de '{$item?->description}'. Disponible: {$available}, solicitado: {$itemData['qty']}.",
+                            'available' => $available,
+                            'requested' => $itemData['qty'],
+                        ],
+                        'status' => 409,
+                    ];
+                }
+            }
+
+            if (! $destinationPallet) {
+                $today = now()->format('Ymd');
+                $countToday = Pallet::whereDate('created_at', now()->toDateString())->count() + 1;
+                $destinationPallet = Pallet::create([
+                    'code' => sprintf('PAL-%s-%04d', $today, $countToday),
+                    'status' => 'open',
+                ]);
+            }
+            if (! $destinationBase) {
+                $nextNum = $destinationPallet->bases()->count() + 1;
+                $destinationBase = PalletBase::create([
+                    'pallet_id' => $destinationPallet->id,
+                    'name' => "Base {$nextNum}",
+                ]);
+            }
+
+            $sourceName = $lockedSourcePallet->code . ' / ' . ($lockedSourceBase->name ?? "Base #{$lockedSourceBase->id}");
+            $destinationName = $destinationPallet->code . ' / ' . ($destinationBase->name ?? "Base #{$destinationBase->id}");
+            $destinationAllocations = $allocations
+                ->where('base_id', $destinationBase->id)
+                ->keyBy('order_item_id');
+
+            foreach ($data['items'] as $itemData) {
+                $orderItemId = $itemData['order_item_id'];
+                $qtyToMove = $itemData['qty'];
+                $newSourceQty = $sourceQuantities[$orderItemId] - $qtyToMove;
+
+                if ($newSourceQty === 0) {
+                    DB::table('pallet_base_order_items')
+                        ->where('base_id', $lockedSourceBase->id)
+                        ->where('order_item_id', $orderItemId)
+                        ->delete();
+                } else {
+                    DB::table('pallet_base_order_items')
+                        ->where('base_id', $lockedSourceBase->id)
+                        ->where('order_item_id', $orderItemId)
+                        ->update(['qty' => $newSourceQty, 'updated_at' => now()]);
+                }
+
+                $destinationRecord = $destinationAllocations->firstWhere('order_item_id', $orderItemId);
+                $destinationQty = $destinationRecord ? (int) $destinationRecord->qty : 0;
+                DB::table('pallet_base_order_items')->updateOrInsert(
+                    ['base_id' => $destinationBase->id, 'order_item_id' => $orderItemId],
+                    ['qty' => $destinationQty + $qtyToMove, 'updated_at' => now()]
+                );
+
+                $orderItem = $orderItems[$orderItemId];
+                $destinationPallet->orders()->syncWithoutDetaching([$orderItem->order_id]);
+
+                ActivityLogger::log(
+                    action: 'item_migrated',
+                    entityType: 'order_item',
+                    entityId: $orderItemId,
+                    description: "Migrado '{$orderItem->description}': {$qtyToMove} u. de [{$sourceName}] → [{$destinationName}]",
+                    palletId: $lockedSourcePallet->id,
+                    oldValues: ['source' => $sourceName, 'qty' => $qtyToMove],
+                    newValues: ['dest' => $destinationName, 'qty' => $qtyToMove],
+                );
+            }
+
+            return [
+                'destination_pallet_id' => $destinationPallet->id,
+                'destination_pallet_code' => $destinationPallet->code,
+            ];
+        });
+    }
+
     public function createBase(Pallet $pallet, array $data): array
     {
         return DB::transaction(function () use ($pallet, $data) {

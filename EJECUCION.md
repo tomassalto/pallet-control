@@ -64,11 +64,22 @@ Implementado localmente:
 
 Evidencia final: commit `87d6a4b`, Actions run `40919324208`, jobs `ci` y `postgres-concurrency` verdes.
 
-## Próxima sesión — R-03 migración entre bases
+## Sesión actual — R-03 migración entre bases
 
 Crear la rama desde el cierre de R-02, nunca desde `master`. Aplicar `DOMINIO.md`, `BE-VALID`, `BE-ERR`, `BE-TX`, `SEC-AUTHZ`, `SEC-LOG`, `QA-INVARIANT`, `QA-RISK` y `BE-GATE`.
 
-Objetivo: mover la lectura de stock de `migrate` dentro de la transacción, bloquear origen/destino/items en orden determinista, mantener cantidades y auditoría atómicas y acreditar dos migraciones concurrentes en PostgreSQL. Hallazgo principal: H-007.
+Implementado localmente:
+
+1. La operación salió del controlador y vive en `PalletBaseService::migrateBase()`.
+2. Disponibilidad, validación, débito, crédito, asociación del pedido y activity log comparten una transacción.
+3. Orden de locks: pallets por ID, bases por ID, `order_items` por ID y asignaciones por item/base; extiende D-003 sin invertir locks con R-02.
+4. Destino incoherente, misma base, pallet finalizado o stock insuficiente devuelven `409`; items duplicados o base sin pallet destino devuelven `422`.
+5. Rollback forzado acredita que origen, destino y `order_pallet` no quedan parciales si falla auditoría.
+6. Suite completa local verde: 65 tests, 165 assertions; Pint, PHPStan, audits, lint y build verdes.
+7. Presupuesto de 15 queries con 20 bases, guardado en `benchmarks/results/2026-10-29-r03-migrate-base.md`.
+8. Gate PostgreSQL agregado: dos migraciones simultáneas de 6 sobre 10 deben producir `200/409`, origen 4, destino 6 y un solo log.
+
+Pendiente para cerrar: push, pipeline remoto y registro de evidencia.
 
 ## Sesiones R-02 a R-07
 

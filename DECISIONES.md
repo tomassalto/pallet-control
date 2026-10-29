@@ -133,6 +133,8 @@ Una tarea puede requerir varias secciones de distintos documentos; a cambio cada
 **Decisión**
 En R-01 se bloquea `order_items` con `lockForUpdate()` y, dentro de la misma transacción, se leen en orden de `base_id` todas sus asignaciones, se valida `SUM(asignado) ≤ pedido`, se escribe y se crea el activity log. Un exceso o una pertenencia inválida devuelven `409`.
 
+R-02 reutiliza ese coordinador para crear y actualizar bases. R-03 agrega recursos de contexto antes del coordinador con un orden único: pallets por ID, bases por ID, `order_items` por ID y pivots por `order_item_id/base_id`. Así, migraciones opuestas bloquean los mismos recursos en el mismo orden y cada conflicto se reevalúa después de esperar.
+
 **Por qué**
 La fila de `order_items` existe antes de cualquier asignación y es compartida por todas las bases y pallets. Esto evita el hueco de bloquear filas pivot inexistentes y define un orden reproducible.
 
