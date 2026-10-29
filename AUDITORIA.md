@@ -48,8 +48,8 @@ Referencia:  `SEC-AUTHZ`, `BE-API`
 **Qué está pasando:** `GET /public/orders/{code}` no requiere auth ni tiene `throttle`, y `code` es un string libre que en la práctica es numérico y secuencial (`attachOrder` usa regex `^\d+$`).
 **Por qué importa acá:** cualquiera puede iterar códigos y extraer cliente, items, precios y fotos de pedidos ajenos, sin límite de tasa.
 **Resolución R-06:** un token aleatorio separado reemplaza al código comercial en GET y faltantes. El token se oculta por defecto y las rutas aplican límites combinados por IP y recurso según D-006.
-**Evidencia local:** tests acreditan acceso por token, rechazo del código enumerable, contrato sin token, entrega sólo autenticada, faltantes protegidos, `429` con `Retry-After`, backfill/rollback y presupuesto constante.
-**Estado:** 🟡 implementación local verde; pendiente CI.
+**Evidencia:** tests acreditan acceso por token, rechazo del código enumerable, contrato sin token, entrega sólo autenticada, faltantes protegidos, `429` con `Retry-After`, backfill/rollback y presupuesto constante.
+**Estado:** ✅ resuelto en R-06, commit `f344770`; Actions run `40933450650` con `ci` y `postgres-concurrency` verdes.
 
 #### H-002 — Webhook de Telegram falla abierto sin secret configurado
 ```

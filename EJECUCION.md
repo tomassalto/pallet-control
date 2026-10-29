@@ -115,7 +115,7 @@ Implementado localmente:
 
 Evidencia final: commit `85daa84`; Actions run `40931851828` con jobs `ci` y `postgres-concurrency` verdes.
 
-## Sesión actual — R-06 acceso público a pedidos
+## Última sesión cerrada — R-06 acceso público a pedidos
 
 Crear la rama desde el cierre documental de R-05, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `PRODUCTO.md`, `SEC-THREAT`, `SEC-AUTHZ`, `SEC-ABUSE`, `SEC-DATA`, `BE-API`, `BE-ERR`, `QA-RISK`, `QA-SEC` y `QA-CONTRACT`. Antes de cambiar el contrato público, registrar la decisión sobre código enumerable, token opaco y compatibilidad.
 
@@ -132,7 +132,11 @@ Implementado localmente:
 9. Presupuesto de 6 queries con 20 ítems, guardado en `benchmarks/results/2026-10-29-r06-public-order.md`.
 10. Suite completa local verde: 82 tests, 226 assertions; Pint, PHPStan, audits, lint y build verdes.
 
-Pendiente para cerrar: push, pipeline remoto y evidencia final.
+Evidencia final: commit `f344770`; Actions run `40933450650` con jobs `ci` y `postgres-concurrency` verdes.
+
+## Próxima sesión — R-07 autenticación y Telegram
+
+Crear la rama desde el cierre documental de R-06, nunca desde `master`. Volver a recorrer `ROUTER.md` y aplicar `BE-AUTH`, `BE-ASYNC`, `BE-ERR`, `SEC-IDENTITY`, `SEC-SECRET`, `SEC-ABUSE`, `SEC-LOG`, `QA-RISK`, `QA-SEC`, `QA-CONTRACT` y `QA-RESILIENCE`. El bot activo es Telegram dentro del backend; `whatsapp-bot/` permanece fuera de alcance.
 
 ## Sesiones R-02 a R-07
 

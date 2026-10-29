@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-29
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Rebanada actual:** R-06 — endurecer el acceso público a pedidos.
+**Rebanada actual:** R-07 — endurecer autenticación, desactivación y webhook de Telegram.
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -19,7 +19,7 @@
 Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b)
 Fase 1 — Red de seguridad      ✅ hecho (gates activos y caracterización completos)
 Fase Fundacional — Normativa  ✅ cinco autoridades y router por IDs estables
-Fase 2 — Rebanadas verticales  🟡 R-06 en curso (5 de 7 cerradas)
+Fase 2 — Rebanadas verticales  🟡 R-07 en curso (6 de 7 cerradas)
 Fase 3 — Dominio específico    🔲
 Fase 4 — Performance           🔲 (benchmarks/ armado, baseline sin correr — H-040)
 Fase 5 — Infraestructura       🔲
@@ -34,7 +34,7 @@ _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código
 
 1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
-3. **Implementar R-06** — reducir enumeración y abuso del acceso público a pedidos. `H-001`.
+3. **Implementar R-07** — cerrar fallos de login, revocación y webhook de Telegram. `H-002`, `H-003`, `H-021`.
 
 ---
 
@@ -196,10 +196,10 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 ✅ 4. Datos                 → token único, backfill reversible y oculto por defecto
 ✅ 5. Respuesta (HTTP)      → contrato público no expone el token; abuso devuelve 429 + Retry-After
 ✅ 6. Audit log             → no se registra cada lectura; se limitan y observan patrones (`D-006`)
-🟡 7. Tests                 → 82 tests/226 assertions locales; token, contrato y rate limit; pendiente CI
+✅ 7. Tests                 → 82 tests/226 assertions; token, contrato y rate limit acreditados en CI
 ✅ 8. Medición              → 6 queries con 20 ítems; `benchmarks/results/2026-10-29-r06-public-order.md`
 ```
-**Estado:** 🟡 implementación local verde; pendiente CI.
+**Estado:** ✅ cerrada en `f344770`; Actions run `40933450650` con `ci` y `postgres-concurrency` verdes.
 **Hallazgos que resuelve:** H-001.
 
 ---
