@@ -147,7 +147,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build production image
-        run: docker build --tag pallet-control:ci .
+        shell: bash
+        run: |
+          set +e
+          docker build --progress=plain --tag pallet-control:ci . 2>&1 | tee /tmp/docker-build.log
+          estado=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$estado" -ne 0 ]; then
+            while IFS= read -r linea; do
+              echo "::error::$linea"
+            done < <(tail -n 40 /tmp/docker-build.log)
+            exit "$estado"
+          fi
 
       - name: Verify non-root runtime
         run: |
