@@ -270,3 +270,23 @@ Los controladores no capturan una excepción inesperada para convertirla en 422 
 El contrato común mínimo es `message`; `errors`, campos de conflicto y `error_id` son extensiones según la categoría. No se fuerza una envoltura idéntica para todos los 4xx porque son contratos activos del frontend y requieren una migración separada si se desea cambiarlos.
 
 **Referencia normativa:** `BE-ERR`, `BE-API`, `SEC-LOG`, `QA-CONTRACT`, `QA-SEC`, `FE-DATA`
+
+---
+
+## D-009 — Guard productivo común y runtime no root
+
+**Fecha:** 2026-10-29
+**Estado:** ✅ vigente
+
+**Contexto**
+El repositorio mantiene dos caminos de despliegue, Docker y Nixpacks. Docker ejecutaba supervisor como root y ninguno de los dos caminos garantizaba que una variable externa no activara debug en producción.
+
+**Decisión**
+Centralizar la normalización productiva en `deploy-env.sh`, consumido por ambos caminos. Cuando `APP_ENV=production` o no está definido, el script fuerza `APP_DEBUG=false` antes de cachear configuración o iniciar la aplicación. Docker declara `USER www-data`, asigna sólo los directorios de escritura necesarios y ejecuta web y worker con ese usuario.
+
+El `.env` local del frontend deja de ser un artefacto versionado; `.env.example` documenta exclusivamente el valor público esperado y Git/Docker excluyen los archivos reales. CI construye la imagen y prueba tanto UID no root como el guard de debug.
+
+**Trade-off aceptado**
+Una intención de depurar producción se ignora deliberadamente y debe reproducirse en un entorno controlado. La imagen tarda más en CI porque el gate compila el artefacto real; esa evidencia es necesaria para no declarar seguridad sólo por inspección del Dockerfile.
+
+**Referencia normativa:** `DO-ENV`, `DO-CONTAINER`, `DO-RELEASE`, `DO-SUPPLY`, `SEC-SECRET`, `SEC-SUPPLY`, `QA-SEC`, `QA-RESILIENCE`

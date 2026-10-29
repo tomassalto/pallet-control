@@ -166,9 +166,24 @@ Rama creada desde el cierre documental de R-07. Se aplicaron `BE-ERR`, `BE-API`,
 
 Evidencia funcional: commit `ce48ca3`; Actions run `40966390873` con jobs `ci` y `postgres-concurrency` verdes.
 
-## Próxima sesión — hardening de deploy y contenedor
+## Última sesión cerrada — hardening de deploy y contenedor
 
-Crear la rama desde el cierre documental del contrato de errores, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `DO-ENV`, `DO-CONTAINER`, `DO-RELEASE`, `DO-SUPPLY`, `SEC-SECRET`, `SEC-SUPPLY`, `QA-SEC` y `QA-RESILIENCE`. Atender `H-025`, `H-030` y `H-032` sin asumir el estado del dashboard de Render; `H-028` y `H-029` siguen requiriendo verificación operativa separada.
+Rama creada desde el cierre documental del contrato de errores. Se aplicaron `DO-ENV`, `DO-CONTAINER`, `DO-RELEASE`, `DO-SUPPLY`, `SEC-SECRET`, `SEC-SUPPLY`, `QA-SEC` y `QA-RESILIENCE`.
+
+1. `D-009` centraliza el guard productivo para Docker y Nixpacks.
+2. Producción fuerza `APP_DEBUG=false` antes de cachear configuración.
+3. La imagen y ambos procesos supervisor ejecutan como `www-data`; sólo storage, cache y public reciben ownership de runtime.
+4. El `.env` frontend deja de estar versionado y se reemplaza por un ejemplo sin secreto.
+5. El nuevo job `container-security` construye el artefacto real, inspecciona usuario/UID y ejecuta el guard de debug.
+6. Actions run `40967326459`: `ci`, `postgres-concurrency` y `container-security` verdes.
+
+Evidencia funcional: commits `7cf1875`, `2aadfc6` y `f01bc14`.
+
+`H-028` y `H-029` siguen abiertos porque requieren verificar el estado externo de Render; este cambio no presume ni reemplaza esa comprobación.
+
+## Próxima sesión — higiene y operabilidad de imagen
+
+Crear la rama desde este cierre, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `DO-CONTAINER`, `DO-SUPPLY`, `DO-RELEASE`, `SEC-SUPPLY`, `QA-SEC` y `QA-RESILIENCE` para atender `H-033` a `H-036`: Composer en runtime, cobertura de `.dockerignore`, versiones base y healthcheck/readiness. No mezclar las verificaciones externas `H-028/H-029` con cambios inferidos desde el repositorio.
 
 ## Sesiones R-02 a R-07
 

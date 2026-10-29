@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-29
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** contrato global de errores cerrado; siguiente bloque de código: hardening de deploy y contenedor (`H-025`, `H-030`, `H-032`).
+**Trabajo actual:** guard de producción, usuario no root y `.env` cerrados; siguiente bloque: higiene y operabilidad de imagen (`H-033` a `H-036`).
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -52,11 +52,11 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 |---|---|---|---|---|
 | H-001 | IDOR/enumeración en `GET /public/orders/{code}` | 🟡 medio | Alto | ❌ no (resuelto mediante decisión D-006) |
 | H-019 | `$e->getMessage()` filtrado al cliente en 4 controladores — ✅ resuelto | 🟢 bajo | Medio | 🟡 parcial |
-| H-030 | Contenedor corre como root | 🟢 bajo | Alto | ✅ sí |
-| H-032 | `pallet-frontend/.env` trackeado en git | 🟢 bajo | Medio | ✅ sí |
+| H-030 | Contenedor corre como root — ✅ resuelto | 🟢 bajo | Alto | ✅ sí |
+| H-032 | `pallet-frontend/.env` trackeado en git — ✅ resuelto | 🟢 bajo | Medio | ✅ sí |
 | H-002 | Webhook Telegram falla abierto sin secret | 🟢 bajo | Medio | ✅ sí |
 | H-003 | Desactivar usuario no revoca tokens | 🟡 medio | Medio | ❌ no |
-| H-025 | `APP_DEBUG` sin safeguard en el deploy | 🟢 bajo | Medio | ✅ sí |
+| H-025 | `APP_DEBUG` sin safeguard en el deploy — ✅ resuelto | 🟢 bajo | Medio | ✅ sí |
 | H-004 | Rutas de verificación de email rotas | 🟢 bajo | Bajo | ✅ sí |
 
 ### 🔴 Integridad / pérdida de datos
@@ -251,8 +251,8 @@ Constraints e índices (una migración, bajo riesgo, alto retorno):
                                                                      junto con R-01/R-02)
 
 Docker/infra (mecánico, bajo riesgo):
-□ USER no-root en Dockerfile + user= en supervisord.conf         → H-030
-□ Sacar pallet-frontend/.env de git (git rm --cached) + gitignore → H-032
+✅ USER no-root en Dockerfile + user= en supervisord.conf         → H-030
+✅ Sacar pallet-frontend/.env de git (git rm --cached) + gitignore → H-032
 □ .dockerignore: agregar *.md, tests/, storage/logs/*            → H-034
 □ HEALTHCHECK en Dockerfile                                       → H-036
 □ Pinear versiones de imágenes base a digest                      → H-035

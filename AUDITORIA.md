@@ -301,7 +301,8 @@ Referencia:  `BE-ERR`, `QA-CONTRACT`
 Severidad:   🟡 medio · Categoría: seguridad
 Ubicación:   docker-entrypoint.sh, nixpacks.toml — nada fuerza `APP_DEBUG=false`
 ```
-**Estado:** 🔲 abierto
+**Resolución:** `deploy-env.sh` fuerza `APP_DEBUG=false` en producción antes de cachear configuración y es usado tanto por Docker como por Nixpacks. CI ejecuta el guard dentro de la imagen con `APP_DEBUG=true` y acredita el resultado `false`.
+**Estado:** ✅ resuelto en `7cf1875` + `f01bc14`; Actions run `40967326459`, job `container-security` verde.
 
 #### H-026 — Único uso de `$request->all()`
 ```
@@ -380,7 +381,8 @@ Severidad:   🟠 alto · Categoría: seguridad
 Ubicación:   Dockerfile (sin USER) — supervisord.conf (sin user=)
 Referencia:  `DO-CONTAINER`
 ```
-**Estado:** 🔲 abierto
+**Resolución:** la imagen declara `USER www-data`, limita ownership a rutas de escritura y supervisor ejecuta web/worker como `www-data`. CI construye la imagen, inspecciona `Config.User` y comprueba que el UID efectivo no sea 0.
+**Estado:** ✅ resuelto en `7cf1875` + `f01bc14`; Actions run `40967326459`, job `container-security` verde.
 
 #### H-031 — Sin CI de ningún tipo
 ```
@@ -397,7 +399,8 @@ Ubicación:   pallet-frontend/.env — sin entrada en .gitignore ni .dockerignor
 Referencia:  `DO-ENV`, `SEC-SECRET`
 ```
 **Qué está pasando:** contenido actual inofensivo (`VITE_API_BASE_URL=/api/v1`), pero el patrón de protección está roto para este archivo específico.
-**Estado:** 🔲 abierto
+**Resolución:** el archivo real fue retirado del índice sin borrar la copia local, Git y Docker lo ignoran, y `pallet-frontend/.env.example` conserva sólo `VITE_API_BASE_URL=/api/v1` como documentación pública.
+**Estado:** ✅ resuelto en `7cf1875`; Actions run `40967326459` verde.
 
 #### H-033 — Imagen final incluye el binario de Composer
 ```
