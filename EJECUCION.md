@@ -48,7 +48,7 @@ Implementado:
 
 Evidencia final: Actions run `40827127268`, commit `78786b1`, jobs `ci` y `postgres-concurrency` verdes.
 
-## Sesión actual — R-02 bases con items
+## Sesión cerrada — R-02 bases con items
 
 Crear la rama desde el cierre de R-01, nunca desde `master`. Aplicar `DOMINIO.md`, `BE-VALID`, `BE-ERR`, `BE-TX`, `SEC-AUTHZ`, `SEC-LOG`, `QA-INVARIANT`, `QA-RISK` y `BE-GATE`.
 
@@ -62,7 +62,13 @@ Implementado localmente:
 6. Creación medida en 14 queries constantes con 20 bases; resultado en `benchmarks/results/2026-10-29-r02-create-base.md`.
 7. Gate PostgreSQL extendido: dos `POST bases` concurrentes deben producir un `201`, un `409`, total asignado 6, una sola base y dos logs.
 
-Pendiente para cerrar R-02: push de la rama, pipeline remoto y registro de su evidencia. Después comienza R-03.
+Evidencia final: commit `87d6a4b`, Actions run `40919324208`, jobs `ci` y `postgres-concurrency` verdes.
+
+## Próxima sesión — R-03 migración entre bases
+
+Crear la rama desde el cierre de R-02, nunca desde `master`. Aplicar `DOMINIO.md`, `BE-VALID`, `BE-ERR`, `BE-TX`, `SEC-AUTHZ`, `SEC-LOG`, `QA-INVARIANT`, `QA-RISK` y `BE-GATE`.
+
+Objetivo: mover la lectura de stock de `migrate` dentro de la transacción, bloquear origen/destino/items en orden determinista, mantener cantidades y auditoría atómicas y acreditar dos migraciones concurrentes en PostgreSQL. Hallazgo principal: H-007.
 
 ## Sesiones R-02 a R-07
 

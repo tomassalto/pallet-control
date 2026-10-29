@@ -93,8 +93,8 @@ Ubicación:   app/Services/PalletBaseService.php:15-137 (createBase, updateBase/
 Referencia:  `BE-TX`, `QA-INVARIANT`
 ```
 **Resolución R-02:** `createBase()` y `updateBase()` bloquean los `order_items` en orden determinista, bloquean sus asignaciones y calculan el total global dentro de la misma transacción antes de sincronizar pivots.
-**Evidencia local:** exceso, límite exacto, asignaciones en otros pallets, ownership, rollback y auditoría se cubren en `PalletBaseStockMovementTest`; `AdjustItemConcurrencyTest` incorpora dos creaciones simultáneas para el gate PostgreSQL.
-**Estado:** 🟡 implementación local verde; pendiente acreditación PostgreSQL remota para cerrar.
+**Evidencia:** exceso, límite exacto, asignaciones en otros pallets, ownership, rollback y auditoría se cubren en `PalletBaseStockMovementTest`; `AdjustItemConcurrencyTest` acredita dos creaciones simultáneas sobre PostgreSQL.
+**Estado:** ✅ resuelto en R-02, commit `87d6a4b`; Actions run `40919324208` con `ci` y `postgres-concurrency` verdes.
 
 #### H-006 — Sin constraint de DB para "asignado ≤ pedido"
 ```
