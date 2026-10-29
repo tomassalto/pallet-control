@@ -137,6 +137,6 @@ En R-01 se bloquea `order_items` con `lockForUpdate()` y, dentro de la misma tra
 La fila de `order_items` existe antes de cualquier asignación y es compartida por todas las bases y pallets. Esto evita el hueco de bloquear filas pivot inexistentes y define un orden reproducible.
 
 **Trade-off aceptado**
-Dos ajustes del mismo item se ejecutan en serie. SQLite verifica comportamiento y rollback, pero la garantía de bloqueo concurrente debe acreditarse además sobre PostgreSQL antes de cerrar completamente R-01.
+Dos ajustes del mismo item se ejecutan en serie. SQLite verifica comportamiento, rollback y presupuesto de queries; la garantía del lock se acredita separadamente en CI mediante dos procesos Laravel contra PostgreSQL.
 
 **Referencia normativa:** `BE-VALID`, `BE-ERR`, `BE-TX`, `SEC-LOG`, `QA-INVARIANT`

@@ -394,6 +394,32 @@ class PalletBaseStockMovementTest extends TestCase
             ->sum('qty'));
     }
 
+    public function test_adjust_item_mantiene_un_numero_acotado_de_queries_con_muchas_bases(): void
+    {
+        [$pallet, , $item] = $this->palletWithAssignableItem(qty: 100);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+
+        PalletBase::factory()
+            ->for($pallet, 'pallet')
+            ->count(20)
+            ->create()
+            ->each(fn (PalletBase $otherBase) => $otherBase->orderItems()->attach($item->id, ['qty' => 1]));
+
+        $this->actingAs($this->actingUser());
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/adjust-item", [
+            'order_item_id' => $item->id,
+            'qty' => 10,
+        ])->assertOk();
+
+        $queryCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertSame(9, $queryCount, "El ajuste ejecutó {$queryCount} queries.");
+    }
+
     public function test_adjust_item_revierte_stock_si_falla_el_audit_log(): void
     {
         [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);

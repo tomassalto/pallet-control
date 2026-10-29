@@ -39,16 +39,17 @@ Implementado:
 2. Lock del `order_item` y locks pivot por `base_id`.
 3. Conflictos de disponibilidad y pertenencia con `409`.
 4. Activity log atómico con rollback acreditado.
-5. Suite focal SQLite: 27 tests, 58 assertions.
+5. Suite focal SQLite: 28 tests, 60 assertions.
 6. Decisión registrada en D-003.
 7. Dependencias afectadas por advisories actualizadas sin salto mayor; `composer audit` quedó en cero.
+8. Presupuesto de 9 queries constante con 20 bases, guardado en `benchmarks/results/2026-10-29-r01-adjust-item.md`.
+9. Gate PostgreSQL agregado a CI: dos servidores Laravel compiten por el mismo item; se exige un `200`, un `409`, total 6 y un solo activity log.
 
 Pendiente para cerrar la rebanada:
 
-1. Ejecutar gates backend completos.
-2. Acreditar dos ajustes concurrentes sobre PostgreSQL; SQLite no demuestra locks de fila.
-3. Guardar la medición antes/después en `benchmarks/`.
-4. Al cerrar esos gates, marcar R-01 terminada y avanzar a R-02.
+1. Ejecutar el job `postgres-concurrency` en GitHub Actions; localmente se descubre y salta porque este runtime no tiene `pdo_pgsql` ni PostgreSQL.
+2. Si queda verde, registrar su ejecución y marcar R-01 terminada.
+3. Avanzar a R-02.
 
 ## Sesiones R-02 a R-07
 

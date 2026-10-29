@@ -2,7 +2,7 @@ name: Backend CI
 
 on:
   push:
-    branches: [master, 'modernizacion/**']
+    branches: [master, 'modernizacion/**', 'hardening/**']
   pull_request:
 
 defaults:
@@ -71,3 +71,46 @@ jobs:
       - name: Security audit (frontend npm)
         working-directory: pallet-frontend
         run: npm ci && npm audit
+
+  postgres-concurrency:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: pallet_control_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pallet_control_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_pgsql, bcmath, gd, intl, exif, curl, dom, fileinfo
+          coverage: none
+
+      - name: Install dependencies
+        working-directory: pallet-backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Prepare test environment
+        working-directory: pallet-backend
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: PostgreSQL concurrency gate
+        working-directory: pallet-backend
+        run: ./vendor/bin/phpunit --configuration phpunit.postgres.xml --group postgres
