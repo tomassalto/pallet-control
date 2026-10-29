@@ -12,7 +12,6 @@ use App\Models\OrderTicketPhoto;
 use App\Services\TicketOcrService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class OrderTicketController extends Controller
@@ -54,69 +53,55 @@ class OrderTicketController extends Controller
     // POST /orders/{order}/tickets/{ticket}/photos
     public function storePhoto(Request $request, Order $order, OrderTicket $ticket)
     {
-        try {
-            // Verificar que el ticket pertenece al pedido
-            if ($ticket->order_id !== $order->id) {
-                return response()->json(['message' => 'Ticket no encontrado'], 404);
-            }
-
-            $data = $request->validate([
-                'photo' => ['required', 'file', 'mimes:jpeg,jpg,png,webp', 'max:20480'], // 20MB
-                'note' => ['nullable', 'string', 'max:1000'],
-            ]);
-
-            $file = $data['photo'];
-
-            // Convertir a WebP
-            $path = ImageConverter::convertToWebP(
-                $file,
-                "orders/{$order->id}/tickets/{$ticket->id}",
-                95,
-                6000,
-                6000
-            );
-
-            // Obtener el siguiente índice de orden
-            $maxIndex = $ticket->photos()->max('order_index') ?? -1;
-            $nextIndex = $maxIndex + 1;
-
-            $photo = OrderTicketPhoto::create([
-                'ticket_id' => $ticket->id,
-                'path' => $path,
-                'original_name' => $file->getClientOriginalName(),
-                'note' => $data['note'] ?? null,
-                'order_index' => $nextIndex,
-            ]);
-
-            ActivityLogger::log(
-                action: 'order_ticket_photo_uploaded',
-                entityType: 'order_ticket_photo',
-                entityId: $photo->id,
-                description: "Foto agregada al ticket del pedido '{$order->code}': {$file->getClientOriginalName()}",
-                newValues: ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()],
-                orderId: $order->id,
-            );
-
-            // NO despacha OCR automáticamente — el usuario lo dispara
-            // manualmente desde el frontend con el botón "Escanear ticket".
-
-            return response()->json([
-                'photo' => $photo->fresh(),
-                'url' => $photo->fresh()->url,
-            ], 201);
-        } catch (\Throwable $e) {
-            Log::error('OrderTicketController storePhoto: excepción no controlada.', [
-                'order_id' => $order->id ?? null,
-                'ticket_id' => $ticket->id ?? null,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return response()->json([
-                'message' => 'Error al subir la foto del ticket.',
-                'detail' => $e->getMessage(),
-            ], 500);
+        // Verificar que el ticket pertenece al pedido
+        if ($ticket->order_id !== $order->id) {
+            return response()->json(['message' => 'Ticket no encontrado'], 404);
         }
+
+        $data = $request->validate([
+            'photo' => ['required', 'file', 'mimes:jpeg,jpg,png,webp', 'max:20480'], // 20MB
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $file = $data['photo'];
+
+        // Convertir a WebP
+        $path = ImageConverter::convertToWebP(
+            $file,
+            "orders/{$order->id}/tickets/{$ticket->id}",
+            95,
+            6000,
+            6000
+        );
+
+        // Obtener el siguiente índice de orden
+        $maxIndex = $ticket->photos()->max('order_index') ?? -1;
+        $nextIndex = $maxIndex + 1;
+
+        $photo = OrderTicketPhoto::create([
+            'ticket_id' => $ticket->id,
+            'path' => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'note' => $data['note'] ?? null,
+            'order_index' => $nextIndex,
+        ]);
+
+        ActivityLogger::log(
+            action: 'order_ticket_photo_uploaded',
+            entityType: 'order_ticket_photo',
+            entityId: $photo->id,
+            description: "Foto agregada al ticket del pedido '{$order->code}': {$file->getClientOriginalName()}",
+            newValues: ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()],
+            orderId: $order->id,
+        );
+
+        // NO despacha OCR automáticamente — el usuario lo dispara
+        // manualmente desde el frontend con el botón "Escanear ticket".
+
+        return response()->json([
+            'photo' => $photo->fresh(),
+            'url' => $photo->fresh()->url,
+        ], 201);
     }
 
     // GET /orders/{order}/tickets/{ticket}/photos/{photo}/ocr-status

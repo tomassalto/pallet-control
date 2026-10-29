@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Services\PhotoUploadService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 
 class BotController extends Controller
 {
@@ -36,11 +35,7 @@ class BotController extends Controller
 
             return response()->json($result, 201);
         } catch (ModelNotFoundException) {
-            return response()->json(['error' => 'No encontrado. Verificá el código.'], 404);
-        } catch (\Throwable $e) {
-            Log::error('[Bot] uploadPhoto error: ' . $e->getMessage());
-
-            return response()->json(['error' => $e->getMessage()], 422);
+            return response()->json(['message' => 'No encontrado. Verificá el código.'], 404);
         }
     }
 }

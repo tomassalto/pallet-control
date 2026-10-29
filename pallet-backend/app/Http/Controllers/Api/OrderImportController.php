@@ -8,7 +8,6 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Columnas fijas del archivo (separadas por TAB):
@@ -126,49 +125,37 @@ class OrderImportController extends Controller
             ], 422);
         }
 
-        try {
-            DB::transaction(function () use ($order, $parsed) {
-                // Obtener EANS del import para eliminar solo los que ya no están
-                $importEans = array_column($parsed, 'ean');
-                OrderItem::where('order_id', $order->id)
-                    ->whereNotIn('ean', $importEans)
-                    ->delete();
+        DB::transaction(function () use ($order, $parsed) {
+            // Obtener EANS del import para eliminar solo los que ya no están
+            $importEans = array_column($parsed, 'ean');
+            OrderItem::where('order_id', $order->id)
+                ->whereNotIn('ean', $importEans)
+                ->delete();
 
-                foreach ($parsed as $row) {
-                    Product::updateOrCreate(
-                        ['ean' => $row['ean']],
-                        ['name' => $row['description'], 'ean_last4' => $row['ean_last4']]
-                    );
+            foreach ($parsed as $row) {
+                Product::updateOrCreate(
+                    ['ean' => $row['ean']],
+                    ['name' => $row['description'], 'ean_last4' => $row['ean_last4']]
+                );
 
-                    OrderItem::updateOrCreate(
-                        [
-                            'order_id' => $order->id,
-                            'ean' => $row['ean'],
-                        ],
-                        [
-                            'ean_last4' => $row['ean_last4'],
-                            'description' => $row['description'],
-                            'qty' => $row['qty'],
-                            'done_qty' => $row['done_qty'],
-                            'status' => $row['status'],
-                            'price' => $row['price'],
-                            'desc_medio_pago' => $row['desc_medio_pago'],
-                            'is_controlled' => $row['is_controlled'],
-                        ]
-                    );
-                }
-            });
-        } catch (\Throwable $e) {
-            Log::error('OrderImportController: Falló import', [
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return response()->json([
-                'message' => 'Error al importar: ' . $e->getMessage(),
-            ], 500);
-        }
+                OrderItem::updateOrCreate(
+                    [
+                        'order_id' => $order->id,
+                        'ean' => $row['ean'],
+                    ],
+                    [
+                        'ean_last4' => $row['ean_last4'],
+                        'description' => $row['description'],
+                        'qty' => $row['qty'],
+                        'done_qty' => $row['done_qty'],
+                        'status' => $row['status'],
+                        'price' => $row['price'],
+                        'desc_medio_pago' => $row['desc_medio_pago'],
+                        'is_controlled' => $row['is_controlled'],
+                    ]
+                );
+            }
+        });
 
         return response()->json([
             'message' => 'Pedido importado: ' . count($parsed) . ' productos encontrados.',

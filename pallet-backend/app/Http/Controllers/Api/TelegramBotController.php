@@ -360,7 +360,7 @@ class TelegramBotController extends Controller
             $this->editMessage($chatId, $messageId, '❌ Pallet no encontrado.');
         } catch (\Throwable $e) {
             Log::error('[TelegramBot] createBaseAndUpload: ' . $e->getMessage());
-            $this->editMessage($chatId, $messageId, '❌ Error inesperado: ' . $e->getMessage());
+            $this->editMessage($chatId, $messageId, '❌ Ocurrió un error inesperado. Intentá nuevamente.');
         } finally {
             if ($uploadedFile instanceof UploadedFile) {
                 @unlink($uploadedFile->getPathname());
@@ -422,7 +422,7 @@ class TelegramBotController extends Controller
             $this->editMessage($chatId, $messageId, '❌ No encontrado. Puede que el destino haya sido cerrado.');
         } catch (\Throwable $e) {
             Log::error('[TelegramBot] runUpload: ' . $e->getMessage());
-            $this->editMessage($chatId, $messageId, '❌ Error inesperado: ' . $e->getMessage());
+            $this->editMessage($chatId, $messageId, '❌ Ocurrió un error inesperado. Intentá nuevamente.');
         } finally {
             if ($uploadedFile instanceof UploadedFile) {
                 @unlink($uploadedFile->getPathname());
@@ -519,7 +519,7 @@ class TelegramBotController extends Controller
             $this->reply($chatId, '❌ No encontrado. Verificá el código.');
         } catch (\Throwable $e) {
             Log::error('[TelegramBot] handlePhotoWithCaption: ' . $e->getMessage());
-            $this->reply($chatId, '❌ Error: ' . $e->getMessage());
+            $this->reply($chatId, '❌ Ocurrió un error inesperado. Intentá nuevamente.');
         } finally {
             if ($uploadedFile instanceof UploadedFile) {
                 @unlink($uploadedFile->getPathname());
