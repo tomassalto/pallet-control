@@ -134,7 +134,7 @@ Implementado localmente:
 
 Evidencia final: commit `f344770`; Actions run `40933450650` con jobs `ci` y `postgres-concurrency` verdes.
 
-## Sesión actual — R-07 autenticación y Telegram
+## Última sesión cerrada — R-07 autenticación y Telegram
 
 Crear la rama desde el cierre documental de R-06, nunca desde `master`. Volver a recorrer `ROUTER.md` y aplicar `BE-AUTH`, `BE-ASYNC`, `BE-ERR`, `SEC-IDENTITY`, `SEC-SECRET`, `SEC-ABUSE`, `SEC-LOG`, `QA-RISK`, `QA-SEC`, `QA-CONTRACT` y `QA-RESILIENCE`. El bot activo es Telegram dentro del backend; `whatsapp-bot/` permanece fuera de alcance.
 
@@ -151,7 +151,11 @@ Implementado localmente:
 9. Reglas administrativas prohibidas usan `403`; un admin no puede degradar ni desactivar a un superadmin.
 10. Suite completa local verde: 90 tests, 256 assertions; Pint, PHPStan, audits, lint y build verdes.
 
-Pendiente para cerrar: push, pipeline remoto y evidencia.
+Evidencia final: commit `9bd77b7`; Actions run `40965649678` con jobs `ci` y `postgres-concurrency` verdes. Con R-07 quedan cerradas las siete rebanadas verticales de Fase 2.
+
+## Próxima sesión — contrato global de errores
+
+Crear la rama desde el cierre documental de R-07, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `BE-ERR`, `BE-API`, `SEC-LOG`, `QA-CONTRACT`, `QA-SEC` y `FE-DATA`. Caracterizar primero los contratos consumidos por frontend; luego implementar handler global, respuesta 5xx genérica y retirar mensajes crudos señalados en H-019 sin ocultar errores de dominio esperados.
 
 ## Sesiones R-02 a R-07
 

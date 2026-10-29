@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-29
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Rebanada actual:** R-07 — endurecer autenticación, desactivación y webhook de Telegram.
+**Trabajo actual:** Fase 2 cerrada; siguiente tarea transversal: contrato global de errores (`H-018`, `H-019`, `H-024`).
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -19,7 +19,7 @@
 Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b)
 Fase 1 — Red de seguridad      ✅ hecho (gates activos y caracterización completos)
 Fase Fundacional — Normativa  ✅ cinco autoridades y router por IDs estables
-Fase 2 — Rebanadas verticales  🟡 R-07 en curso (6 de 7 cerradas)
+Fase 2 — Rebanadas verticales  ✅ 7 de 7 cerradas
 Fase 3 — Dominio específico    🔲
 Fase 4 — Performance           🔲 (benchmarks/ armado, baseline sin correr — H-040)
 Fase 5 — Infraestructura       🔲
@@ -34,7 +34,7 @@ _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código
 
 1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
-3. **Implementar R-07** — cerrar fallos de login, revocación y webhook de Telegram. `H-002`, `H-003`, `H-021`.
+3. **Normalizar errores y evitar fugas internas** — handler global, contrato estable y retiro de `$e->getMessage()` al cliente. `H-018`, `H-019`, `H-024`.
 
 ---
 
@@ -212,10 +212,10 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 ✅ 4. Datos                 → desactivación/rol, tokens y auditoría comparten transacción
 ✅ 5. Respuesta (HTTP)      → login inválido 401; secret inválido 401; config ausente 503
 ✅ 6. Audit log             → desactivación, reactivación y cambio de rol auditados sin secretos
-🟡 7. Tests                 → 90 tests/256 assertions; auth, revocación, rollback y webhook; pendiente CI
+✅ 7. Tests                 → 90 tests/256 assertions; auth, revocación, rollback y webhook acreditados
 ✅ 8. Medición              → n/a; operaciones acotadas por usuario
 ```
-**Estado:** 🟡 implementación local verde; pendiente CI.
+**Estado:** ✅ cerrada en `9bd77b7`; Actions run `40965649678` con `ci` y `postgres-concurrency` verdes.
 **Hallazgos que resuelve:** H-002, H-003, H-021, H-022.
 
 ---

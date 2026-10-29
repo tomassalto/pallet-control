@@ -61,8 +61,8 @@ Referencia:  `BE-AUTH`, `SEC-IDENTITY`
 **Qué está pasando:** el chequeo de `X-Telegram-Bot-Api-Secret-Token` solo se ejecuta `if ($secret)` — si la env var no está seteada, cualquiera puede pegarle al webhook.
 **Por qué importa acá:** a diferencia de `BotSecretMiddleware` (que sí falla cerrado), acá una env var faltante deja el bot completamente abierto (puede crear bases, subir fotos, mover cache keys).
 **Resolución R-07:** configuración ausente devuelve `503` antes de procesar payload y deja log crítico sin secretos; header incorrecto devuelve `401` mediante `hash_equals`.
-**Evidencia local:** tests cubren secret ausente, incorrecto y correcto; `.env.example` documenta el valor obligatorio.
-**Estado:** 🟡 implementación local verde; pendiente CI.
+**Evidencia:** tests cubren secret ausente, incorrecto y correcto; `.env.example` documenta el valor obligatorio.
+**Estado:** ✅ resuelto en R-07, commit `9bd77b7`; Actions run `40965649678` verde.
 
 #### H-003 — Desactivar usuario no revoca sus tokens
 ```
@@ -74,8 +74,8 @@ Referencia:  `BE-AUTH`, `SEC-IDENTITY`
 **Qué está pasando:** `toggle-active` cambia `is_active`, pero `is_active` solo se valida en `login()` — un token Sanctum ya emitido sigue funcionando hasta su expiración natural (14 días).
 **Por qué importa acá:** un empleado desvinculado sigue teniendo acceso completo a la API durante semanas.
 **Resolución R-07:** desactivar revoca todos los tokens dentro de la transacción y `user.active` rechaza credenciales residuales. Los cambios de rol también renuevan sesión por revocación según D-007.
-**Evidencia local:** tests cubren múltiples tokens, reuso rechazado, defensa residual, auditoría y rollback total si el log falla.
-**Estado:** 🟡 implementación local verde; pendiente CI.
+**Evidencia:** tests cubren múltiples tokens, reuso rechazado, defensa residual, auditoría y rollback total si el log falla.
+**Estado:** ✅ resuelto en R-07, commit `9bd77b7`; Actions run `40965649678` verde.
 
 #### H-004 — Rutas de verificación de email rotas
 ```
@@ -267,7 +267,7 @@ Severidad:   🟡 medio · Categoría: calidad
 Ubicación:   AuthController.php:63-67
 ```
 **Resolución R-07:** usuario inexistente, password incorrecto y cuenta inactiva comparten `401` y el mismo cuerpo genérico.
-**Estado:** 🟡 implementación local verde; pendiente CI.
+**Estado:** ✅ resuelto en R-07, commit `9bd77b7`; Actions run `40965649678` verde.
 
 #### H-022 — Reglas de autorización en UserController devuelven 422 en vez de 403
 ```
@@ -275,7 +275,7 @@ Severidad:   🟡 medio · Categoría: calidad
 Ubicación:   UserController.php:38-39,50-56
 ```
 **Resolución R-07:** autoedición de rol, autodesactivación y modificación de una cuenta superadmin sin ese nivel devuelven `403`; un admin tampoco puede degradar a un superadmin.
-**Estado:** 🟡 implementación local verde; pendiente CI.
+**Estado:** ✅ resuelto en R-07, commit `9bd77b7`; Actions run `40965649678` verde.
 
 #### H-023 — "Sin stock disponible" devuelve 422 en vez de 409
 ```
