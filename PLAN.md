@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-29
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Rebanada actual:** R-03 — hacer atómica la migración de cantidades entre bases.
+**Rebanada actual:** R-04 — impedir duplicados concurrentes de ítems/EAN en un pedido.
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -19,7 +19,7 @@
 Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b)
 Fase 1 — Red de seguridad      ✅ hecho (gates activos y caracterización completos)
 Fase Fundacional — Normativa  ✅ cinco autoridades y router por IDs estables
-Fase 2 — Rebanadas verticales  🟡 R-03 en curso (2 de 7 cerradas)
+Fase 2 — Rebanadas verticales  🟡 R-04 en curso (3 de 7 cerradas)
 Fase 3 — Dominio específico    🔲
 Fase 4 — Performance           🔲 (benchmarks/ armado, baseline sin correr — H-040)
 Fase 5 — Infraestructura       🔲
@@ -34,7 +34,7 @@ _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código
 
 1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
-3. **Implementar R-03** — mover lectura y validación de migraciones al límite transaccional, definir locks deterministas y acreditar concurrencia/rollback. `H-007`.
+3. **Implementar R-04** — proteger la unicidad de EAN por pedido ante requests simultáneos y devolver conflicto estable. `H-008`.
 
 ---
 
@@ -148,10 +148,10 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 ✅ 4. Datos                 → débito, crédito y asociación del pedido confirman como una operación
 ✅ 5. Respuesta (HTTP)      → conflictos de estado, destino y stock devuelven 409
 ✅ 6. Audit log             → misma transacción; rollback forzado acreditado
-🟡 7. Tests                 → 65 tests/165 assertions locales; gate PostgreSQL agregado, pendiente CI
+✅ 7. Tests                 → 65 tests/165 assertions locales; PostgreSQL concurrente verde
 ✅ 8. Medición              → 15 queries constantes con 20 bases; `benchmarks/results/2026-10-29-r03-migrate-base.md`
 ```
-**Estado:** 🟡 implementación local verde; pendiente CI y concurrencia PostgreSQL.
+**Estado:** ✅ cerrada en `28e6cf6`; jobs `ci` y `postgres-concurrency` verdes en Actions run `40922987827`.
 **Hallazgos que resuelve:** H-007.
 
 ---

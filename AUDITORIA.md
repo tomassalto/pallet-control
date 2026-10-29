@@ -126,8 +126,8 @@ Ubicación:   app/Http/Controllers/Api/PalletBaseController.php:52-175
 Referencia:  `BE-TX`, `QA-INVARIANT`
 ```
 **Resolución R-03:** disponibilidad, origen, destino, asociación de pedido y auditoría se leen/escriben dentro de una transacción. Pallets, bases, items y pivots se bloquean en orden determinista; el segundo retiro concurrente debe reevaluar el stock ya confirmado.
-**Evidencia local:** `PalletBaseStockMovementTest` cubre 401, pertenencia, stock insuficiente, destinos incoherentes/finalizados, duplicados, acumulación, asociación, rollback de auditoría y presupuesto constante. El gate PostgreSQL incorpora dos migraciones simultáneas sobre el mismo origen.
-**Estado:** 🟡 implementación local verde; pendiente acreditación PostgreSQL remota.
+**Evidencia:** `PalletBaseStockMovementTest` cubre 401, pertenencia, stock insuficiente, destinos incoherentes/finalizados, duplicados, acumulación, asociación, rollback de auditoría y presupuesto constante. PostgreSQL acredita dos migraciones simultáneas sobre el mismo origen con resultado `200/409`, origen 4, destino 6 y un solo log.
+**Estado:** ✅ resuelto en R-03, commit `28e6cf6`; Actions run `40922987827` con `ci` y `postgres-concurrency` verdes.
 
 #### H-008 — Race check-then-insert al agregar producto a un pedido
 ```

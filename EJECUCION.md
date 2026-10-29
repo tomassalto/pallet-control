@@ -64,7 +64,7 @@ Implementado localmente:
 
 Evidencia final: commit `87d6a4b`, Actions run `40919324208`, jobs `ci` y `postgres-concurrency` verdes.
 
-## Sesión actual — R-03 migración entre bases
+## Sesión cerrada — R-03 migración entre bases
 
 Crear la rama desde el cierre de R-02, nunca desde `master`. Aplicar `DOMINIO.md`, `BE-VALID`, `BE-ERR`, `BE-TX`, `SEC-AUTHZ`, `SEC-LOG`, `QA-INVARIANT`, `QA-RISK` y `BE-GATE`.
 
@@ -79,7 +79,13 @@ Implementado localmente:
 7. Presupuesto de 15 queries con 20 bases, guardado en `benchmarks/results/2026-10-29-r03-migrate-base.md`.
 8. Gate PostgreSQL agregado: dos migraciones simultáneas de 6 sobre 10 deben producir `200/409`, origen 4, destino 6 y un solo log.
 
-Pendiente para cerrar: push, pipeline remoto y registro de evidencia.
+Evidencia final: commit `28e6cf6`, Actions run `40922987827`, jobs `ci` y `postgres-concurrency` verdes.
+
+## Próxima sesión — R-04 unicidad de ítems por pedido
+
+Crear la rama desde el cierre de R-03, nunca desde `master`. Aplicar `DOMINIO.md`, `BE-VALID`, `BE-ERR`, `BE-TX`, `BE-DATA`, `SEC-AUTHZ`, `SEC-LOG`, `QA-INVARIANT`, `QA-RISK` y `BE-GATE`.
+
+Objetivo: impedir que dos altas simultáneas creen el mismo EAN dentro de un pedido, respaldar la regla con la defensa de datos adecuada, devolver `409` y acreditar concurrencia PostgreSQL. Hallazgo principal: H-008.
 
 ## Sesiones R-02 a R-07
 
