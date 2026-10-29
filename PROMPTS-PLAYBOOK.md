@@ -7,12 +7,12 @@
 
 ## ⚙️ ANTES DE EMPEZAR
 
-**Sobre repetir el CLAUDE.md en cada prompt:** no hace falta. Claude Code carga `CLAUDE.md` de la raíz automáticamente en cada sesión.
+**Sobre repetir teoría en cada prompt:** no hace falta. La sesión entra por `AGENTS.md` y `ROUTER.md`, que cargan sólo las secciones normativas necesarias.
 
 **Lo que SÍ hay que indicar en cada prompt:** qué capítulo de las biblias leer, porque esas NO se cargan solas.
 
 ```
-❌ "Seguí el CLAUDE.md"                    → redundante, ya lo tiene
+❌ "Leé todas las biblias"                 → el router selecciona el contexto mínimo
 ✅ "Leé sección 1 de BACKEND-BIBLIA.md"    → necesario, no está cargado
 ```
 
@@ -188,7 +188,7 @@ Después decime qué configurar en GitHub para branch protection.
 Rebanada vertical: endpoint [MÉTODO /ruta]
 Leé secciones 1, 2, 3 y 5 de BACKEND-BIBLIA.md.
 
-Aplicá el protocolo de 8 puntos del CLAUDE.md a este endpoint:
+Aplicá el protocolo de cierre de `QA-GATE` y las rutas de `ROUTER.md` a este endpoint:
 auth → validación → negocio → datos → respuesta → audit → tests → medición
 
 Requisitos:
@@ -355,7 +355,7 @@ Tono profesional, sin exagerar. Nada que no pueda defender en una entrevista.
 "Un commit por cambio lógico, no un commit gigante."
 "Los tests existentes tienen que seguir pasando. Si alguno falla, pará y avisame."
 "¿Qué trade-offs tiene esta decisión?"
-"Esto que proponés, ¿contradice algo del CLAUDE.md o de las biblias?"
+"Esto que proponés, ¿contradice alguna sección normativa o decisión vigente?"
 "Estás tocando más de lo que pedí. Volvé al alcance del endpoint X."
 ```
 

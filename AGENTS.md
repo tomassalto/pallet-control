@@ -10,11 +10,13 @@ Three-component monorepo:
 
 ## Mandatory context routing
 
-Before planning or changing code, read `ROUTER.md` and follow the route for the task.
-All technical theory must come from `BACKEND-BIBLIA.md` or `DEVOPS-BIBLIA.md`.
-Operational documents may apply that theory to Pallet Control, but must not invent or
-duplicate it. If the router identifies a theoretical gap, stop and follow its
-`GAP-XXX` protocol before implementing the affected behavior.
+Before planning or changing code, read `ROUTER.md` and follow every route that applies.
+Technical theory comes only from the canonical `BE-*`, `FE-*`, `DO-*`, `SEC-*` and
+`QA-*` sections in the five biblias. `BIBLIAS-GOBERNANZA.md` defines ownership and
+precedence; `DOMINIO.md` defines business invariants and `PRODUCTO.md` product intent.
+Operational documents may apply that knowledge to Pallet Control, but must not invent or
+duplicate it. If the router identifies a theoretical gap, stop and follow its `GAP-XXX`
+protocol before implementing the affected behavior.
 
 Backend `package.json` is Laravel's Vite integration (axios + concurrently), **not** the frontend.
 
@@ -68,7 +70,7 @@ Laravel backend scripts (`composer.json` scripts section) are the source of trut
 
 - PHPUnit, tests in `tests/Unit/` and `tests/Feature/`
 - Runs with SQLite `:memory:`, `QUEUE_CONNECTION=sync`, `CACHE_STORE=array`
-- No frontend tests exist
+- No frontend test runner exists yet; `QUALITY-BIBLIA.md` and `FE-GATE` define the gap
 
 ## Deployment
 
@@ -78,6 +80,10 @@ Laravel backend scripts (`composer.json` scripts section) are the source of trut
 
 ## Existing instruction files
 
+- `BIBLIAS-GOBERNANZA.md` — ownership, precedence, template and GAP lifecycle
 - `ROUTER.md` — mandatory entry point and context selector
+- `BACKEND-BIBLIA.md`, `FRONTEND-BIBLIA.md`, `DEVOPS-BIBLIA.md`,
+  `SECURITY-BIBLIA.md`, `QUALITY-BIBLIA.md` — sole technical sources
+- `DOMINIO.md`, `PRODUCTO.md` — business language and product intent
 - `PLAN.md`, `AUDITORIA.md`, `DECISIONES.md`, `EJECUCION.md` — operational state
-- `BACKEND-BIBLIA.md`, `DEVOPS-BIBLIA.md` — sole theoretical sources
+- `AUDITORIA-BIBLIAS.md` — trace of the foundational documentation restructuring

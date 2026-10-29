@@ -2,7 +2,7 @@
 
 > Solo medición. Nada acá optimiza código. Correr esto y guardar el resultado
 > ANTES de tocar cualquier query es lo que después permite escribir
-> "reduje de Xms a Yms (p95)" y poder defenderlo (BACKEND-BIBLIA §8.1 y §8.8).
+> "reduje de Xms a Yms (p95)" con evidencia reproducible (`BE-PERF`, `QA-PERF`).
 
 ## Los 5 endpoints elegidos y por qué
 
@@ -84,17 +84,17 @@ k6 run --vus 20 --duration 30s benchmarks/k6-hot-endpoints.js \
 
 Guardar el `.txt` de salida en `benchmarks/results/` con fecha en el nombre.
 Eso es la evidencia — sin el archivo en el repo, "antes: 3.2s / después: 480ms"
-es una afirmación no verificable (BACKEND-BIBLIA §8.8).
+es una afirmación no verificable (`BE-PERF`, `QA-PERF`).
 
 ## Qué mirar en la salida de k6
 
 - **`p(95)` por cada `endpoint_*`** (no el agregado general) — es el número que
-  importa, no el promedio (§8.1).
+  importa, no el promedio (`QA-PERF`).
 - Con Debugbar activo en local (`APP_DEBUG=true`, ya instalado —
   `barryvdh/laravel-debugbar`), abrir cada uno de los 4 endpoints una vez en el
   navegador y anotar la **cantidad de queries** que muestra la barra inferior.
   Si algún endpoint pasa de ~10 queries para una sola respuesta, ahí está el N+1
-  (§8.3, paso 1 — el de mayor retorno y arreglo más barato).
+  (`BE-PERF` — suele ser el primer lugar a inspeccionar).
 - `Model::preventLazyLoading()` ya está activo en local
   (`app/Providers/AppServiceProvider.php`) — si hay un N+1 real, **tira una
   excepción al navegar la SPA en desarrollo**, no hace falta ni mirar Debugbar
@@ -104,4 +104,4 @@ es una afirmación no verificable (BACKEND-BIBLIA §8.8).
 
 No tocar ninguna query, índice ni relación a partir de este baseline sin que
 el número esté guardado en `benchmarks/results/`. Ese es el orden que pide
-BACKEND-BIBLIA §8.1: medir → perfilar → hipótesis → **recién ahí** arreglar.
+`BE-PERF`: medir → perfilar → hipótesis → **recién ahí** arreglar.

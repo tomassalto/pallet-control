@@ -4,10 +4,12 @@
 > **Se actualiza:** en cada sesión de trabajo. Es lo primero que lee la IA para saber dónde estamos.
 > **Referencia a teoría:** con `§`, nunca copiando texto de las biblias. El detalle de cada hallazgo vive en `AUDITORIA.md` (`H-XXX`) — acá solo se prioriza y se ordena el trabajo.
 
-**Última actualización:** 2026-08-24
+**Última actualización:** 2026-10-29
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Rebanada actual:** R-01 — endurecer `adjust-item` según BACKEND-BIBLIA §2.2, §3.1, §5.6 y §6.2.
+**Rebanada actual:** R-01 — reanudar `adjust-item` según `BE-VALID`, `BE-ERR`, `BE-TX` y `QA-INVARIANT`.
+
+**Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
 ---
 
@@ -16,7 +18,8 @@
 ```
 Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b)
 Fase 1 — Red de seguridad      ✅ hecho (gates activos y caracterización completos)
-Fase 2 — Rebanadas verticales  🟡 R-01 en progreso (0 de 7 cerradas)
+Fase Fundacional — Normativa  ✅ cinco autoridades y router por IDs estables
+Fase 2 — Rebanadas verticales  🟡 R-01 listo para reanudar (0 de 7 cerradas)
 Fase 3 — Dominio específico    🔲
 Fase 4 — Performance           🔲 (benchmarks/ armado, baseline sin correr — H-040)
 Fase 5 — Infraestructura       🔲
@@ -31,7 +34,7 @@ _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código
 
 1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
-3. **Cerrar R-01** (`adjust-item`) — agregar transacción, lock, techo contra lo pedido, 409 y audit log atómico. `H-006b`, `H-023`, `H-017`.
+3. **Reanudar y cerrar R-01** (`adjust-item`) — aplicar `BE-TX` y `QA-INVARIANT`: transacción, lock, techo contra lo pedido, 409 y audit log atómico. `H-006b`, `H-023`, `H-017`.
 
 ---
 
@@ -100,17 +103,17 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 
 ## 📦 REBANADAS VERTICALES
 
-> Protocolo de 8 puntos por endpoint (ver CLAUDE.md). Un endpoint no se cierra hasta tener los 8 en verde.
+> Protocolo de 8 puntos por endpoint, gobernado por `ROUTER.md` y `QA-GATE`. Un endpoint no se cierra hasta tener los 8 en verde.
 > **Orden: empezando por los endpoints de escritura de stock** (la tabla real de stock es `pallet_base_order_items`, no un endpoint "movimientos" — este proyecto no tiene ese endpoint genérico, tiene estos 6).
 
 ### R-01 · `PATCH /pallets/{pallet}/bases/{base}/adjust-item`
 ```
 □ 1. Auth (ya tiene has.role — verificar que sea suficiente)
-□ 2. Validación            → tiene AdjustPalletBaseItemRequest, revisar si le falta 'qty máx'
+□ 2. Validación            → tiene AdjustPalletBaseItemRequest, revisar techo según `BE-VALID`
 □ 3. Negocio (tx + lock)   → HOY NO VALIDA CONTRA EL TOTAL PEDIDO. Agregar fetchAllocations()
-                              + lockForUpdate() + DB::transaction() → ref BACKEND-BIBLIA §5.6
+                              + lockForUpdate() + DB::transaction() → `BE-TX`
 □ 4. Datos (constraint)    → evaluar CHECK/trigger que respalde la invariante en DB
-□ 5. Respuesta (HTTP)      → "sin stock" hoy es 422, debería ser 409 → ref §3.1
+□ 5. Respuesta (HTTP)      → "sin stock" hoy es 422, debería ser 409 → `BE-ERR`
 □ 6. Audit log             → ya existe, mover adentro de la transacción
 □ 7. Tests (feliz+límite+concurrencia) → caso clave: 2 requests concurrentes al límite exacto
 □ 8. Medición antes/después → benchmarks/
@@ -126,7 +129,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 □ 2. Validación            → StorePalletBaseRequest, revisar
 □ 3. Negocio (tx + lock)   → PalletBaseService::createBase/updateBase SIN transacción ni lock hoy.
                               Envolver en DB::transaction() + lockForUpdate() sobre order_items
-                              involucrados antes de calcular $available → ref §5.6
+                              involucrados antes de calcular $available → `BE-TX`
 □ 4. Datos                 → fetchAllocations() ya evita N+1, revisar bajo lock
 □ 5. Respuesta (HTTP)      → mismos casos 422→409 que R-01
 □ 6. Audit log             → ya existe (ActivityLogger dentro del service), moverlo a la transacción
@@ -144,7 +147,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 □ 1. Auth                  → ok
 □ 2. Validación            → MigratePalletBaseRequest, ok
 □ 3. Negocio (tx + lock)   → mover la lectura de $sourceRecords DE ADENTRO del DB::transaction()
-                              existente, agregar lockForUpdate() → ref §5.6
+                              existente, agregar lockForUpdate() → `BE-TX`
 □ 4. Datos                 → revisar índices usados en el join de pallet_base_order_items
 □ 5. Respuesta (HTTP)      → ok
 □ 6. Audit log             → ya existe
@@ -160,7 +163,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 □ 1. Auth                  → ok
 □ 2. Validación            → inline hoy (H-020) — aprovechar para migrar a Form Request
 □ 3. Negocio (tx + lock)   → agregar unique(order_id, ean) en DB + manejar el conflicto
-                              (23505/QueryException) en vez de check-then-insert → ref §5.6
+                              (23505/QueryException) en vez de check-then-insert → `BE-TX`
 □ 4. Datos                 → agregar el unique index de arriba
 □ 5. Respuesta (HTTP)      → duplicado ya devuelve 409, correcto — mantener tras el fix
 □ 6. Audit log             → ya existe
@@ -176,7 +179,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 □ 1. Auth                  → ok
 □ 2. Validación            → UpdateOrderItemRequest, agregar regla custom: qty >= assigned
 □ 3. Negocio               → validar contra SUM(pallet_base_order_items.qty) antes de aceptar
-                              una reducción de qty → ref §2.2 (capa de negocio)
+                              una reducción de qty → `BE-VALID` y `DOMINIO.md`
 □ 4. Datos                 → —
 □ 5. Respuesta (HTTP)      → agregar 409 para el caso "no podés bajar de X unidades"
 □ 6. Audit log             → ya existe
@@ -228,10 +231,10 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 □ Verificar FILESYSTEM_DISK=r2 en Render                        → H-029
 
 Antes de tocar código de negocio (Fase 1 — red de seguridad):
-✅ GitHub Actions: Pint → PHPStan → tests → composer audit      → H-031, DEVOPS §3.3
+✅ GitHub Actions: Pint → PHPStan → tests → composer audit      → H-031, `DO-CI`
 ✅ Larastan/PHPStan nivel 5 con baseline legacy                 → H-041
-□ Branch protection en main                                     → DEVOPS §3.4
-✅ Tests de caracterización de los 6 endpoints de stock ANTES   → Backend §6 (`f114458` + `c44cafd`)
+□ Branch protection en main                                     → `DO-CI`
+✅ Tests de caracterización de los 6 endpoints de stock ANTES   → `QA-LEVELS` (`f114458` + `c44cafd`)
   de tocarlos — congelan el comportamiento actual para detectar
   regresiones durante R-01 a R-05
 ✅ Remediar H-042 en todos los componentes activos               → PHP/frontend/backend npm: ✅
@@ -258,19 +261,29 @@ Docker/infra (mecánico, bajo riesgo):
 □ Decidir si nixpacks.toml sigue vigente o se borra                → H-038
 
 Decisiones que necesitan entrada en DECISIONES.md antes de ejecutarse:
-□ Soft delete vs. borrado físico en las tablas de movimiento       → H-009
-□ Estrategia de locking (lockForUpdate vs. optimista con versión)  → H-005, H-006b, H-007
-□ Code público de pedido: throttle vs. token opaco separado         → H-001
+□ Soft delete vs. borrado físico en las tablas de movimiento       → H-009, `BE-DATA`
+□ Estrategia de locking (lockForUpdate vs. optimista con versión)  → H-005, H-006b, H-007, `BE-TX`
+□ Code público de pedido: throttle vs. token opaco separado         → H-001, `SEC-ABUSE`
 
 Más adelante (Fase 3+):
 □ Migración de los 16 controladores a Form Request                  → H-020
 □ Códigos HTTP: pasada de consistencia (422→409/403/401 según caso) → H-021,022,023,027
 □ PendingItemController::index con paginación                        → H-040
-□ Migración Render → VPS                                              → DEVOPS §4,§5,§6
-□ Sentry + UptimeRobot                                                 → DEVOPS §7
-□ Backups + restauración probada                                       → DEVOPS §8
-□ README profesional con sección Performance                            → BACKEND-BIBLIA §8.8
+□ Infraestructura futura                                                → `DO-INFRA`, `DO-EDGE`, `DO-RELEASE`
+□ Observabilidad y uptime                                               → `DO-OBS`
+□ Backups + restauración probada                                       → `DO-DR`
+□ README con evidencia de performance                                  → `BE-PERF`, `QA-PERF`
 ```
+
+## 🧩 GAPS TEÓRICOS FUTUROS
+
+No habilitan implementación hasta completar `BIBLIAS-GOBERNANZA.md §8`:
+
+- `GAP-OFFLINE` — almacenamiento local y sincronización.
+- `GAP-DESKTOP` — distribución y actualización Windows.
+- `GAP-MOBILE` — clientes móviles y publicación.
+- `GAP-TENANCY` — aislamiento SaaS multiempresa.
+- `GAP-DEVICE` — identidad y revocación de dispositivos.
 
 ---
 

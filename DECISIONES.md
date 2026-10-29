@@ -1,13 +1,12 @@
 # 🧠 DECISIONES — Pallet Control
 
 > **Qué es esto:** por qué el proyecto es como es. Un ADR (Architecture Decision Record) liviano.
-> **Por qué importa:** es lo que te salva en la entrevista cuando te preguntan *"¿por qué elegiste esto?"*.
-> Y es lo que evita que la IA (o vos en tres meses) revierta una decisión pensada.
+> **Por qué importa:** permite reconstruir el contexto y evita que una sesión futura revierta una decisión pensada.
 > **Se agrega:** cada vez que se toma una decisión con trade-offs. Nunca se borra — se marca como superada.
 
 ---
 
-## D-001 — _(título de la decisión)_
+## Plantilla D-XXX
 
 **Fecha:** _(fecha)_
 **Estado:** ✅ vigente / ⚠️ superada por D-0XX
@@ -30,7 +29,7 @@ _(La razón concreta, atada a este proyecto.)_
 **Trade-off aceptado**
 _(Qué se resigna a cambio. Toda decisión resigna algo — si no encontrás qué, no la pensaste bien.)_
 
-**Referencia:** BACKEND-BIBLIA §X / DEVOPS-BIBLIA §Y
+**Referencia normativa:** `BE-*` / `FE-*` / `DO-*` / `SEC-*` / `QA-*`
 
 ---
 
@@ -72,7 +71,7 @@ WhatsApp fue descartado: queda fuera de runtime, deploy y gates activos. Si algu
 se reactiva, antes deberá migrarse a una versión soportada y obtener audit 0.
 
 **Por qué**
-DEVOPS-BIBLIA §3.6 exige no forzar versiones mayores transitivas y validar cada
+`DO-SUPPLY` exige no forzar versiones mayores transitivas y validar cada
 ecosistema de forma aislada. La cadena maneja cifrado y estado de WhatsApp, por lo
 que una falsa corrección del lockfile es más peligrosa que un bloqueo explícito.
 
@@ -80,4 +79,35 @@ que una falsa corrección del lockfile es más peligrosa que un bloqueo explíci
 El código legado permanece en el repositorio con avisos conocidos, claramente marcado
 como inactivo; a cambio no se desvía la modernización activa hacia un componente descartado.
 
-**Referencia:** DEVOPS-BIBLIA §3.6
+**Referencia:** `DO-SUPPLY`, `SEC-SUPPLY`
+
+---
+
+## D-002 — Autoridades normativas por propiedad canónica
+
+**Fecha:** 2026-10-29
+**Estado:** ✅ vigente
+
+**Contexto**
+Las biblias originales mezclaban backend, seguridad, testing, frontend, operación y consejos no normativos. Las referencias por número de sección se volvían frágiles al editar los documentos.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Una biblia única | Un solo archivo | Contexto enorme, duplicación y ownership ambiguo |
+| Una biblia por tecnología concreta | Búsqueda directa | Fragmentación y reglas repetidas |
+| Cinco autoridades por responsabilidad | Contexto enrutable, propiedad estable | Requiere gobierno y referencias cruzadas |
+
+**Decisión**
+Mantener cinco autoridades: Backend (`BE-*`), Frontend (`FE-*`), DevOps (`DO-*`), Security (`SEC-*`) y Quality (`QA-*`). `ROUTER.md` combina rutas por tarea y los IDs estables sustituyen referencias por línea o numeración editorial.
+
+`DOMINIO.md` y `PRODUCTO.md` describen Pallet Control sin convertirse en biblias técnicas. La teoría nueva entra únicamente por `GAP-XXX`.
+
+**Por qué**
+Separa responsabilidades sin impedir rutas transversales y permite cargar sólo el contexto necesario en cada sesión.
+
+**Trade-off aceptado**
+Una tarea puede requerir varias secciones de distintos documentos; a cambio cada regla tiene una única autoridad y evidencia definida.
+
+**Referencia:** `BIBLIAS-GOBERNANZA.md`, `ROUTER.md`

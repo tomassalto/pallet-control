@@ -1,97 +1,117 @@
-# ROUTER — entrada obligatoria al contexto de Pallet Control
+# Router normativo de Pallet Control
 
-> Este archivo decide **qué leer antes de planear o tocar código**.
-> No contiene teoría: toda regla técnica sale de `BACKEND-BIBLIA.md` o
-> `DEVOPS-BIBLIA.md`. Los demás documentos sólo aplican esa teoría al proyecto.
+**Entrada obligatoria antes de planear o modificar código.**
+**Última revisión:** 2026-10-29
 
-## Protocolo de uso
+Este archivo selecciona contexto; no contiene teoría. La propiedad, precedencia y protocolo de cambio están en `BIBLIAS-GOBERNANZA.md`.
 
-1. Clasificar la tarea con la tabla de abajo.
-2. Leer únicamente las secciones indicadas de las biblias.
-3. Abrir la rebanada vigente de `PLAN.md` y los H-XXX relacionados de `AUDITORIA.md`.
-4. Consultar `DECISIONES.md` para no contradecir decisiones ya tomadas.
-5. Definir implementación, riesgos y pruebas desde esas fuentes antes de cambiar código.
-6. Ejecutar los gates de la ruta y cerrar la sesión actualizando los documentos operativos.
+## Protocolo
 
-Si una tarea cruza varias filas, se combinan sus lecturas y gates. Las biblias completas
-sólo se leen para una auditoría transversal o para mantenerlas.
+1. Clasificar la tarea con las tablas.
+2. Combinar todas las rutas que apliquen.
+3. Leer las secciones por ID estable, no por número de línea.
+4. Abrir `DOMINIO.md` o `PRODUCTO.md` si cambia comportamiento.
+5. Consultar la rebanada de `PLAN.md`, los H-XXX de `AUDITORIA.md` y D-XXX vigentes.
+6. Definir riesgos, implementación, pruebas y gates desde esas fuentes.
+7. Si falta teoría, detenerse y abrir `GAP-XXX`.
+8. Cerrar con gates y actualización documental.
 
-## Autoridad documental
+## Autoridades
 
-| Documento | Responsabilidad | No debe contener |
+| Documento | Autoridad |
+|---|---|
+| `BACKEND-BIBLIA.md` | Servicios, API, persistencia y ejecución backend (`BE-*`) |
+| `FRONTEND-BIBLIA.md` | Arquitectura y experiencia del cliente web (`FE-*`) |
+| `DEVOPS-BIBLIA.md` | Entrega, infraestructura y operación (`DO-*`) |
+| `SECURITY-BIBLIA.md` | Seguridad transversal (`SEC-*`) |
+| `QUALITY-BIBLIA.md` | Verificación y evidencia (`QA-*`) |
+| `DOMINIO.md` | Vocabulario e invariantes de Pallet Control |
+| `PRODUCTO.md` | Usuario, objetivos y límites funcionales |
+| `DECISIONES.md` | Adaptaciones vigentes con trade-offs |
+| `PLAN.md` | Prioridad y estado actual |
+| `AUDITORIA.md` | Evidencia y hallazgos del código/sistema |
+| `EJECUCION.md` | Orden operativo de sesiones |
+
+## Backend
+
+| Tarea o señal | Teoría obligatoria | Gate mínimo |
 |---|---|---|
-| `BACKEND-BIBLIA.md` | Teoría de backend, datos, API, seguridad, testing y performance | Estado del proyecto |
-| `DEVOPS-BIBLIA.md` | Teoría de infraestructura, entrega y operación | Estado del proyecto |
-| `ROUTER.md` | Derivar tareas hacia teoría y proceso | Teoría duplicada o estados |
-| `PLAN.md` | Prioridad, fase y próxima rebanada | Teoría nueva |
-| `AUDITORIA.md` | Evidencia y hallazgos H-XXX | Soluciones sin referencia a las biblias |
-| `DECISIONES.md` | Adaptaciones D-XXX con trade-offs | Decisiones sin fundamento en las biblias |
-| `EJECUCION.md` | Orden y gates de las sesiones | Patrones técnicos nuevos |
-| `REVIEW.md` / `ROADMAP.md` | Historia técnica y backlog funcional | Estado rector de modernización |
+| Capas, controlador, servicio, dependencia | `BE-ARCH`, `QA-RISK`, `QA-STATIC` | responsabilidades + tests de capa |
+| Feature o nuevo límite de confianza | `SEC-THREAT`, `QA-RISK`, autoridad técnica aplicable | threat cases y riesgos trazados |
+| Login, Sanctum, tokens, sesión | `BE-AUTH`, `SEC-IDENTITY`, `QA-SEC` | 401, expiración/revocación y abuso |
+| Roles, policies, ownership | `SEC-AUTHZ`, `BE-API`, `QA-SEC` | 403 y acceso cruzado |
+| Form Request, DTO, invariante | `BE-VALID`, `SEC-INPUT`, `QA-INVARIANT` | feliz, inválido, límite y conflicto |
+| Excepciones, logging, respuesta fallida | `BE-ERR`, `SEC-LOG`, `QA-CONTRACT` | status, forma, redacción y correlación |
+| Rutas, recursos, filtros, paginación | `BE-API`, `SEC-AUTHZ`, `QA-CONTRACT` | límites y compatibilidad |
+| Modelos, índices, migraciones | `BE-DATA`, `DO-RELEASE`, `QA-DATA` | migración y recuperación |
+| Transacciones, locks, stock | `BE-TX`, `BE-VALID`, `QA-INVARIANT`, `DOMINIO.md` | atomicidad y concurrencia PostgreSQL |
+| Colas, OCR, Telegram, webhook | `BE-ASYNC`, `SEC-SECRET`, `SEC-ABUSE`, `QA-RESILIENCE` | retry, idempotencia y fallo |
+| N+1, cache, latencia | `BE-PERF`, `QA-PERF`, `DO-OBS` | baseline antes/después |
+| Tipo/nivel de test o caracterización | `QA-LEVELS`, `QA-RISK` | nivel que prueba el límite real |
+| Test intermitente o timeout | `QA-FLAKY`, `QA-DATA` | causa eliminada y repetición estable |
+| Cierre backend | `BE-GATE`, `QA-GATE`, `SEC-GATE` según riesgo | Pint, PHPStan, tests, audit y build |
 
-En un conflicto documental prevalece la biblia para la teoría, `DECISIONES.md` para una
-adaptación vigente y `PLAN.md` para el estado del trabajo.
+## Frontend
 
-## Router de backend
-
-| Tarea o señal | Teoría obligatoria | Contexto y gate mínimo |
+| Tarea o señal | Teoría obligatoria | Gate mínimo |
 |---|---|---|
-| Login, sesiones, Sanctum, tokens, roles, policies | Backend §1 Autenticación y autorización; §7 Seguridad | Auditar auth completa; tests 401/403 y revocación |
-| Validación, Form Request, DTO, invariante | Backend §2 Validación | H-XXX asociado; casos feliz, límite e inválido |
-| Excepciones, errores, logging, respuesta fallida | Backend §3 Manejo de errores; §4.2 Códigos HTTP | Contrato consumido por frontend; test de forma y status |
-| Rutas, recursos, filtros, paginación, versionado | Backend §4 Diseño de API REST | Compatibilidad del contrato y tests HTTP |
-| Modelos, relaciones, índices, migraciones | Backend §5.1–§5.5 Base de datos | Verificar datos existentes; `down()` funcional |
-| Transacciones, locks, concurrencia, stock | Backend §2.2; §3.1; §5.6; §6.2 | Rebanada R-01–R-05; test de conflicto y atomicidad |
-| Tests, factories, seeders, caracterización | Backend §6 Testing | PHPUnit aislado; comportamiento actual antes del refactor |
-| Seguridad transversal o exposición pública | Backend §7 Seguridad; §1 si hay identidad | Threat case, autorización, rate limit y secretos |
-| N+1, caché, colas, latencia, benchmark | Backend §8 Performance | Medición reproducible antes y después |
-| Checklist de salida backend | Backend §9 Production-ready | Pint, PHPStan, tests, audit y build |
+| Componentes, features, hooks | `FE-ARCH`, `FE-STATE`, `QA-STATIC` | lint, build y límites claros |
+| React Query, carga, cache, errores | `FE-DATA`, `BE-API`, `BE-ERR`, `QA-CONTRACT` | loading/refresh/vacío/error/usuario |
+| Escrituras, UI optimista, 409 | `FE-MUTATION`, `BE-TX`, `QA-INVARIANT` | doble envío, rollback y conflicto |
+| Formularios | `FE-FORM`, `BE-VALID`, `SEC-INPUT` | teclado, 422/409 y persistencia de entrada |
+| Rutas, login, permisos visuales | `FE-SESSION`, `SEC-IDENTITY`, `SEC-AUTHZ` | anónimo, expiración, logout y 403 |
+| Accesibilidad | `FE-A11Y`, `QA-A11Y` | automático + teclado + revisión manual |
+| Responsive, scanner, canvas, imágenes | `FE-RESPONSIVE`, `SEC-FILE`, `QA-COMPAT` | matriz y fallos de capacidad |
+| Bundle, render, listas, carga | `FE-PERF`, `QA-PERF` | presupuesto y medición |
+| PWA/service worker/cache | `FE-PWA`, `SEC-BROWSER`, `SEC-DATA`, `DO-EDGE` | instalación, update, offline shell y logout |
+| Sistema visual/feedback | `FE-UI`, `FE-A11Y`, `PRODUCTO.md` | estados coherentes y contraste |
+| Cierre frontend | `FE-GATE`, `QA-GATE`, `SEC-GATE` según riesgo | lint, build, tests y revisión UI |
 
-## Router de DevOps
+## DevOps y operación
 
-| Tarea o señal | Teoría obligatoria | Contexto y gate mínimo |
+| Tarea o señal | Teoría obligatoria | Gate mínimo |
 |---|---|---|
-| Dockerfile, imagen, capas, usuario del contenedor | DevOps §1 Docker | Build de imagen y ejecución no-root |
-| `.env`, secretos, credenciales, configuración | DevOps §2 Variables y secretos | Sin secretos versionados; rotación si hubo exposición |
-| CI, GitHub Actions, branch protection | DevOps §3 CI/CD | Pipeline completo en push y pull request |
-| Dependencias, CVE, `composer audit`, `npm audit` | DevOps §3.6 Auditoría y remediación | Lockfile, dry-run, actualización mínima y todos los gates |
-| VPS, SSH, firewall, permisos | DevOps §4 Servidor | Checklist de hardening antes de publicar |
-| Nginx, proxy, HTTPS, headers | DevOps §5 Nginx y HTTPS | Config validada, TLS y headers comprobados |
-| Deploy, healthcheck, migración, rollback | DevOps §6 Deploy sin downtime | Plan de rollback y migración compatible |
-| Logs, métricas, Sentry, uptime, alertas | DevOps §7 Observabilidad | Señal accionable y prueba de alerta |
-| Backup y restauración | DevOps §8 Backups | Restauración probada, no sólo archivo generado |
-| Dominio y DNS | DevOps §9 Dominio y DNS | Resolución y HTTPS verificados |
-| Checklist de salida infraestructura | DevOps §10 | Gates de producción completos |
+| `.env`, configuración, secretos | `DO-ENV`, `SEC-SECRET` | secret scan, validación y rotación |
+| Dockerfile, imagen, runtime | `DO-CONTAINER`, `DO-SUPPLY`, `SEC-SUPPLY` | build, usuario, scan y persistencia |
+| CI, Actions, branch protection | `DO-CI`, `DO-SUPPLY`, `QA-GATE` | pipeline remoto y bloqueo probado |
+| Dependencias/CVE | `DO-SUPPLY`, `SEC-SUPPLY`, `QA-SEC` | dry-run, cambio mínimo y todos los gates |
+| Render, VPS, storage, capacidad | `DO-INFRA`, `SEC-DATA`, `DO-DR` | inventario y persistencia probada |
+| Proxy, TLS, headers, CORS | `DO-EDGE`, `SEC-BROWSER` | TLS, headers, origen y cache |
+| Deploy, health, migración, rollback | `DO-RELEASE`, `BE-DATA`, `QA-RESILIENCE` | readiness y recuperación ensayada |
+| Logs, métricas, alertas | `DO-OBS`, `SEC-LOG`, `QA-PERF` | correlación y alerta probada |
+| Backup y restauración | `DO-DR`, `SEC-DATA`, `QA-RESILIENCE` | restauración con RPO/RTO observados |
+| Cierre DevOps | `DO-GATE`, `QA-GATE`, `SEC-GATE` | evidencia automatizada y operativa |
 
-## Rutas combinadas del repositorio
+## Rutas combinadas del producto
 
 | Área | Recorrido |
 |---|---|
-| Frontend que consume API | `AGENTS.md` → Backend §3–§4 → contrato actual → `ROADMAP.md` → lint/build |
-| Bot de Telegram | Backend §1, §3, §4 y §7 + DevOps §2 y §7 → tests de secret/webhook |
-| Componente legado/inactivo | Confirmar que no entra en build, deploy ni runtime; no bloquea gates activos |
-| OCR, imágenes y trabajos asíncronos | Backend §2, §3, §6 y §8.6 → costo, retry, storage y cleanup |
-| Stock y organización de pallets | `PLAN.md` R-01–R-05 → H-XXX → Backend §2.2, §3.1, §5.6 y §6.2 |
-| CI o deploy que toca código y plataforma | Backend §9 + DevOps §2, §3 y §6 |
+| Stock y organización | `DOMINIO.md` → `BE-VALID` → `BE-TX` → `SEC-AUTHZ`/`SEC-LOG` → `QA-INVARIANT` |
+| Frontend que consume API | `FE-DATA`/`FE-MUTATION` → `BE-API`/`BE-ERR` → `QA-CONTRACT` → `SEC-AUTHZ` |
+| Telegram | `BE-ASYNC` → `SEC-SECRET`/`SEC-ABUSE` → `DO-OBS` → `QA-RESILIENCE` |
+| Fotos, OCR y anotaciones | `SEC-FILE` → `BE-ASYNC` → `FE-RESPONSIVE` → `DO-INFRA` → `QA-RESILIENCE` |
+| Componente legado/inactivo | confirmar exclusión de build/deploy/runtime; aplicar `DO-SUPPLY` si se reactiva |
+| Offline/escritorio/mobile/multiempresa | detenerse: `GAP-OFFLINE`, `GAP-DESKTOP`, `GAP-MOBILE` o `GAP-TENANCY` |
 
-## Vacío teórico: protocolo GAP-XXX
+## Ejemplos de recorrido
 
-Si ninguna sección cubre suficientemente una decisión necesaria:
+### Pipeline
+`ROUTER → DO-CI + DO-SUPPLY + QA-GATE + SEC-SUPPLY → D-XXX → PLAN/H-XXX → workflow → pipeline remoto verde`.
 
-1. Detener la planificación técnica y no modificar ese comportamiento.
-2. Registrar `GAP-XXX` en `PLAN.md`, con la pregunta exacta y su impacto.
-3. Investigar sólo fuentes primarias u oficiales para redactar una propuesta de ampliación.
-4. Revisar y aprobar la nueva sección de la biblia correspondiente.
-5. Actualizar este router para apuntar a esa sección.
-6. Recién entonces planear e implementar el cambio.
+### Ajuste de stock
+`ROUTER → DOMINIO.md + BE-VALID + BE-TX + SEC-AUTHZ + SEC-LOG + QA-INVARIANT → R-01/H-XXX → implementación → concurrencia/atomicidad`.
 
-Una fuente externa puede fundamentar una ampliación de la biblia, pero nunca una
-implementación directa que todavía no esté respaldada por ella.
+### Pantalla con carga remota
+`ROUTER → PRODUCTO.md + FE-DATA + FE-A11Y + BE-API + QA-CONTRACT → implementación → loading/vacío/error/teclado/build`.
 
-## Cierre de sesión
+## GAP-XXX
 
-- Ejecutar los gates indicados por la ruta.
-- Marcar H-XXX resueltos en `AUDITORIA.md` con el hash del commit.
-- Actualizar fase, rebanada y siguiente acción en `PLAN.md`.
-- Agregar D-XXX si hubo una adaptación con trade-offs y citar la sección de la biblia.
-- Cambiar este router sólo cuando aparezca una ruta o sección nueva.
+Aplicar exactamente `BIBLIAS-GOBERNANZA.md §8`: detener, registrar pregunta e impacto, investigar fuentes oficiales, aprobar norma, actualizar este router y recién implementar.
+
+## Cierre
+
+- Ejecutar gates combinados.
+- Cerrar H-XXX con evidencia y hash cuando corresponda.
+- Registrar D-XXX si hubo trade-off.
+- Actualizar `PLAN.md` y `EJECUCION.md`.
+- Confirmar que documentación y código describen el mismo estado.

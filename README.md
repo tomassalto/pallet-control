@@ -6,6 +6,20 @@ Warehouse logistics management system for tracking pallets, orders, customers, a
 
 ---
 
+## Engineering knowledge system
+
+All technical work starts in [`ROUTER.md`](ROUTER.md). It selects stable normative sections from five authorities:
+
+- [`BACKEND-BIBLIA.md`](BACKEND-BIBLIA.md) — `BE-*`.
+- [`FRONTEND-BIBLIA.md`](FRONTEND-BIBLIA.md) — `FE-*`.
+- [`DEVOPS-BIBLIA.md`](DEVOPS-BIBLIA.md) — `DO-*`.
+- [`SECURITY-BIBLIA.md`](SECURITY-BIBLIA.md) — `SEC-*`.
+- [`QUALITY-BIBLIA.md`](QUALITY-BIBLIA.md) — `QA-*`.
+
+[`BIBLIAS-GOBERNANZA.md`](BIBLIAS-GOBERNANZA.md) defines ownership and the `GAP-XXX` process. [`DOMINIO.md`](DOMINIO.md) and [`PRODUCTO.md`](PRODUCTO.md) describe Pallet Control without duplicating technical theory. Operational state remains in `PLAN.md`, `AUDITORIA.md`, `DECISIONES.md` and `EJECUCION.md`.
+
+---
+
 ## Screenshots
 
 > Replace each placeholder with a real screenshot. Suggested folder: `docs/screenshots/`.
@@ -63,9 +77,9 @@ Warehouse logistics management system for tracking pallets, orders, customers, a
 - User management and role assignment
 - Storage cleanup: view and delete orphaned photos from deleted pallets/orders
 
-### WhatsApp Bot
-- Monitors a WhatsApp group and automatically uploads photos to the corresponding pallet or base
-- Commands: `p <code>` (pallet photo), `b <code>` (base photo), `t <code>` (order ticket)
+### Telegram Bot
+- Receives authenticated webhook events in the Laravel backend
+- Assists uploads to pallets, bases and order tickets
 
 ---
 
@@ -98,7 +112,7 @@ Warehouse logistics management system for tracking pallets, orders, customers, a
 | Scanner | html5-qrcode (EAN / QR codes) |
 | Toasts | react-toastify |
 
-### WhatsApp Bot — `whatsapp-bot/`
+### Legacy WhatsApp Bot — `whatsapp-bot/`
 
 | | |
 |---|---|
@@ -106,6 +120,8 @@ Warehouse logistics management system for tracking pallets, orders, customers, a
 | Library | Baileys (WhatsApp Web Multi-Device) |
 | Session | Persisted in PostgreSQL |
 | HTTP API | Express (port 3001) |
+
+This component is retained for history only and is not part of the active runtime or deploy.
 
 ---
 
@@ -131,7 +147,7 @@ Warehouse logistics management system for tracking pallets, orders, customers, a
                              └──────────────────────────┘
 ```
 
-**Development:** Vite proxies `/api` and `/storage` to `localhost:8000`.  
+**Development:** Vite proxies `/api` and `/storage` to `localhost:8000`.
 **Production:** the frontend is compiled into `pallet-backend/public/app/` and served directly by Laravel.
 
 ---
@@ -264,7 +280,7 @@ npm start
 | `admin` | Everything above + user management and storage cleanup. |
 | `superadmin` | Everything above. Automatically assigned to the first registered user. |
 
-The first registered user becomes `superadmin` and skips email verification.  
+The first registered user becomes `superadmin` and skips email verification.
 All subsequent users must verify their email before logging in.
 
 Once your team is set up, set `REGISTRATION_ENABLED=false` in the backend `.env` to close public sign-ups.
@@ -281,14 +297,14 @@ Upload a photo of a delivery receipt and the system extracts numbers and quantit
 | **Tesseract** | `apt install tesseract-ocr` / `brew install tesseract` | Good for local development |
 | **PaddleOCR** | Python + PaddleOCR installed locally | Alternative local option |
 
-Set the provider with `OCR_PROVIDER=azure|tesseract|paddle` in your `.env`.  
+Set the provider with `OCR_PROVIDER=azure|tesseract|paddle` in your `.env`.
 The dashboard displays how many OCR requests have been used this month.
 
 ---
 
 ## API Reference
 
-All endpoints are prefixed with `/api/v1`.  
+All endpoints are prefixed with `/api/v1`.
 Most require `Authorization: Bearer <token>`. Exceptions are noted.
 
 ```
