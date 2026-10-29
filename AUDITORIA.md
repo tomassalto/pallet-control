@@ -160,7 +160,9 @@ Referencia:  `BE-VALID`, `DOMINIO.md`
 ```
 **Qué está pasando:** `PATCH /order-items/{item}` solo valida `qty >= 1`. No chequea cuánto de ese item ya está en `pallet_base_order_items`.
 **Por qué importa acá:** un solo request bien formado (sin concurrencia) puede dejar `asignado > pedido` — mismo resultado final que H-005/H-008 por una vía totalmente distinta.
-**Estado:** 🔲 abierto
+**Resolución R-05:** el item y sus asignaciones se bloquean antes de sumar; una reducción menor que lo ya asignado devuelve `409`. La actualización y su auditoría comparten transacción.
+**Evidencia local:** límite exacto, conflicto, auth, input inválido, rollback de auditoría y presupuesto constante acreditados. El gate PostgreSQL enfrenta una reducción con una asignación simultánea.
+**Estado:** 🟡 implementación local verde; pendiente acreditación PostgreSQL remota.
 
 #### H-011 — Escrituras multi-tabla sin transacción
 ```

@@ -174,16 +174,16 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 
 ### R-05 · `PATCH /order-items/{item}`
 ```
-□ 1. Auth                  → ok
-□ 2. Validación            → UpdateOrderItemRequest, agregar regla custom: qty >= assigned
-□ 3. Negocio               → validar contra SUM(pallet_base_order_items.qty) antes de aceptar
-                              una reducción de qty → `BE-VALID` y `DOMINIO.md`
-□ 4. Datos                 → —
-□ 5. Respuesta (HTTP)      → agregar 409 para el caso "no podés bajar de X unidades"
-□ 6. Audit log             → ya existe
-□ 7. Tests                 → caso feliz + intento de reducir por debajo de lo asignado
-□ 8. Medición              → benchmarks/
+✅ 1. Auth                  → auth:sanctum + has.role; 401 acreditado
+✅ 2. Validación            → límite agregado se evalúa dentro de la transacción
+✅ 3. Negocio (tx + lock)   → item y pivots bloqueados; reducción compite con asignaciones
+✅ 4. Datos                 → suma global entre todas las bases, sin constraint simple inaplicable
+✅ 5. Respuesta (HTTP)      → 409 estable con assigned/requested
+✅ 6. Audit log             → misma transacción; rollback forzado acreditado
+🟡 7. Tests                 → 75 tests/185 assertions locales; gate PostgreSQL agregado, pendiente CI
+✅ 8. Medición              → 6 queries constantes con 20 asignaciones; `benchmarks/results/2026-10-29-r05-update-order-item.md`
 ```
+**Estado:** 🟡 implementación local verde; pendiente CI y concurrencia PostgreSQL.
 **Hallazgos que resuelve:** H-010.
 
 ---

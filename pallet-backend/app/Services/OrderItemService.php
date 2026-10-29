@@ -11,6 +11,56 @@ use Illuminate\Support\Facades\DB;
 
 class OrderItemService
 {
+    public function update(OrderItem $item, array $data): array
+    {
+        return DB::transaction(function () use ($item, $data) {
+            $lockedItem = OrderItem::query()->lockForUpdate()->findOrFail($item->id);
+            $allocations = DB::table('pallet_base_order_items')
+                ->where('order_item_id', $lockedItem->id)
+                ->orderBy('base_id')
+                ->lockForUpdate()
+                ->get();
+            $assignedQty = (int) $allocations->sum('qty');
+
+            if (isset($data['qty']) && $data['qty'] < $assignedQty) {
+                return [
+                    'error' => [
+                        'message' => "La cantidad no puede ser menor que las {$assignedQty} unidades ya asignadas.",
+                        'assigned' => $assignedQty,
+                        'requested' => $data['qty'],
+                    ],
+                    'status' => 409,
+                ];
+            }
+
+            [$oldValues, $newValues, $descriptions] = $this->buildUpdateLog($lockedItem, $data);
+            $lockedItem->update($data);
+
+            if ($descriptions !== []) {
+                $action = isset($data['status']) && $data['status'] === 'removed'
+                    ? 'item_removed'
+                    : (isset($data['qty']) ? 'item_quantity_changed' : 'item_status_changed');
+                $palletId = DB::table('order_pallet')
+                    ->where('order_id', $lockedItem->order_id)
+                    ->orderBy('pallet_id')
+                    ->value('pallet_id');
+
+                ActivityLogger::log(
+                    action: $action,
+                    entityType: 'order_item',
+                    entityId: $lockedItem->id,
+                    description: "{$lockedItem->description} (EAN: {$lockedItem->ean}): " . implode(', ', $descriptions),
+                    palletId: $palletId ? (int) $palletId : null,
+                    oldValues: $oldValues,
+                    newValues: $newValues,
+                    orderId: $lockedItem->order_id,
+                );
+            }
+
+            return ['item' => $lockedItem];
+        });
+    }
+
     public function addToOrder(Order $order, array $data): array
     {
         $resolvedProduct = $this->resolveProduct($data);
@@ -105,6 +155,34 @@ class OrderItemService
         $product = $matches->firstOrFail();
 
         return ['ean' => $product->ean, 'description' => $product->name];
+    }
+
+    private function buildUpdateLog(OrderItem $item, array $data): array
+    {
+        $oldValues = [];
+        $newValues = [];
+        $descriptions = [];
+
+        if (isset($data['qty']) && $item->qty != $data['qty']) {
+            $oldValues['qty'] = $item->qty;
+            $newValues['qty'] = $data['qty'];
+            $descriptions[] = "Cantidad modificada de {$item->qty} a {$data['qty']}";
+        }
+
+        if (isset($data['status']) && $item->status != $data['status']) {
+            $oldValues['status'] = $item->status;
+            $newValues['status'] = $data['status'];
+            $statusLabels = ['pending' => 'Pendiente', 'done' => 'Listo', 'removed' => 'Quitado'];
+            $descriptions[] = "Estado cambiado de '{$statusLabels[$item->status]}' a '{$statusLabels[$data['status']]}'";
+        }
+
+        if (isset($data['done_qty']) && $item->done_qty != $data['done_qty']) {
+            $oldValues['done_qty'] = $item->done_qty;
+            $newValues['done_qty'] = $data['done_qty'];
+            $descriptions[] = "Cantidad completada modificada de {$item->done_qty} a {$data['done_qty']}";
+        }
+
+        return [$oldValues, $newValues, $descriptions];
     }
 
     private function duplicateResult(OrderItem $item): array

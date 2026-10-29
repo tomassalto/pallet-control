@@ -135,6 +135,8 @@ En R-01 se bloquea `order_items` con `lockForUpdate()` y, dentro de la misma tra
 
 R-02 reutiliza ese coordinador para crear y actualizar bases. R-03 agrega recursos de contexto antes del coordinador con un orden único: pallets por ID, bases por ID, `order_items` por ID y pivots por `order_item_id/base_id`. Así, migraciones opuestas bloquean los mismos recursos en el mismo orden y cada conflicto se reevalúa después de esperar.
 
+R-05 reutiliza el mismo coordinador al reducir la cantidad pedida: bloquea el `order_item`, lee y bloquea sus pivots por `base_id`, y rechaza con `409` cualquier nuevo total menor que la suma ya asignada. La actualización y su activity log confirman en la misma transacción.
+
 **Por qué**
 La fila de `order_items` existe antes de cualquier asignación y es compartida por todas las bases y pallets. Esto evita el hueco de bloquear filas pivot inexistentes y define un orden reproducible.
 

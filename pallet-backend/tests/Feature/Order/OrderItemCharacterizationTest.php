@@ -234,11 +234,15 @@ class OrderItemCharacterizationTest extends TestCase
             ->assertNotFound();
     }
 
-    /**
-     * COMPORTAMIENTO ACTUAL INCORRECTO — ver AUDITORIA.md H-010.
-     * El endpoint permite bajar qty por debajo de las unidades ya asignadas.
-     */
-    public function test_bug_reducir_qty_por_debajo_de_lo_asignado_es_aceptado(): void
+    public function test_actualizar_item_sin_autenticacion_devuelve_401(): void
+    {
+        $item = OrderItem::factory()->create();
+
+        $this->patchJson("/api/v1/order-items/{$item->id}", ['qty' => 2])
+            ->assertUnauthorized();
+    }
+
+    public function test_reducir_qty_por_debajo_de_lo_asignado_devuelve_conflicto(): void
     {
         $item = OrderItem::factory()->create(['qty' => 10]);
         $base = PalletBase::factory()->create();
@@ -252,13 +256,63 @@ class OrderItemCharacterizationTest extends TestCase
 
         $this->actingAs($this->actingUser())
             ->patchJson("/api/v1/order-items/{$item->id}", ['qty' => 4])
-            ->assertOk()
-            ->assertJsonPath('qty', 4);
+            ->assertConflict()
+            ->assertJsonPath('assigned', 8)
+            ->assertJsonPath('requested', 4);
 
-        $this->assertDatabaseHas('order_items', ['id' => $item->id, 'qty' => 4]);
+        $this->assertDatabaseHas('order_items', ['id' => $item->id, 'qty' => 10]);
         $this->assertDatabaseHas('pallet_base_order_items', [
             'order_item_id' => $item->id,
             'qty' => 8,
         ]);
+    }
+
+    public function test_reducir_qty_al_total_asignado_esta_permitido(): void
+    {
+        $item = OrderItem::factory()->create(['qty' => 10]);
+        $base = PalletBase::factory()->create();
+        $base->orderItems()->attach($item->id, ['qty' => 8]);
+
+        $this->actingAs($this->actingUser())
+            ->patchJson("/api/v1/order-items/{$item->id}", ['qty' => 8])
+            ->assertOk()
+            ->assertJsonPath('qty', 8);
+    }
+
+    public function test_actualizar_item_revierte_el_cambio_si_falla_el_audit_log(): void
+    {
+        $item = OrderItem::factory()->create(['qty' => 10]);
+        DB::statement(<<<'SQL'
+            CREATE TRIGGER fail_activity_log
+            BEFORE INSERT ON activity_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'forced audit failure');
+            END
+        SQL);
+
+        $this->actingAs($this->actingUser())
+            ->patchJson("/api/v1/order-items/{$item->id}", ['qty' => 12])
+            ->assertStatus(500);
+
+        $this->assertDatabaseHas('order_items', ['id' => $item->id, 'qty' => 10]);
+    }
+
+    public function test_actualizar_item_mantiene_queries_acotadas_con_muchas_asignaciones(): void
+    {
+        $item = OrderItem::factory()->create(['qty' => 30]);
+        PalletBase::factory()->count(20)->create()->each(
+            fn (PalletBase $base) => $base->orderItems()->attach($item->id, ['qty' => 1])
+        );
+
+        $this->actingAs($this->actingUser());
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->patchJson("/api/v1/order-items/{$item->id}", ['qty' => 20])->assertOk();
+
+        $queryCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertSame(6, $queryCount, "La actualización ejecutó {$queryCount} queries.");
     }
 }

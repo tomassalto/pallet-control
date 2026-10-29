@@ -218,6 +218,47 @@ class AdjustItemConcurrencyTest extends TestCase
         $this->assertDatabaseCount('activity_logs', 1);
     }
 
+    public function test_reduccion_y_asignacion_concurrentes_no_rompen_el_total_pedido(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $token = $user->createToken('postgres-concurrency')->plainTextToken;
+        $order = Order::factory()->create();
+        $item = OrderItem::factory()->for($order)->create(['qty' => 10]);
+        $pallet = Pallet::factory()->create();
+        $pallet->orders()->attach($order->id);
+        $firstBase = PalletBase::factory()->for($pallet, 'pallet')->create();
+        $secondBase = PalletBase::factory()->for($pallet, 'pallet')->create();
+        $firstBase->orderItems()->attach($item->id, ['qty' => 4]);
+
+        $responses = $this->sendJsonConcurrently([
+            [
+                'port' => 18001,
+                'method' => 'PATCH',
+                'path' => "/api/v1/order-items/{$item->id}",
+                'payload' => ['qty' => 5],
+                'token' => $token,
+            ],
+            [
+                'port' => 18002,
+                'method' => 'PATCH',
+                'path' => "/api/v1/pallets/{$pallet->id}/bases/{$secondBase->id}/adjust-item",
+                'payload' => ['order_item_id' => $item->id, 'qty' => 2],
+                'token' => $token,
+            ],
+        ]);
+
+        $statuses = array_column($responses, 'status');
+        sort($statuses);
+
+        $this->assertSame([200, 409], $statuses, json_encode($responses, JSON_PRETTY_PRINT));
+        $item->refresh();
+        $assigned = (int) DB::table('pallet_base_order_items')
+            ->where('order_item_id', $item->id)
+            ->sum('qty');
+        $this->assertLessThanOrEqual($item->qty, $assigned);
+        $this->assertDatabaseCount('activity_logs', 1);
+    }
+
     private function startServer(int $port): void
     {
         $server = new Process([

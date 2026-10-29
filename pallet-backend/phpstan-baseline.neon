@@ -139,18 +139,6 @@ parameters:
 			path: app/Http/Controllers/Api/OrderImportController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\OrderItem\:\:\$order\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/OrderItemController.php
-
-		-
-			message: '#^Offset ''done''\|''pending''\|''removed'' on array\{pending\: ''Pendiente'', done\: ''Listo'', removed\: ''Quitado''\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Http/Controllers/Api/OrderItemController.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$description\.$#'
 			identifier: property.notFound
 			count: 2
