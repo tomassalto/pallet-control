@@ -81,11 +81,23 @@ Implementado localmente:
 
 Evidencia final: commit `28e6cf6`, Actions run `40922987827`, jobs `ci` y `postgres-concurrency` verdes.
 
-## Próxima sesión — R-04 unicidad de ítems por pedido
+## Sesión actual — R-04 unicidad de ítems por pedido
 
 Crear la rama desde el cierre de R-03, nunca desde `master`. Aplicar `DOMINIO.md`, `BE-VALID`, `BE-ERR`, `BE-TX`, `BE-DATA`, `SEC-AUTHZ`, `SEC-LOG`, `QA-INVARIANT`, `QA-RISK` y `BE-GATE`.
 
-Objetivo: impedir que dos altas simultáneas creen el mismo EAN dentro de un pedido, respaldar la regla con la defensa de datos adecuada, devolver `409` y acreditar concurrencia PostgreSQL. Hallazgo principal: H-008.
+Implementado localmente:
+
+1. `StoreOrderItemRequest` reemplaza validación inline y exige formatos numéricos válidos.
+2. `OrderItemService` bloquea el pedido y confirma item + activity log en una transacción.
+3. Una migración agrega `UNIQUE(order_id, ean)`; su preflight detiene el deploy si existen duplicados históricos, sin fusionarlos ni borrarlos.
+4. La misma EAN sigue permitida en pedidos diferentes; un duplicado dentro del pedido devuelve `409`.
+5. Fallo forzado de auditoría revierte el item; la DB rechaza una inserción directa duplicada.
+6. Migración probada localmente en secuencia `up → down → up` sobre SQLite temporal.
+7. Suite completa local verde: 71 tests, 177 assertions; Pint, PHPStan, audits, lint y build verdes.
+8. Presupuesto de 7 queries con 20 items, guardado en `benchmarks/results/2026-10-29-r04-add-order-item.md`.
+9. Gate PostgreSQL agregado: dos altas simultáneas deben producir `201/409`, un item y un log.
+
+Pendiente para cerrar: push, pipeline remoto y registro de evidencia. Antes de un deploy real, ejecutar el preflight de duplicados en una copia o ventana controlada.
 
 ## Sesiones R-02 a R-07
 

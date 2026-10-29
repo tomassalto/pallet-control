@@ -136,9 +136,9 @@ Categoría:   integridad de datos
 Ubicación:   app/Http/Controllers/Api/OrderItemController.php:42-65
 Referencia:  `BE-TX`, `QA-INVARIANT`
 ```
-**Qué está pasando:** busca si ya existe un `order_item` con ese EAN en el pedido y, si no, lo crea — sin transacción, sin lock, y sin `unique(order_id, ean)` en DB que lo respalde.
-**Por qué importa acá:** dos requests concurrentes agregando el mismo producto duplican la fila, duplicando efectivamente la cantidad pedida.
-**Estado:** 🔲 abierto
+**Resolución R-04:** el pedido se bloquea durante la comprobación y el alta; item y auditoría confirman juntos. Una migración reversible agrega `UNIQUE(order_id, ean)` y se niega a continuar si detecta duplicados preexistentes.
+**Evidencia local:** tests cubren duplicado secuencial, constraint directo, mismo EAN en pedidos distintos, EAN/last4, input inválido, rollback de auditoría y presupuesto constante. El gate PostgreSQL incorpora dos altas simultáneas sobre el mismo pedido/EAN.
+**Estado:** 🟡 implementación local verde; pendiente acreditación PostgreSQL remota.
 
 #### H-009 — Cero soft deletes en todo el esquema
 ```

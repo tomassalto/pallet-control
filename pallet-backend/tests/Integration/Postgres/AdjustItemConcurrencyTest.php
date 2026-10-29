@@ -178,6 +178,46 @@ class AdjustItemConcurrencyTest extends TestCase
         $this->assertDatabaseCount('activity_logs', 1);
     }
 
+    public function test_dos_altas_concurrentes_no_duplican_el_ean_en_un_pedido(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $token = $user->createToken('postgres-concurrency')->plainTextToken;
+        $order = Order::factory()->create();
+        $payload = ['ean' => '7791234567890', 'qty' => 6];
+
+        $responses = $this->sendJsonConcurrently([
+            [
+                'port' => 18001,
+                'method' => 'POST',
+                'path' => "/api/v1/orders/{$order->id}/items",
+                'payload' => $payload,
+                'token' => $token,
+            ],
+            [
+                'port' => 18002,
+                'method' => 'POST',
+                'path' => "/api/v1/orders/{$order->id}/items",
+                'payload' => $payload,
+                'token' => $token,
+            ],
+        ]);
+
+        $statuses = array_column($responses, 'status');
+        sort($statuses);
+
+        $this->assertSame([201, 409], $statuses, json_encode($responses, JSON_PRETTY_PRINT));
+        $this->assertDatabaseHas('order_items', [
+            'order_id' => $order->id,
+            'ean' => '7791234567890',
+            'qty' => 6,
+        ]);
+        $this->assertSame(1, OrderItem::query()
+            ->where('order_id', $order->id)
+            ->where('ean', '7791234567890')
+            ->count());
+        $this->assertDatabaseCount('activity_logs', 1);
+    }
+
     private function startServer(int $port): void
     {
         $server = new Process([

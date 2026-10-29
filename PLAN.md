@@ -158,16 +158,16 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 
 ### R-04 · `POST /orders/{order}/items`
 ```
-□ 1. Auth                  → ok
-□ 2. Validación            → inline hoy (H-020) — aprovechar para migrar a Form Request
-□ 3. Negocio (tx + lock)   → agregar unique(order_id, ean) en DB + manejar el conflicto
-                              (23505/QueryException) en vez de check-then-insert → `BE-TX`
-□ 4. Datos                 → agregar el unique index de arriba
-□ 5. Respuesta (HTTP)      → duplicado ya devuelve 409, correcto — mantener tras el fix
-□ 6. Audit log             → ya existe
-□ 7. Tests                 → caso clave: 2 requests concurrentes agregando el mismo EAN
-□ 8. Medición              → benchmarks/
+✅ 1. Auth                  → auth:sanctum + has.role; 401 acreditado
+✅ 2. Validación            → `StoreOrderItemRequest`; EAN y últimos cuatro numéricos
+✅ 3. Negocio (tx + lock)   → pedido bloqueado; alta y auditoría en una transacción
+✅ 4. Datos                 → `UNIQUE(order_id, ean)` reversible y con preflight no destructivo
+✅ 5. Respuesta (HTTP)      → duplicado devuelve 409 con el item existente
+✅ 6. Audit log             → misma transacción; rollback forzado acreditado
+🟡 7. Tests                 → 71 tests/177 assertions locales; gate PostgreSQL agregado, pendiente CI
+✅ 8. Medición              → 7 queries constantes con 20 items; `benchmarks/results/2026-10-29-r04-add-order-item.md`
 ```
+**Estado:** 🟡 implementación local verde; pendiente CI y concurrencia PostgreSQL.
 **Hallazgos que resuelve:** H-008, H-020 (parcial, solo este endpoint).
 
 ---
@@ -298,7 +298,7 @@ No habilitan implementación hasta completar `BIBLIAS-GOBERNANZA.md §8`:
 | **Laravel Debugbar** | Contar queries a mano por endpoint | ✅ instalado desde esta sesión |
 | **k6 (`benchmarks/`)** | "Me parece que está lento" sin número — da p50/p95/p99 reproducible | ✅ script armado, falta correrlo |
 | **CHECK constraint en Postgres** | Repetir la validación "asignado ≤ pedido" en cada controlador nuevo que toque stock — la DB la garantiza una vez, para siempre | 🔲 falta decidir expresión exacta (H-006) |
-| **`unique(order_id, ean)`** | El check-then-insert manual de `OrderItemController::store` — Postgres rechaza el duplicado solo | 🔲 falta agregar (H-008) |
+| **`unique(order_id, ean)`** | El check-then-insert manual de `OrderItemController::store` — Postgres rechaza el duplicado solo | ✅ implementado en R-04 (H-008) |
 | **CI check simple** (`grep -r "getMessage()" en respuestas json`) | No previene el bug ya existente, pero evita que se reintroduzca una vez arreglado H-019 | 🔲 se puede armar como parte del pipeline de H-031 |
 
 **Lo que NO se automatiza — necesita diseño humano:**

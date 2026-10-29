@@ -36,7 +36,7 @@ Cambiar estados o transiciones requiere una decisión de dominio y tests de tran
 - Reducir la cantidad pedida no puede dejar asignaciones por encima del nuevo total.
 - Una base pertenece a un pallet.
 - Un ítem sólo aparece una vez por base.
-- Un EAN identifica un producto; su unicidad dentro de un pedido debe definirse y protegerse explícitamente.
+- Un EAN identifica un producto y sólo puede aparecer una vez dentro del mismo pedido; puede repetirse en pedidos distintos.
 - Una acción significativa debe ser atribuible y auditable.
 - Una finalización no debe ocultar conflictos o pendientes incompatibles con ese estado.
 

@@ -5,7 +5,9 @@ namespace Tests\Feature\Order;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\PalletBase;
+use App\Models\Product;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -87,6 +89,99 @@ class OrderItemCharacterizationTest extends TestCase
             ->assertJsonPath('message', 'Este producto ya está en el pedido.');
 
         $this->assertDatabaseCount('order_items', 1);
+    }
+
+    public function test_la_base_de_datos_rechaza_ean_duplicado_en_el_mismo_pedido(): void
+    {
+        $order = Order::factory()->create();
+        OrderItem::factory()->for($order)->create(['ean' => '7791234567890']);
+
+        $this->expectException(QueryException::class);
+        OrderItem::factory()->for($order)->create(['ean' => '7791234567890']);
+    }
+
+    public function test_el_mismo_ean_puede_existir_en_pedidos_distintos(): void
+    {
+        $firstOrder = Order::factory()->create();
+        $secondOrder = Order::factory()->create();
+
+        OrderItem::factory()->for($firstOrder)->create(['ean' => '7791234567890']);
+        OrderItem::factory()->for($secondOrder)->create(['ean' => '7791234567890']);
+
+        $this->assertDatabaseCount('order_items', 2);
+    }
+
+    public function test_agregar_item_por_ultimos_cuatro_resuelve_el_producto(): void
+    {
+        $order = Order::factory()->create();
+        Product::create([
+            'ean' => '7791234567890',
+            'ean_last4' => '7890',
+            'name' => 'Producto conocido',
+        ]);
+
+        $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/orders/{$order->id}/items", [
+                'last4' => '7890',
+                'qty' => 3,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('ean', '7791234567890')
+            ->assertJsonPath('description', 'Producto conocido');
+    }
+
+    public function test_agregar_item_rechaza_ultimos_cuatro_no_numericos(): void
+    {
+        $order = Order::factory()->create();
+
+        $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/orders/{$order->id}/items", [
+                'last4' => 'ABCD',
+                'qty' => 3,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('last4');
+    }
+
+    public function test_agregar_item_revierte_el_alta_si_falla_el_audit_log(): void
+    {
+        $order = Order::factory()->create();
+        DB::statement(<<<'SQL'
+            CREATE TRIGGER fail_activity_log
+            BEFORE INSERT ON activity_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'forced audit failure');
+            END
+        SQL);
+
+        $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/orders/{$order->id}/items", [
+                'ean' => '7791234567890',
+                'qty' => 3,
+            ])
+            ->assertStatus(500);
+
+        $this->assertDatabaseCount('order_items', 0);
+    }
+
+    public function test_agregar_item_mantiene_un_numero_acotado_de_queries_con_pedido_grande(): void
+    {
+        $order = Order::factory()->create();
+        OrderItem::factory()->for($order)->count(20)->create();
+
+        $this->actingAs($this->actingUser());
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->postJson("/api/v1/orders/{$order->id}/items", [
+            'ean' => '7791234567890',
+            'qty' => 3,
+        ])->assertCreated();
+
+        $queryCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertSame(7, $queryCount, "El alta ejecutó {$queryCount} queries.");
     }
 
     public function test_agregar_item_sin_autenticacion_devuelve_401(): void

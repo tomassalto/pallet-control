@@ -171,3 +171,32 @@ La cadena afectada se usa al construir el service worker con fuentes controladas
 El audit frontend informa cuatro bajos durante la excepción. A cambio se evita introducir una versión PWA incompatible y se siguen bloqueando hallazgos moderados, altos y críticos.
 
 **Referencia normativa:** `DO-SUPPLY`, `SEC-SUPPLY`, `QA-SEC`
+
+---
+
+## D-005 — EAN único por pedido con lock y constraint
+
+**Fecha:** 2026-10-29
+**Estado:** ✅ vigente
+
+**Contexto**
+`OrderItemController::store` hacía check-then-insert sin coordinación. Dos requests podían crear el mismo EAN en un pedido y duplicar la cantidad pedida.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Sólo comprobar en PHP | Mensaje simple | No protege concurrencia ni escritores alternativos |
+| Sólo índice único | Integridad durable | El conflicto depende de capturar una excepción de DB |
+| Lock del pedido + índice único | Respuesta estable y defensa durable | Serializa las altas dentro del mismo pedido |
+
+**Decisión**
+Bloquear la fila `orders` durante el alta, comprobar el EAN y confirmar item + activity log en una transacción. Agregar `UNIQUE(order_id, ean)` como defensa final. La migración hace preflight y falla si hay duplicados históricos; no elimina ni fusiona información automáticamente.
+
+**Por qué**
+La fila del pedido existe antes que sus items y coordina todas las altas del mismo agregado. El índice protege además imports, consola o código futuro que no use el servicio.
+
+**Trade-off aceptado**
+Las altas de un mismo pedido se ejecutan en serie y un deploy con datos históricos inconsistentes requiere remediación explícita antes de aplicar la migración.
+
+**Referencia normativa:** `BE-VALID`, `BE-DATA`, `BE-TX`, `BE-ERR`, `SEC-LOG`, `QA-INVARIANT`
