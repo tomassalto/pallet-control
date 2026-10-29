@@ -81,7 +81,7 @@ Implementado localmente:
 
 Evidencia final: commit `28e6cf6`, Actions run `40922987827`, jobs `ci` y `postgres-concurrency` verdes.
 
-## Sesión actual — R-04 unicidad de ítems por pedido
+## Última sesión cerrada — R-04 unicidad de ítems por pedido
 
 Crear la rama desde el cierre de R-03, nunca desde `master`. Aplicar `DOMINIO.md`, `BE-VALID`, `BE-ERR`, `BE-TX`, `BE-DATA`, `SEC-AUTHZ`, `SEC-LOG`, `QA-INVARIANT`, `QA-RISK` y `BE-GATE`.
 
@@ -97,7 +97,11 @@ Implementado localmente:
 8. Presupuesto de 7 queries con 20 items, guardado en `benchmarks/results/2026-10-29-r04-add-order-item.md`.
 9. Gate PostgreSQL agregado: dos altas simultáneas deben producir `201/409`, un item y un log.
 
-Pendiente para cerrar: push, pipeline remoto y registro de evidencia. Antes de un deploy real, ejecutar el preflight de duplicados en una copia o ventana controlada.
+Evidencia final: commit funcional `82af27c`; Actions run `40929456582` con jobs `ci` y `postgres-concurrency` verdes. El commit `2ffc4de` limita los reintentos de `composer audit` a fallos operativos de red; los hallazgos de vulnerabilidades continúan fallando de inmediato. Antes de un deploy real, ejecutar el preflight de duplicados en una copia o ventana controlada.
+
+## Próxima sesión — R-05 reducción segura de cantidad
+
+Crear la rama desde el cierre documental de R-04, nunca desde `master`. Volver a recorrer `ROUTER.md` y aplicar como mínimo `DOMINIO.md`, `BE-VALID`, `BE-ERR`, `BE-TX`, `BE-DATA`, `SEC-AUTHZ`, `SEC-LOG`, `QA-INVARIANT`, `QA-RISK` y `BE-GATE`. El objetivo es impedir que `PATCH /order-items/{item}` reduzca `qty` por debajo de la cantidad ya asignada a pallets, incluso ante concurrencia.
 
 ## Sesiones R-02 a R-07
 

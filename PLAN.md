@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-29
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Rebanada actual:** R-04 — impedir duplicados concurrentes de ítems/EAN en un pedido.
+**Rebanada actual:** R-05 — impedir reducir un ítem por debajo de la cantidad ya asignada.
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -19,7 +19,7 @@
 Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b)
 Fase 1 — Red de seguridad      ✅ hecho (gates activos y caracterización completos)
 Fase Fundacional — Normativa  ✅ cinco autoridades y router por IDs estables
-Fase 2 — Rebanadas verticales  🟡 R-04 en curso (3 de 7 cerradas)
+Fase 2 — Rebanadas verticales  🟡 R-05 en curso (4 de 7 cerradas)
 Fase 3 — Dominio específico    🔲
 Fase 4 — Performance           🔲 (benchmarks/ armado, baseline sin correr — H-040)
 Fase 5 — Infraestructura       🔲
@@ -34,7 +34,7 @@ _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código
 
 1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
-3. **Implementar R-04** — proteger la unicidad de EAN por pedido ante requests simultáneos y devolver conflicto estable. `H-008`.
+3. **Implementar R-05** — impedir reducir la cantidad pedida por debajo de lo ya asignado a pallets. `H-010`.
 
 ---
 
@@ -69,7 +69,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | H-006 | Sin CHECK constraint "asignado ≤ pedido" | 🟡 medio | Alto | 🟡 parcial |
 | H-006b | `adjustItem` sin techo de validación | 🟡 medio | Alto | ❌ no |
 | H-007 | `migrate` lee stock antes de abrir la transacción | 🟡 medio | Alto | ❌ no |
-| H-008 | Race duplicando EAN en `order_items` | 🟡 medio | Alto | 🟡 parcial |
+| H-008 | Race duplicando EAN en `order_items` | 🟡 medio | Alto | ✅ sí |
 | H-009 | Cero soft deletes en todo el esquema | 🔴 alto | Alto | 🟡 parcial |
 | H-010 | Reducir `qty` sin validar lo ya asignado | 🟡 medio | Medio | ❌ no |
 | H-011 | Escrituras multi-tabla sin transacción | 🟡 medio | Medio | 🟡 parcial |
@@ -164,10 +164,10 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 ✅ 4. Datos                 → `UNIQUE(order_id, ean)` reversible y con preflight no destructivo
 ✅ 5. Respuesta (HTTP)      → duplicado devuelve 409 con el item existente
 ✅ 6. Audit log             → misma transacción; rollback forzado acreditado
-🟡 7. Tests                 → 71 tests/177 assertions locales; gate PostgreSQL agregado, pendiente CI
+✅ 7. Tests                 → 71 tests/177 assertions; concurrencia PostgreSQL `201/409` acreditada
 ✅ 8. Medición              → 7 queries constantes con 20 items; `benchmarks/results/2026-10-29-r04-add-order-item.md`
 ```
-**Estado:** 🟡 implementación local verde; pendiente CI y concurrencia PostgreSQL.
+**Estado:** ✅ cerrada en `82af27c`; Actions run `40929456582` con `ci` y `postgres-concurrency` verdes. El commit `2ffc4de` agregó reintento acotado solo para fallos operativos de Packagist.
 **Hallazgos que resuelve:** H-008, H-020 (parcial, solo este endpoint).
 
 ---

@@ -137,8 +137,8 @@ Ubicación:   app/Http/Controllers/Api/OrderItemController.php:42-65
 Referencia:  `BE-TX`, `QA-INVARIANT`
 ```
 **Resolución R-04:** el pedido se bloquea durante la comprobación y el alta; item y auditoría confirman juntos. Una migración reversible agrega `UNIQUE(order_id, ean)` y se niega a continuar si detecta duplicados preexistentes.
-**Evidencia local:** tests cubren duplicado secuencial, constraint directo, mismo EAN en pedidos distintos, EAN/last4, input inválido, rollback de auditoría y presupuesto constante. El gate PostgreSQL incorpora dos altas simultáneas sobre el mismo pedido/EAN.
-**Estado:** 🟡 implementación local verde; pendiente acreditación PostgreSQL remota.
+**Evidencia:** tests cubren duplicado secuencial, constraint directo, mismo EAN en pedidos distintos, EAN/last4, input inválido, rollback de auditoría y presupuesto constante. PostgreSQL acredita dos altas simultáneas sobre el mismo pedido/EAN con resultado `201/409`, un item y un log.
+**Estado:** ✅ resuelto en R-04, commit `82af27c`; Actions run `40929456582` con `ci` y `postgres-concurrency` verdes.
 
 #### H-009 — Cero soft deletes en todo el esquema
 ```
