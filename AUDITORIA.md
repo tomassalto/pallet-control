@@ -92,9 +92,9 @@ Categoría:   integridad de datos
 Ubicación:   app/Services/PalletBaseService.php:15-137 (createBase, updateBase/syncBaseItems)
 Referencia:  `BE-TX`, `QA-INVARIANT`
 ```
-**Qué está pasando:** lee `SUM(qty)` ya asignado en otras bases, calcula `$available` en PHP, y recién después escribe con `sync()`. Sin `DB::transaction()`, sin `lockForUpdate()`.
-**Por qué importa acá:** dos operarios asignando el mismo `order_item` a bases distintas al mismo tiempo pueden ambos pasar la validación con el mismo `$available` leído — la suma asignada termina superando lo pedido y viola `DOMINIO.md`.
-**Estado:** 🔲 abierto
+**Resolución R-02:** `createBase()` y `updateBase()` bloquean los `order_items` en orden determinista, bloquean sus asignaciones y calculan el total global dentro de la misma transacción antes de sincronizar pivots.
+**Evidencia local:** exceso, límite exacto, asignaciones en otros pallets, ownership, rollback y auditoría se cubren en `PalletBaseStockMovementTest`; `AdjustItemConcurrencyTest` incorpora dos creaciones simultáneas para el gate PostgreSQL.
+**Estado:** 🟡 implementación local verde; pendiente acreditación PostgreSQL remota para cerrar.
 
 #### H-006 — Sin constraint de DB para "asignado ≤ pedido"
 ```
@@ -105,7 +105,7 @@ Referencia:  `BE-VALID`, `BE-TX`, `DOMINIO.md`
 ```
 **Qué está pasando:** no existe ningún CHECK/trigger que impida `SUM(pallet_base_order_items.qty) > order_items.qty`. Toda la garantía depende de que el código PHP de cada endpoint la calcule bien.
 **Por qué importa acá:** un bug futuro, un `tinker`, o el propio `adjustItem` (ver H-006b) puede violar la invariante si sólo existe una comprobación parcial en PHP. `BE-VALID` exige defensas adecuadas a la naturaleza agregada de la regla.
-**Estado:** 🔲 abierto
+**Estado:** 🟡 mitigado en R-01/R-02 mediante el lock coordinador D-003; permanece abierto como defensa transversal frente a escritores futuros o directos.
 
 #### H-006b — `adjustItem` no valida contra el total pedido
 ```
@@ -171,7 +171,7 @@ Referencia:  `BE-TX`, `QA-INVARIANT`
 ```
 **Qué está pasando:** cada uno hace 2-4 escrituras en tablas distintas (crear/actualizar registro + `ActivityLogger::log()` + a veces `Storage`) sin `DB::transaction()`.
 **Por qué importa acá:** el más grave es `MissingItemRequestController::update` — si `PendingItem::create()` falla después de marcar la solicitud "approved", la aprobación queda registrada sin su pendiente correspondiente, silenciosamente.
-**Estado:** 🔲 abierto
+**Estado:** 🔲 abierto. R-02 cerrará la parte de crear/actualizar bases, que ya no figura en esta lista; estas escrituras restantes conservan el hallazgo.
 
 #### H-012 — Foreign keys sin índice (Postgres no las indexa solo)
 ```
@@ -222,7 +222,7 @@ Severidad:   ⚪ bajo · Categoría: integridad de datos
 Ubicación:   app/Helpers/ActivityLogger.php
 ```
 **Qué está pasando:** al no correr dentro de la misma transacción que el cambio de negocio (ver H-011), una falla del insert de auditoría después de un commit ya aplicado pierde esa entrada del log silenciosamente.
-**Estado:** 🟡 resuelto para `adjust-item` en R-01; abierto en las demás escrituras citadas por H-011. Un test fuerza la falla de `activity_logs` y acredita el rollback del stock.
+**Estado:** 🟡 resuelto para `adjust-item` en R-01 y para crear/actualizar bases en R-02; abierto en las demás escrituras citadas por H-011. Tests fuerzan la falla de `activity_logs` y acreditan rollback de stock, base y metadatos.
 
 ---
 
@@ -273,7 +273,7 @@ Severidad:   🟡 medio · Categoría: calidad
 Ubicación:   PalletBaseController.php:63,85,186 — PalletBaseService.php:48
 Referencia:  `BE-ERR`
 ```
-**Estado:** 🟡 resuelto para el conflicto de disponibilidad de `adjust-item` en R-01; resta normalizar los demás endpoints señalados.
+**Estado:** 🟡 resuelto para disponibilidad/pertenencia en `adjust-item` (R-01) y crear/actualizar bases (R-02); resta normalizar los demás endpoints señalados.
 
 #### H-024 — Formato de respuesta de error no estandarizado
 ```

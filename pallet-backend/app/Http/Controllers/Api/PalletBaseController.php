@@ -31,7 +31,7 @@ class PalletBaseController extends Controller
         $result = $this->palletBaseService->createBase($pallet, $request->validated());
 
         if (isset($result['error'])) {
-            return response()->json($result['error'], 422);
+            return response()->json($result['error'], $result['status'] ?? 422);
         }
 
         return response()->json($result['base']->load(['photos', 'orderItems']), 201);

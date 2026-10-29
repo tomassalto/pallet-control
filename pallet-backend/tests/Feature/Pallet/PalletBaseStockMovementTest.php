@@ -12,20 +12,16 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Tests de caracterización — documentan el comportamiento ACTUAL de los
- * endpoints de "movimiento de stock" entre bases de pallets:
+ * Pruebas de regresión de los endpoints de movimiento de stock entre bases:
  *
  *   POST   /pallets/{pallet}/bases                    (PalletBaseController::store)
  *   PATCH  /pallets/{pallet}/bases/{base}              (PalletBaseController::update)
  *   PATCH  /pallets/{pallet}/bases/{base}/adjust-item  (PalletBaseController::adjustItem)
  *   POST   /pallets/{pallet}/bases/{base}/migrate      (PalletBaseController::migrate)
  *
- * IMPORTANTE: varios de estos tests documentan bugs conocidos a propósito
- * (ver AUDITORIA.md H-005, H-006, H-006b, H-011). NO se corrige nada acá.
- * Si un refactor hace que alguno de estos asserts falle, comparar contra
- * el hallazgo correspondiente antes de "arreglar el test" — puede ser que
- * el refactor haya corregido el bug, en cuyo caso el test se actualiza
- * a propósito (y se marca H-XXX como resuelto en AUDITORIA.md).
+ * Los casos de R-01 y R-02 acreditan el techo global, la atomicidad y el
+ * contrato observable. Los casos de migración que siguen caracterizando
+ * deuda conservan comentarios específicos junto a cada comportamiento.
  */
 class PalletBaseStockMovementTest extends TestCase
 {
@@ -80,7 +76,7 @@ class PalletBaseStockMovementTest extends TestCase
         ]);
     }
 
-    public function test_crear_base_pidiendo_mas_de_lo_disponible_devuelve_422(): void
+    public function test_crear_base_pidiendo_mas_de_lo_disponible_devuelve_409(): void
     {
         [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);
 
@@ -89,19 +85,12 @@ class PalletBaseStockMovementTest extends TestCase
                 'items' => [['order_item_id' => $item->id, 'qty' => 15]],
             ]);
 
-        $response->assertStatus(422);
+        $response->assertConflict();
         $response->assertJsonPath('available', 10);
         $response->assertJsonPath('requested', 15);
     }
 
-    /**
-     * H-011 (AUDITORIA.md): no hay transacción en PalletBaseService::createBase.
-     * La PalletBase se crea con PalletBase::create() ANTES de validar los items,
-     * y si la validación falla el método hace `return` sin revertirla.
-     * Esto documenta que, hoy, un 422 en este endpoint puede dejar una base
-     * vacía "huérfana" en la base de datos.
-     */
-    public function test_bug_base_queda_creada_en_db_aunque_la_asignacion_de_items_falle(): void
+    public function test_crear_base_revierte_la_base_si_la_asignacion_falla(): void
     {
         [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);
 
@@ -109,20 +98,13 @@ class PalletBaseStockMovementTest extends TestCase
             ->postJson("/api/v1/pallets/{$pallet->id}/bases", [
                 'items' => [['order_item_id' => $item->id, 'qty' => 15]],
             ])
-            ->assertStatus(422);
+            ->assertConflict();
 
-        $this->assertDatabaseCount('pallet_bases', 1);
+        $this->assertDatabaseCount('pallet_bases', 0);
         $this->assertSame(0, DB::table('pallet_base_order_items')->count());
     }
 
-    /**
-     * PalletBaseService::createBase solo agrega el item al sync si
-     * `$pallet->orders->contains('id', $orderItem->order_id)`. Si el
-     * order_item pertenece a un pedido que NO está asociado al pallet,
-     * el item se salta EN SILENCIO — no hay error, y la base sí se crea
-     * sin ese producto. Se documenta ese comportamiento actual.
-     */
-    public function test_item_de_pedido_no_asociado_al_pallet_se_ignora_sin_error(): void
+    public function test_crear_base_rechaza_item_de_pedido_no_asociado_al_pallet(): void
     {
         $pallet = Pallet::factory()->create(); // sin pedidos asociados
         $otherOrder = Order::factory()->create();
@@ -133,8 +115,10 @@ class PalletBaseStockMovementTest extends TestCase
                 'items' => [['order_item_id' => $item->id, 'qty' => 5]],
             ]);
 
-        $response->assertCreated(); // no falla
-        $this->assertSame(0, DB::table('pallet_base_order_items')->count()); // pero no asigna nada
+        $response->assertConflict()
+            ->assertJsonPath('message', 'El producto no pertenece a un pedido asociado a este pallet.');
+        $this->assertDatabaseCount('pallet_bases', 0);
+        $this->assertSame(0, DB::table('pallet_base_order_items')->count());
     }
 
     public function test_crear_base_bloqueada_si_el_pedido_del_item_esta_finalizado(): void
@@ -147,8 +131,107 @@ class PalletBaseStockMovementTest extends TestCase
                 'items' => [['order_item_id' => $item->id, 'qty' => 5]],
             ]);
 
-        $response->assertStatus(422);
+        $response->assertConflict();
         $response->assertJsonFragment(['order_code' => $order->code]);
+    }
+
+    public function test_crear_base_considera_asignaciones_en_otros_pallets(): void
+    {
+        [$pallet, $order, $item] = $this->palletWithAssignableItem(qty: 10);
+        $otherPallet = Pallet::factory()->create();
+        $otherPallet->orders()->attach($order->id);
+        $otherBase = PalletBase::factory()->for($otherPallet, 'pallet')->create();
+        $otherBase->orderItems()->attach($item->id, ['qty' => 7]);
+
+        $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/pallets/{$pallet->id}/bases", [
+                'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+            ])
+            ->assertConflict()
+            ->assertJsonPath('available', 3);
+
+        $this->assertDatabaseCount('pallet_bases', 1);
+    }
+
+    public function test_crear_base_acepta_el_limite_exacto_global_y_registra_auditoria(): void
+    {
+        [$pallet, $order, $item] = $this->palletWithAssignableItem(qty: 10);
+        $otherPallet = Pallet::factory()->create();
+        $otherPallet->orders()->attach($order->id);
+        $otherBase = PalletBase::factory()->for($otherPallet, 'pallet')->create();
+        $otherBase->orderItems()->attach($item->id, ['qty' => 7]);
+
+        $response = $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/pallets/{$pallet->id}/bases", [
+                'name' => 'Base límite',
+                'items' => [['order_item_id' => $item->id, 'qty' => 3]],
+            ])
+            ->assertCreated();
+
+        $this->assertSame(10, (int) DB::table('pallet_base_order_items')
+            ->where('order_item_id', $item->id)
+            ->sum('qty'));
+        $this->assertDatabaseHas('activity_logs', [
+            'action' => 'base_created',
+            'entity_type' => 'pallet_base',
+            'entity_id' => $response->json('id'),
+        ]);
+    }
+
+    public function test_crear_base_rechaza_el_mismo_item_duplicado(): void
+    {
+        [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);
+
+        $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/pallets/{$pallet->id}/bases", [
+                'items' => [
+                    ['order_item_id' => $item->id, 'qty' => 2],
+                    ['order_item_id' => $item->id, 'qty' => 3],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('items.0.order_item_id');
+
+        $this->assertDatabaseCount('pallet_bases', 0);
+    }
+
+    public function test_crear_base_revierte_estado_si_falla_el_audit_log(): void
+    {
+        [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);
+        $this->forzarFalloDeAuditoria();
+
+        $this->actingAs($this->actingUser())
+            ->postJson("/api/v1/pallets/{$pallet->id}/bases", [
+                'name' => 'No debe persistir',
+                'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+            ])
+            ->assertStatus(500);
+
+        $this->assertDatabaseCount('pallet_bases', 0);
+        $this->assertSame(0, DB::table('pallet_base_order_items')->count());
+    }
+
+    public function test_crear_base_mantiene_un_numero_acotado_de_queries_con_muchas_bases(): void
+    {
+        [$pallet, , $item] = $this->palletWithAssignableItem(qty: 100);
+        PalletBase::factory()
+            ->for($pallet, 'pallet')
+            ->count(20)
+            ->create()
+            ->each(fn (PalletBase $base) => $base->orderItems()->attach($item->id, ['qty' => 1]));
+
+        $this->actingAs($this->actingUser());
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->postJson("/api/v1/pallets/{$pallet->id}/bases", [
+            'items' => [['order_item_id' => $item->id, 'qty' => 10]],
+        ])->assertCreated();
+
+        $queryCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertSame(14, $queryCount, "La creación ejecutó {$queryCount} queries.");
     }
 
     // ───────────────────────────────────────────────────────────
@@ -182,13 +265,7 @@ class PalletBaseStockMovementTest extends TestCase
         $this->assertDatabaseHas('pallet_bases', ['id' => $base->id, 'name' => 'Base nueva']);
     }
 
-    /**
-     * H-011: PalletBaseService::updateBase llama a $base->update([name/note])
-     * ANTES de validar los items via syncBaseItems(). Si la validación de
-     * cantidad falla, el nombre/nota YA quedaron guardados — solo el 422
-     * se devuelve, sin revertir el update anterior. Se documenta a propósito.
-     */
-    public function test_bug_nombre_se_actualiza_aunque_la_reasignacion_de_items_falle(): void
+    public function test_actualizar_base_revierte_el_nombre_si_la_reasignacion_falla(): void
     {
         [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);
         $base = PalletBase::factory()->for($pallet, 'pallet')->create(['name' => 'Base original']);
@@ -199,9 +276,71 @@ class PalletBaseStockMovementTest extends TestCase
                 'items' => [['order_item_id' => $item->id, 'qty' => 999]],
             ]);
 
-        $response->assertStatus(422);
-        // El nombre SÍ cambió a pesar del 422 — comportamiento actual, no deseado.
-        $this->assertDatabaseHas('pallet_bases', ['id' => $base->id, 'name' => 'Base con overbooking']);
+        $response->assertConflict();
+        $this->assertDatabaseHas('pallet_bases', ['id' => $base->id, 'name' => 'Base original']);
+    }
+
+    public function test_actualizar_base_considera_asignaciones_en_otros_pallets(): void
+    {
+        [$pallet, $order, $item] = $this->palletWithAssignableItem(qty: 10);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+        $otherPallet = Pallet::factory()->create();
+        $otherPallet->orders()->attach($order->id);
+        $otherBase = PalletBase::factory()->for($otherPallet, 'pallet')->create();
+        $otherBase->orderItems()->attach($item->id, ['qty' => 7]);
+
+        $this->actingAs($this->actingUser())
+            ->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}", [
+                'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+            ])
+            ->assertConflict()
+            ->assertJsonPath('available', 3);
+
+        $this->assertDatabaseMissing('pallet_base_order_items', [
+            'base_id' => $base->id,
+            'order_item_id' => $item->id,
+        ]);
+    }
+
+    public function test_actualizar_base_rechaza_item_de_pedido_no_asociado(): void
+    {
+        $pallet = Pallet::factory()->create();
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+        $item = OrderItem::factory()->create(['qty' => 10]);
+
+        $this->actingAs($this->actingUser())
+            ->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}", [
+                'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+            ])
+            ->assertConflict()
+            ->assertJsonPath('message', 'El producto no pertenece a un pedido asociado a este pallet.');
+
+        $this->assertDatabaseMissing('pallet_base_order_items', [
+            'base_id' => $base->id,
+            'order_item_id' => $item->id,
+        ]);
+    }
+
+    public function test_actualizar_base_revierte_estado_si_falla_el_audit_log(): void
+    {
+        [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create(['name' => 'Base original']);
+        $base->orderItems()->attach($item->id, ['qty' => 2]);
+        $this->forzarFalloDeAuditoria();
+
+        $this->actingAs($this->actingUser())
+            ->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}", [
+                'name' => 'No debe persistir',
+                'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+            ])
+            ->assertStatus(500);
+
+        $this->assertDatabaseHas('pallet_bases', ['id' => $base->id, 'name' => 'Base original']);
+        $this->assertDatabaseHas('pallet_base_order_items', [
+            'base_id' => $base->id,
+            'order_item_id' => $item->id,
+            'qty' => 2,
+        ]);
     }
 
     // ───────────────────────────────────────────────────────────
@@ -424,13 +563,7 @@ class PalletBaseStockMovementTest extends TestCase
     {
         [$pallet, , $item] = $this->palletWithAssignableItem(qty: 10);
         $base = PalletBase::factory()->for($pallet, 'pallet')->create();
-        DB::statement(<<<'SQL'
-            CREATE TRIGGER fail_activity_log
-            BEFORE INSERT ON activity_logs
-            BEGIN
-                SELECT RAISE(ABORT, 'forced audit failure');
-            END
-        SQL);
+        $this->forzarFalloDeAuditoria();
 
         $this->actingAs($this->actingUser())
             ->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/adjust-item", [
@@ -447,6 +580,17 @@ class PalletBaseStockMovementTest extends TestCase
     // ───────────────────────────────────────────────────────────
     // POST /pallets/{pallet}/bases/{base}/migrate
     // ───────────────────────────────────────────────────────────
+
+    private function forzarFalloDeAuditoria(): void
+    {
+        DB::statement(<<<'SQL'
+            CREATE TRIGGER fail_activity_log
+            BEFORE INSERT ON activity_logs
+            BEGIN
+                SELECT RAISE(ABORT, 'forced audit failure');
+            END
+        SQL);
+    }
 
     private function baseWithStock(int $qty): array
     {

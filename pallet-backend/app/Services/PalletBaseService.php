@@ -14,23 +14,30 @@ class PalletBaseService
 {
     public function createBase(Pallet $pallet, array $data): array
     {
-        $base = PalletBase::create([
-            'pallet_id' => $pallet->id,
-            'name' => $data['name'] ?? null,
-            'note' => $data['note'] ?? null,
-        ]);
-
-        if (! empty($data['items'])) {
-            $pallet->loadMissing('orders');
-            $requestedItemIds = collect($data['items'])->pluck('order_item_id');
-
-            [$orderItemsMap, $ordersMap] = $this->fetchOrderData($requestedItemIds);
-            $allocations = $this->fetchAllocations($pallet, $base, $requestedItemIds);
-
+        return DB::transaction(function () use ($pallet, $data) {
             $itemsToSync = [];
-            foreach ($data['items'] as $item) {
-                $orderItem = $orderItemsMap->get($item['order_item_id']);
-                if ($orderItem && $pallet->orders->contains('id', $orderItem->order_id)) {
+            $orderItemsMap = collect();
+
+            if (! empty($data['items'])) {
+                $requestedItemIds = collect($data['items'])
+                    ->pluck('order_item_id')
+                    ->unique()
+                    ->sort()
+                    ->values();
+                $palletOrderIds = $pallet->orders()->pluck('orders.id');
+
+                [$orderItemsMap, $ordersMap] = $this->fetchOrderData($requestedItemIds, lock: true);
+                $allocations = $this->fetchAllocations(null, $requestedItemIds, lock: true);
+
+                foreach ($data['items'] as $item) {
+                    $orderItem = $orderItemsMap->get($item['order_item_id']);
+                    if (! $orderItem || ! $palletOrderIds->contains($orderItem->order_id)) {
+                        return [
+                            'error' => ['message' => 'El producto no pertenece a un pedido asociado a este pallet.'],
+                            'status' => 409,
+                        ];
+                    }
+
                     $order = $ordersMap->get($orderItem->order_id);
                     if ($order && $order->status === 'done') {
                         return [
@@ -39,6 +46,7 @@ class PalletBaseService
                                 'order_item_id' => $item['order_item_id'],
                                 'order_code' => $order->code,
                             ],
+                            'status' => 409,
                         ];
                     }
 
@@ -53,6 +61,7 @@ class PalletBaseService
                                 'available' => $available,
                                 'requested' => $item['qty'],
                             ],
+                            'status' => 409,
                         ];
                     }
 
@@ -60,33 +69,41 @@ class PalletBaseService
                 }
             }
 
-            $base->orderItems()->sync($itemsToSync);
+            $base = PalletBase::create([
+                'pallet_id' => $pallet->id,
+                'name' => $data['name'] ?? null,
+                'note' => $data['note'] ?? null,
+            ]);
 
-            foreach ($itemsToSync as $orderItemId => $pivotData) {
-                $orderItem = $orderItemsMap->get($orderItemId);
-                if ($orderItem) {
-                    ActivityLogger::log(
-                        action: 'item_assigned_to_base',
-                        entityType: 'order_item',
-                        entityId: $orderItemId,
-                        description: "Producto '{$orderItem->description}' asignado a base '" . ($base->name ?? 'Sin nombre') . "' - Cantidad: {$pivotData['qty']}",
-                        palletId: $pallet->id,
-                        newValues: ['base_id' => $base->id, 'base_name' => $base->name, 'qty' => $pivotData['qty']],
-                    );
+            if ($itemsToSync !== []) {
+                $base->orderItems()->sync($itemsToSync);
+
+                foreach ($itemsToSync as $orderItemId => $pivotData) {
+                    $orderItem = $orderItemsMap->get($orderItemId);
+                    if ($orderItem) {
+                        ActivityLogger::log(
+                            action: 'item_assigned_to_base',
+                            entityType: 'order_item',
+                            entityId: $orderItemId,
+                            description: "Producto '{$orderItem->description}' asignado a base '" . ($base->name ?? 'Sin nombre') . "' - Cantidad: {$pivotData['qty']}",
+                            palletId: $pallet->id,
+                            newValues: ['base_id' => $base->id, 'base_name' => $base->name, 'qty' => $pivotData['qty']],
+                        );
+                    }
                 }
             }
-        }
 
-        ActivityLogger::log(
-            action: 'base_created',
-            entityType: 'pallet_base',
-            entityId: $base->id,
-            description: "Base creada: '" . ($base->name ?? 'Sin nombre') . "'",
-            palletId: $pallet->id,
-            newValues: ['name' => $base->name, 'note' => $base->note],
-        );
+            ActivityLogger::log(
+                action: 'base_created',
+                entityType: 'pallet_base',
+                entityId: $base->id,
+                description: "Base creada: '" . ($base->name ?? 'Sin nombre') . "'",
+                palletId: $pallet->id,
+                newValues: ['name' => $base->name, 'note' => $base->note],
+            );
 
-        return ['base' => $base];
+            return ['base' => $base];
+        });
     }
 
     public function updateBase(Pallet $pallet, PalletBase $base, array $data): array
@@ -95,45 +112,65 @@ class PalletBaseService
             return ['error' => ['message' => 'Base no encontrada'], 'status' => 404];
         }
 
-        $changeLog = $this->buildBaseChangeLog($base, $data);
+        return DB::transaction(function () use ($pallet, $base, $data) {
+            $base = PalletBase::query()->lockForUpdate()->findOrFail($base->id);
+            $changeLog = $this->buildBaseChangeLog($base, $data);
+            $syncResult = null;
+            $oldItems = [];
+            $orderItemsMap = collect();
 
-        $base->update([
-            'name' => $data['name'] ?? $base->name,
-            'note' => $data['note'] ?? $base->note,
-        ]);
+            if (isset($data['items'])) {
+                $palletOrderIds = $pallet->orders()->pluck('orders.id');
+                $requestedItemIds = collect($data['items'])->pluck('order_item_id');
+                $oldItemIds = DB::table('pallet_base_order_items')
+                    ->where('base_id', $base->id)
+                    ->pluck('order_item_id');
+                $allItemIds = $requestedItemIds
+                    ->merge($oldItemIds)
+                    ->unique()
+                    ->sort()
+                    ->values();
 
-        if (isset($data['items'])) {
-            $oldItems = $base->orderItems()->get()->mapWithKeys(fn ($item) => [$item->id => ['qty' => $item->pivot->qty]])->toArray();
+                [$orderItemsMap, $ordersMap] = $this->fetchOrderData($allItemIds, lock: true);
+                $oldItems = $base->orderItems()
+                    ->orderBy('order_items.id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->mapWithKeys(fn ($item) => [$item->id => ['qty' => $item->pivot->qty]])
+                    ->toArray();
+                $allocations = $this->fetchAllocations($base, $requestedItemIds, lock: true);
 
-            $pallet->loadMissing('orders');
-            $requestedItemIds = collect($data['items'])->pluck('order_item_id');
-            $allItemIds = $requestedItemIds->merge(array_keys($oldItems))->unique()->values();
+                $syncResult = $this->syncBaseItems($palletOrderIds, $base, $data['items'], $oldItems, $orderItemsMap, $ordersMap, $allocations);
 
-            [$orderItemsMap, $ordersMap] = $this->fetchOrderData($allItemIds);
-            $allocations = $this->fetchAllocations($pallet, $base, $requestedItemIds);
+                if (isset($syncResult['error'])) {
+                    return ['error' => $syncResult['error'], 'status' => 409];
+                }
 
-            $syncResult = $this->syncBaseItems($pallet, $base, $data['items'], $oldItems, $orderItemsMap, $ordersMap, $allocations);
-
-            if (isset($syncResult['error'])) {
-                return ['error' => $syncResult['error'], 'status' => 422];
             }
 
-            $this->logItemChanges($pallet, $base, $syncResult['items'], $oldItems, $syncResult['removed'], $orderItemsMap);
-        }
+            $base->update([
+                'name' => $data['name'] ?? $base->name,
+                'note' => $data['note'] ?? $base->note,
+            ]);
 
-        if (! empty($changeLog['descriptions'])) {
-            ActivityLogger::log(
-                action: 'base_updated',
-                entityType: 'pallet_base',
-                entityId: $base->id,
-                description: "Base '" . ($base->name ?? 'Sin nombre') . "': " . implode(', ', $changeLog['descriptions']),
-                palletId: $pallet->id,
-                oldValues: ! empty($changeLog['old']) ? $changeLog['old'] : null,
-                newValues: ! empty($changeLog['new']) ? $changeLog['new'] : null,
-            );
-        }
+            if ($syncResult !== null) {
+                $this->logItemChanges($pallet, $base, $syncResult['items'], $oldItems, $syncResult['removed'], $orderItemsMap);
+            }
 
-        return ['base' => $base];
+            if (! empty($changeLog['descriptions'])) {
+                ActivityLogger::log(
+                    action: 'base_updated',
+                    entityType: 'pallet_base',
+                    entityId: $base->id,
+                    description: "Base '" . ($base->name ?? 'Sin nombre') . "': " . implode(', ', $changeLog['descriptions']),
+                    palletId: $pallet->id,
+                    oldValues: ! empty($changeLog['old']) ? $changeLog['old'] : null,
+                    newValues: ! empty($changeLog['new']) ? $changeLog['new'] : null,
+                );
+            }
+
+            return ['base' => $base];
+        });
     }
 
     private function buildBaseChangeLog(PalletBase $base, array $data): array
@@ -157,7 +194,7 @@ class PalletBaseService
         return ['old' => $oldValues, 'new' => $newValues, 'descriptions' => $descriptions];
     }
 
-    private function syncBaseItems(Pallet $pallet, PalletBase $base, array $items, array $oldItems, Collection $orderItemsMap, Collection $ordersMap, Collection $allocations): array
+    private function syncBaseItems(Collection $palletOrderIds, PalletBase $base, array $items, array $oldItems, Collection $orderItemsMap, Collection $ordersMap, Collection $allocations): array
     {
         $itemsToSync = $oldItems;
         $removedItemIds = [];
@@ -165,8 +202,10 @@ class PalletBaseService
         foreach ($items as $item) {
             $orderItem = $orderItemsMap->get($item['order_item_id']);
 
-            if (! $orderItem || ! $pallet->orders->contains('id', $orderItem->order_id)) {
-                continue;
+            if (! $orderItem || ! $palletOrderIds->contains($orderItem->order_id)) {
+                return ['error' => [
+                    'message' => 'El producto no pertenece a un pedido asociado a este pallet.',
+                ]];
             }
 
             $order = $ordersMap->get($orderItem->order_id);
@@ -194,8 +233,7 @@ class PalletBaseService
             }
 
             $totalAssigned = $allocations->get($item['order_item_id'], 0);
-            $currentQtyInBase = $oldItems[$item['order_item_id']]['qty'] ?? 0;
-            $available = $orderItem->qty - $totalAssigned + $currentQtyInBase;
+            $available = $orderItem->qty - $totalAssigned;
 
             if ($item['qty'] > $available) {
                 return ['error' => [
@@ -258,17 +296,25 @@ class PalletBaseService
      * Devuelve un mapa [order_item_id => total_qty_asignada_en_otras_bases].
      * Si $itemIds está vacío, retorna una colección vacía sin hacer query.
      */
-    private function fetchAllocations(Pallet $pallet, PalletBase $base, Collection $itemIds): Collection
+    private function fetchAllocations(?PalletBase $base, Collection $itemIds, bool $lock = false): Collection
     {
         if ($itemIds->isEmpty()) {
             return collect();
         }
 
-        return DB::table('pallet_base_order_items')
-            ->join('pallet_bases', 'pallet_bases.id', '=', 'pallet_base_order_items.base_id')
-            ->where('pallet_bases.pallet_id', $pallet->id)
-            ->where('pallet_bases.id', '!=', $base->id)
+        $query = DB::table('pallet_base_order_items')
             ->whereIn('pallet_base_order_items.order_item_id', $itemIds)
+            ->when($base, fn ($query) => $query->where('base_id', '!=', $base->id));
+
+        if ($lock) {
+            (clone $query)
+                ->orderBy('order_item_id')
+                ->orderBy('base_id')
+                ->lockForUpdate()
+                ->get();
+        }
+
+        return $query
             ->groupBy('pallet_base_order_items.order_item_id')
             ->selectRaw('pallet_base_order_items.order_item_id, SUM(pallet_base_order_items.qty) as total_qty')
             ->get()
@@ -279,11 +325,19 @@ class PalletBaseService
      * Pre-fetcha OrderItems y Orders en 2 queries fijas.
      * Retorna [$orderItemsMap (keyBy id), $ordersMap (keyBy id)].
      */
-    private function fetchOrderData(Collection $itemIds): array
+    private function fetchOrderData(Collection $itemIds, bool $lock = false): array
     {
-        $orderItemsMap = OrderItem::whereIn('id', $itemIds)->get()->keyBy('id');
+        $orderItemsQuery = OrderItem::whereIn('id', $itemIds)->orderBy('id');
+        if ($lock) {
+            $orderItemsQuery->lockForUpdate();
+        }
+        $orderItemsMap = $orderItemsQuery->get()->keyBy('id');
         $orderIds = $orderItemsMap->pluck('order_id')->unique()->values();
-        $ordersMap = Order::whereIn('id', $orderIds)->get()->keyBy('id');
+        $ordersQuery = Order::whereIn('id', $orderIds)->orderBy('id');
+        if ($lock) {
+            $ordersQuery->lockForUpdate();
+        }
+        $ordersMap = $ordersQuery->get()->keyBy('id');
 
         return [$orderItemsMap, $ordersMap];
     }

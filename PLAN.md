@@ -19,7 +19,7 @@
 Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b)
 Fase 1 — Red de seguridad      ✅ hecho (gates activos y caracterización completos)
 Fase Fundacional — Normativa  ✅ cinco autoridades y router por IDs estables
-Fase 2 — Rebanadas verticales  🟡 R-02 en curso (1 de 7 cerradas)
+Fase 2 — Rebanadas verticales  🟡 R-02 en validación remota (1 de 7 cerradas)
 Fase 3 — Dominio específico    🔲
 Fase 4 — Performance           🔲 (benchmarks/ armado, baseline sin correr — H-040)
 Fase 5 — Infraestructura       🔲
@@ -34,7 +34,7 @@ _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código
 
 1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
-3. **Implementar R-02** — `POST/PATCH bases` con transacción, locks por `order_item`, validación global, `409` y auditoría atómica. Reutilizar D-003. `H-005`, `H-006`, `H-011`.
+3. **Cerrar R-02 en CI** — implementación y suite local verdes; falta acreditar concurrencia PostgreSQL y pipeline remoto antes de avanzar a R-03. `H-005`, `H-006`, `H-011`.
 
 ---
 
@@ -125,17 +125,14 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 
 ### R-02 · `POST /pallets/{pallet}/bases` + `PATCH /pallets/{pallet}/bases/{base}` (con items)
 ```
-□ 1. Auth                  → has.role, ok
-□ 2. Validación            → StorePalletBaseRequest, revisar
-□ 3. Negocio (tx + lock)   → PalletBaseService::createBase/updateBase SIN transacción ni lock hoy.
-                              Envolver en DB::transaction() + lockForUpdate() sobre order_items
-                              involucrados antes de calcular $available → `BE-TX`
-□ 4. Datos                 → fetchAllocations() ya evita N+1, revisar bajo lock
-□ 5. Respuesta (HTTP)      → mismos casos 422→409 que R-01
-□ 6. Audit log             → ya existe (ActivityLogger dentro del service), moverlo a la transacción
-□ 7. Tests                 → caso clave: 2 bases distintas del mismo pallet asignando el mismo
-                              order_item concurrentemente hasta agotar el disponible
-□ 8. Medición              → benchmarks/
+✅ 1. Auth                  → has.role preservado; ownership base/pallet devuelve 404
+✅ 2. Validación            → Form Request rechaza items duplicados; pertenencia y techo se validan bajo lock
+✅ 3. Negocio (tx + lock)   → create/update atómicos; order_items y pivots se bloquean en orden D-003
+🟡 4. Datos                 → techo global entre pallets protegido; defensa DB transversal sigue en H-006
+✅ 5. Respuesta (HTTP)      → conflictos de pertenencia, estado y disponibilidad devuelven 409
+✅ 6. Audit log             → confirma dentro de la transacción; rollback forzado acreditado en create/update
+🟡 7. Tests                 → 57 tests/135 assertions locales; gate concurrente PostgreSQL agregado, pendiente CI
+✅ 8. Medición              → 14 queries constantes con 20 bases; `benchmarks/results/2026-10-29-r02-create-base.md`
 ```
 **Nota:** se agrupan los dos endpoints porque comparten `PalletBaseService` — separarlos no reduce el riesgo, la corrección es una sola.
 **Hallazgos que resuelve:** H-005, H-006, H-011 (parcial).

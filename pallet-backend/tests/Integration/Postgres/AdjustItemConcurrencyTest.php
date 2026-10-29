@@ -56,9 +56,21 @@ class AdjustItemConcurrencyTest extends TestCase
         $firstBase = PalletBase::factory()->for($pallet, 'pallet')->create();
         $secondBase = PalletBase::factory()->for($pallet, 'pallet')->create();
 
-        $responses = $this->sendConcurrently([
-            [18001, $pallet->id, $firstBase->id, $item->id, $token],
-            [18002, $pallet->id, $secondBase->id, $item->id, $token],
+        $responses = $this->sendJsonConcurrently([
+            [
+                'port' => 18001,
+                'method' => 'PATCH',
+                'path' => "/api/v1/pallets/{$pallet->id}/bases/{$firstBase->id}/adjust-item",
+                'payload' => ['order_item_id' => $item->id, 'qty' => 6],
+                'token' => $token,
+            ],
+            [
+                'port' => 18002,
+                'method' => 'PATCH',
+                'path' => "/api/v1/pallets/{$pallet->id}/bases/{$secondBase->id}/adjust-item",
+                'payload' => ['order_item_id' => $item->id, 'qty' => 6],
+                'token' => $token,
+            ],
         ]);
 
         $statuses = array_column($responses, 'status');
@@ -69,6 +81,49 @@ class AdjustItemConcurrencyTest extends TestCase
             ->where('order_item_id', $item->id)
             ->sum('qty'));
         $this->assertDatabaseCount('activity_logs', 1);
+    }
+
+    public function test_dos_creaciones_de_base_concurrentes_no_superan_la_cantidad_pedida(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $token = $user->createToken('postgres-concurrency')->plainTextToken;
+        $order = Order::factory()->create();
+        $item = OrderItem::factory()->for($order)->create(['qty' => 10]);
+        $pallet = Pallet::factory()->create();
+        $pallet->orders()->attach($order->id);
+
+        $responses = $this->sendJsonConcurrently([
+            [
+                'port' => 18001,
+                'method' => 'POST',
+                'path' => "/api/v1/pallets/{$pallet->id}/bases",
+                'payload' => [
+                    'name' => 'Base concurrente A',
+                    'items' => [['order_item_id' => $item->id, 'qty' => 6]],
+                ],
+                'token' => $token,
+            ],
+            [
+                'port' => 18002,
+                'method' => 'POST',
+                'path' => "/api/v1/pallets/{$pallet->id}/bases",
+                'payload' => [
+                    'name' => 'Base concurrente B',
+                    'items' => [['order_item_id' => $item->id, 'qty' => 6]],
+                ],
+                'token' => $token,
+            ],
+        ]);
+
+        $statuses = array_column($responses, 'status');
+        sort($statuses);
+
+        $this->assertSame([201, 409], $statuses, json_encode($responses, JSON_PRETTY_PRINT));
+        $this->assertSame(6, (int) DB::table('pallet_base_order_items')
+            ->where('order_item_id', $item->id)
+            ->sum('qty'));
+        $this->assertDatabaseCount('pallet_bases', 1);
+        $this->assertDatabaseCount('activity_logs', 2);
     }
 
     private function startServer(int $port): void
@@ -100,24 +155,24 @@ class AdjustItemConcurrencyTest extends TestCase
     }
 
     /**
-     * @param array<int, array{int, int, int, int, string}> $requests
+     * @param array<int, array{port: int, method: string, path: string, payload: array<string, mixed>, token: string}> $requests
      * @return array<int, array{status: int, body: mixed}>
      */
-    private function sendConcurrently(array $requests): array
+    private function sendJsonConcurrently(array $requests): array
     {
         $multiHandle = curl_multi_init();
         $handles = [];
 
-        foreach ($requests as [$port, $palletId, $baseId, $itemId, $token]) {
-            $handle = curl_init("http://127.0.0.1:{$port}/api/v1/pallets/{$palletId}/bases/{$baseId}/adjust-item");
+        foreach ($requests as $request) {
+            $handle = curl_init("http://127.0.0.1:{$request['port']}{$request['path']}");
             curl_setopt_array($handle, [
-                CURLOPT_CUSTOMREQUEST => 'PATCH',
+                CURLOPT_CUSTOMREQUEST => $request['method'],
                 CURLOPT_HTTPHEADER => [
                     'Accept: application/json',
                     'Content-Type: application/json',
-                    "Authorization: Bearer {$token}",
+                    "Authorization: Bearer {$request['token']}",
                 ],
-                CURLOPT_POSTFIELDS => json_encode(['order_item_id' => $itemId, 'qty' => 6], JSON_THROW_ON_ERROR),
+                CURLOPT_POSTFIELDS => json_encode($request['payload'], JSON_THROW_ON_ERROR),
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT => 15,
             ]);

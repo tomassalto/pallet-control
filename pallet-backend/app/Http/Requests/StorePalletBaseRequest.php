@@ -17,7 +17,7 @@ class StorePalletBaseRequest extends FormRequest
             'name' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string', 'max:2000'],
             'items' => ['nullable', 'array'],
-            'items.*.order_item_id' => ['required', 'integer', 'exists:order_items,id'],
+            'items.*.order_item_id' => ['required', 'integer', 'distinct', 'exists:order_items,id'],
             'items.*.qty' => ['required', 'integer', 'min:0'],
         ];
     }

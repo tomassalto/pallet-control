@@ -48,11 +48,21 @@ Implementado:
 
 Evidencia final: Actions run `40827127268`, commit `78786b1`, jobs `ci` y `postgres-concurrency` verdes.
 
-## Próxima sesión — R-02 bases con items
+## Sesión actual — R-02 bases con items
 
 Crear la rama desde el cierre de R-01, nunca desde `master`. Aplicar `DOMINIO.md`, `BE-VALID`, `BE-ERR`, `BE-TX`, `SEC-AUTHZ`, `SEC-LOG`, `QA-INVARIANT`, `QA-RISK` y `BE-GATE`.
 
-Objetivo: `PalletBaseService::createBase()` y `updateBase()` no deben persistir nombre/base/items parcialmente ni sobreasignar ante concurrencia. Reutilizar el orden de locks definido en D-003 y acreditar rollback, límite global, `409`, auditoría y PostgreSQL concurrente.
+Implementado localmente:
+
+1. `createBase()` y `updateBase()` ejecutan base, pivots y activity log en una sola transacción.
+2. Locks deterministas de `order_items` y asignaciones reutilizan D-003 y calculan disponibilidad global entre pallets.
+3. Conflictos de pertenencia, pedido finalizado y sobreasignación responden `409`; items duplicados responden `422` desde el Form Request.
+4. Fallas forzadas del activity log revierten base, nombre y cantidades.
+5. Suite backend completa verde: 57 tests, 135 assertions; Pint, PHPStan, Composer audit, npm audit activo, lint y build verdes.
+6. Creación medida en 14 queries constantes con 20 bases; resultado en `benchmarks/results/2026-10-29-r02-create-base.md`.
+7. Gate PostgreSQL extendido: dos `POST bases` concurrentes deben producir un `201`, un `409`, total asignado 6, una sola base y dos logs.
+
+Pendiente para cerrar R-02: push de la rama, pipeline remoto y registro de su evidencia. Después comienza R-03.
 
 ## Sesiones R-02 a R-07
 
