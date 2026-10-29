@@ -56,8 +56,8 @@ export default function App() {
       <Suspense fallback={<PageSpinner />}>
         <Routes>
           {/* ── Sin layout: páginas públicas y auth ────────────────────────── */}
-          <Route path="/order-view/:code" element={<OrderPublicView />} />
-          <Route path="/app/order-view/:code" element={<OrderPublicView />} />
+          <Route path="/order-view/:token" element={<OrderPublicView />} />
+          <Route path="/app/order-view/:token" element={<OrderPublicView />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 

@@ -15,7 +15,7 @@ class PublicOrderController extends Controller
      * Muestra todos los pallets del pedido con sus bases y productos,
      * más los tickets con highlights OCR y el resumen de ítems.
      */
-    public function show(string $code)
+    public function show(string $token)
     {
         $order = Order::with([
             'customer',
@@ -27,7 +27,7 @@ class PublicOrderController extends Controller
             'pallets.bases.photos' => fn ($q) => $q->orderBy('created_at'),
             'pallets.bases.orderItems',
         ])
-            ->where('code', $code)
+            ->where('public_token', $token)
             ->first();
 
         if (! $order) {

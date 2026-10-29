@@ -47,7 +47,9 @@ Referencia:  `SEC-AUTHZ`, `BE-API`
 ```
 **Qué está pasando:** `GET /public/orders/{code}` no requiere auth ni tiene `throttle`, y `code` es un string libre que en la práctica es numérico y secuencial (`attachOrder` usa regex `^\d+$`).
 **Por qué importa acá:** cualquiera puede iterar códigos y extraer cliente, items, precios y fotos de pedidos ajenos, sin límite de tasa.
-**Estado:** 🔲 abierto
+**Resolución R-06:** un token aleatorio separado reemplaza al código comercial en GET y faltantes. El token se oculta por defecto y las rutas aplican límites combinados por IP y recurso según D-006.
+**Evidencia local:** tests acreditan acceso por token, rechazo del código enumerable, contrato sin token, entrega sólo autenticada, faltantes protegidos, `429` con `Retry-After`, backfill/rollback y presupuesto constante.
+**Estado:** 🟡 implementación local verde; pendiente CI.
 
 #### H-002 — Webhook de Telegram falla abierto sin secret configurado
 ```
@@ -441,7 +443,7 @@ Ubicación:   app/Http/Controllers/Api/PendingItemController.php:14-29 (usa ->ge
 ```
 **Estado:** 🔲 abierto
 
-**N+1 — candidatos identificados, sin medir todavía:** ver `benchmarks/README.md` (5 endpoints priorizados: `orders/{id}`, `public/orders/{code}`, `pallets/{id}`, `orders` listado, webhook de Telegram). `Model::preventLazyLoading()` y Debugbar ya están activos en local (`BE-PERF`) — el baseline con k6 está pendiente de correr.
+**N+1 — candidatos identificados, sin medir todavía:** ver `benchmarks/README.md` (5 endpoints priorizados: `orders/{id}`, `public/orders/{token}`, `pallets/{id}`, `orders` listado, webhook de Telegram). `Model::preventLazyLoading()` y Debugbar ya están activos en local (`BE-PERF`) — el baseline con k6 está pendiente de correr.
 
 ---
 

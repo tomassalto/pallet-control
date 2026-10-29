@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import QRCode from "react-qr-code";
 
 export default function QRModal({ order, onClose }) {
-  const url = `${window.location.origin}/order-view/${order?.code}`;
+  const url = `${window.location.origin}/order-view/${order?.public_token}`;
   const label = `Pedido #${order?.code}`;
 
   useEffect(() => {

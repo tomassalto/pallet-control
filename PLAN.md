@@ -50,7 +50,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 
 | ID | Hallazgo | Esfuerzo | Impacto | Automatizable |
 |---|---|---|---|---|
-| H-001 | IDOR/enumeración en `GET /public/orders/{code}` | 🟡 medio | Alto | ❌ no (decisión: throttle vs. code opaco) |
+| H-001 | IDOR/enumeración en `GET /public/orders/{code}` | 🟡 medio | Alto | ❌ no (resuelto mediante decisión D-006) |
 | H-019 | `$e->getMessage()` filtrado al cliente en 4 controladores | 🟢 bajo | Medio | 🟡 parcial |
 | H-030 | Contenedor corre como root | 🟢 bajo | Alto | ✅ sí |
 | H-032 | `pallet-frontend/.env` trackeado en git | 🟢 bajo | Medio | ✅ sí |
@@ -188,18 +188,18 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 
 ---
 
-### R-06 · `GET /public/orders/{code}`
+### R-06 · `GET /public/orders/{token}`
 ```
-□ 1. Auth                  → decidir: throttle agresivo, o migrar `code` público a un token
-                              opaco separado del código de pedido interno → ver DECISIONES.md D-XXX
-□ 2. Validación             → —
-□ 3. Negocio                → —
-□ 4. Datos                  → ya usa eager loading correcto, revisar con benchmarks/
-□ 5. Respuesta (HTTP)       → ok
-□ 6. Audit log              → evaluar loguear accesos (rate de consultas por code)
-□ 7. Tests                  → caso clave: código inexistente, code de otro pedido, rate limit
-□ 8. Medición                → benchmarks/ (ya priorizado, endpoint #2 de la lista)
+✅ 1. Acceso                → token opaco de 48 caracteres; límites por IP + recurso (`D-006`)
+✅ 2. Validación            → sólo 48 caracteres alfanuméricos; código o token inexistente devuelven 404
+✅ 3. Negocio               → GET y solicitud de faltantes comparten la misma capacidad
+✅ 4. Datos                 → token único, backfill reversible y oculto por defecto
+✅ 5. Respuesta (HTTP)      → contrato público no expone el token; abuso devuelve 429 + Retry-After
+✅ 6. Audit log             → no se registra cada lectura; se limitan y observan patrones (`D-006`)
+🟡 7. Tests                 → 82 tests/226 assertions locales; token, contrato y rate limit; pendiente CI
+✅ 8. Medición              → 6 queries con 20 ítems; `benchmarks/results/2026-10-29-r06-public-order.md`
 ```
+**Estado:** 🟡 implementación local verde; pendiente CI.
 **Hallazgos que resuelve:** H-001.
 
 ---
@@ -261,7 +261,7 @@ Docker/infra (mecánico, bajo riesgo):
 Decisiones que necesitan entrada en DECISIONES.md antes de ejecutarse:
 □ Soft delete vs. borrado físico en las tablas de movimiento       → H-009, `BE-DATA`
 □ Estrategia de locking (lockForUpdate vs. optimista con versión)  → H-005, H-006b, H-007, `BE-TX`
-□ Code público de pedido: throttle vs. token opaco separado         → H-001, `SEC-ABUSE`
+✅ Code público de pedido: token opaco + límites por IP/recurso      → D-006, H-001, `SEC-ABUSE`
 
 Más adelante (Fase 3+):
 □ Migración de los 16 controladores a Form Request                  → H-020

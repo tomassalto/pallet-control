@@ -16,7 +16,7 @@
 //   AUTH_EMAIL    usuario con rol asignado (necesario para /orders, /orders/{id}, /pallets/{id})
 //   AUTH_PASSWORD
 //   ORDER_ID      id numérico de un pedido con varios pallets/bases/items cargados
-//   ORDER_CODE    code público de ese mismo pedido (para /public/orders/{code})
+//   ORDER_PUBLIC_TOKEN token opaco del mismo pedido (para /public/orders/{token})
 //   PALLET_ID     id numérico de un pallet con varias bases y fotos
 
 import http from 'k6/http';
@@ -27,7 +27,7 @@ const BASE_URL = __ENV.BASE_URL || 'http://localhost:8000';
 const AUTH_EMAIL = __ENV.AUTH_EMAIL || '';
 const AUTH_PASSWORD = __ENV.AUTH_PASSWORD || '';
 const ORDER_ID = __ENV.ORDER_ID || '1';
-const ORDER_CODE = __ENV.ORDER_CODE || '1';
+const ORDER_PUBLIC_TOKEN = __ENV.ORDER_PUBLIC_TOKEN || '';
 const PALLET_ID = __ENV.PALLET_ID || '1';
 
 // Un Trend por endpoint — un p95 agregado de endpoints distintos miente,
@@ -57,6 +57,9 @@ export function setup() {
       'Faltan AUTH_EMAIL / AUTH_PASSWORD. Ver benchmarks/README.md — se necesita ' +
       'un usuario con rol asignado para /orders, /orders/{id} y /pallets/{id}.'
     );
+  }
+  if (!ORDER_PUBLIC_TOKEN) {
+    throw new Error('Falta ORDER_PUBLIC_TOKEN. Obtenelo desde GET /api/v1/orders/{id}.');
   }
 
   const loginRes = http.post(
@@ -100,14 +103,14 @@ export default function (data) {
     check(res, { 'order show 200': (r) => r.status === 200 });
   });
 
-  // 3) GET /public/orders/{code} — misma profundidad que (2) + más, sin auth,
-  //    sin throttle. El más expuesto a volumen real/no controlado.
-  group('GET /api/v1/public/orders/{code}', () => {
-    const res = http.get(`${BASE_URL}/api/v1/public/orders/${ORDER_CODE}`, {
+  // 3) GET /public/orders/{token} — capacidad pública con rate limit.
+  //    Sólo los 200 alimentan latencia; los 429 acreditan que el control actúa.
+  group('GET /api/v1/public/orders/{token}', () => {
+    const res = http.get(`${BASE_URL}/api/v1/public/orders/${ORDER_PUBLIC_TOKEN}`, {
       headers: { Accept: 'application/json' },
     });
-    trendPublicOrderShow.add(res.timings.duration);
-    check(res, { 'public order show 200': (r) => r.status === 200 });
+    if (res.status === 200) trendPublicOrderShow.add(res.timings.duration);
+    check(res, { 'public order show 200 o rate limited': (r) => [200, 429].includes(r.status) });
   });
 
   // 4) GET /pallets/{id} — misma familia de riesgo que (2), del lado del pallet.

@@ -115,9 +115,24 @@ Implementado localmente:
 
 Evidencia final: commit `85daa84`; Actions run `40931851828` con jobs `ci` y `postgres-concurrency` verdes.
 
-## Próxima sesión — R-06 acceso público a pedidos
+## Sesión actual — R-06 acceso público a pedidos
 
 Crear la rama desde el cierre documental de R-05, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `PRODUCTO.md`, `SEC-THREAT`, `SEC-AUTHZ`, `SEC-ABUSE`, `SEC-DATA`, `BE-API`, `BE-ERR`, `QA-RISK`, `QA-SEC` y `QA-CONTRACT`. Antes de cambiar el contrato público, registrar la decisión sobre código enumerable, token opaco y compatibilidad.
+
+Implementado localmente:
+
+1. `D-006` clasifica datos, actores, amenazas, compatibilidad y riesgo residual.
+2. `orders.public_token` usa 48 caracteres aleatorios, índice único, backfill de existentes y generación automática para nuevos pedidos.
+3. El modelo oculta el token por defecto; sólo store/show autenticados lo hacen visible para link y QR.
+4. GET público y POST de faltantes resuelven únicamente por token. Los links históricos basados en código quedan revocados.
+5. Límites nombrados combinan cuota por IP y por IP/recurso; el contrato de exceso es `429` con `Retry-After`.
+6. Frontend, QR, compartir y formulario de faltantes usan el token sin mostrarlo en errores ni en la respuesta pública.
+7. Migración probada `up → down → backfill de pedido legacy → up → down` sobre SQLite temporal.
+8. Tests focalizados cubren token, código enumerable rechazado, entrega autenticada, faltantes y rate limit.
+9. Presupuesto de 6 queries con 20 ítems, guardado en `benchmarks/results/2026-10-29-r06-public-order.md`.
+10. Suite completa local verde: 82 tests, 226 assertions; Pint, PHPStan, audits, lint y build verdes.
+
+Pendiente para cerrar: push, pipeline remoto y evidencia final.
 
 ## Sesiones R-02 a R-07
 

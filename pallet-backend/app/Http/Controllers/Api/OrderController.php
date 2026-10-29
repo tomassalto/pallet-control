@@ -117,7 +117,7 @@ class OrderController extends Controller
 
         TelegramNotifier::send("🆕 *Nuevo pedido* `#{$order->code}` creado");
 
-        return response()->json($order->load('customer'), 201);
+        return response()->json($order->load('customer')->makeVisible('public_token'), 201);
     }
 
     public function show(Order $order)
@@ -142,7 +142,7 @@ class OrderController extends Controller
         $pendingItemsCount = count($pendingItemIds);
 
         return response()->json([
-            'order' => $order,
+            'order' => $order->makeVisible('public_token'),
             'pallets' => $order->pallets,
             'items' => $itemsWithLocations,
             'highlights_ready' => $highlightsReady,

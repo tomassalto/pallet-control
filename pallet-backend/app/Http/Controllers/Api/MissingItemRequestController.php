@@ -12,10 +12,10 @@ use Illuminate\Http\Request;
 
 class MissingItemRequestController extends Controller
 {
-    // POST /public/orders/{code}/missing-items — sin auth
-    public function store(Request $request, string $code)
+    // POST /public/orders/{token}/missing-items — sin auth, protegido por token opaco
+    public function store(Request $request, string $token)
     {
-        $order = Order::where('code', $code)->first();
+        $order = Order::where('public_token', $token)->first();
         if (! $order) {
             return response()->json(['message' => 'Pedido no encontrado'], 404);
         }

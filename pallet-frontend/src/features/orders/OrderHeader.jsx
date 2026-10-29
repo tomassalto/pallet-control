@@ -7,8 +7,8 @@ import { getStatusConfig } from "../../constants/status";
 const SEC_LABEL =
   "text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500";
 
-async function copyOrderViewUrl(code, setCopied) {
-  const url = `${window.location.origin}/order-view/${code}`;
+async function copyOrderViewUrl(code, publicToken, setCopied) {
+  const url = `${window.location.origin}/order-view/${publicToken}`;
   try {
     if (navigator.share) {
       await navigator.share({ title: `Pedido ${code}`, url });
@@ -72,7 +72,7 @@ export function OrderHeader({ order, pallets, modalItems, onOrganize, onDetach, 
         <div className="flex items-center gap-2 flex-wrap">
           <StatusBadge label={status.label} color={status.color} />
           <button
-            onClick={() => copyOrderViewUrl(order.code, setCopied)}
+            onClick={() => copyOrderViewUrl(order.code, order.public_token, setCopied)}
             className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-semibold hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors"
             title="Compartir vista pública del pedido"
           >

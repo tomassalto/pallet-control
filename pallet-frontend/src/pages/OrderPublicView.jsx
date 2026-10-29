@@ -66,7 +66,7 @@ const CheckIcon = () => (
 
 // ── Vista principal ───────────────────────────────────────────────────────────
 export default function OrderPublicView() {
-  const { code } = useParams();
+  const { token } = useParams();
   const [copied, setCopied] = useState(false);
 
   const [isDark, setIsDark] = useState(() => readThemePreference());
@@ -76,8 +76,8 @@ export default function OrderPublicView() {
     isError,
     error,
   } = useQuery({
-    queryKey: ["public-order", code],
-    queryFn: () => apiGet(`/public/orders/${code}`),
+    queryKey: ["public-order", token],
+    queryFn: () => apiGet(`/public/orders/${token}`),
     retry: false,
   });
 
@@ -88,8 +88,8 @@ export default function OrderPublicView() {
 
   async function handleShare() {
     const url = window.location.href;
-    const title = `Pedido ${code} — Pallet Control`;
-    const text = `Ver el contenido del pedido ${code}`;
+    const title = `Pedido ${order?.code ?? ""} — Pallet Control`;
+    const text = `Ver el contenido del pedido ${order?.code ?? ""}`;
     if (navigator.share) {
       try {
         await navigator.share({ title, text, url });
@@ -119,9 +119,9 @@ export default function OrderPublicView() {
           <p className="text-5xl mb-4">📭</p>
           <p className="text-lg font-semibold text-gray-700 dark:text-gray-200">Pedido no encontrado</p>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {error?.response?.data?.message || "No se pudo cargar la vista pÃºblica del pedido."}
+            {error?.response?.data?.message || "No se pudo cargar la vista pública del pedido."}
           </p>
-          <p className="text-sm text-gray-400 mt-1">Código: {code}</p>
+          <p className="text-sm text-gray-400 mt-1">Verificá que el enlace esté completo y vigente.</p>
         </div>
       </div>
     );
@@ -206,7 +206,7 @@ export default function OrderPublicView() {
           <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
             ⚠️ ¿Falta algo?
           </h2>
-          <MissingItemsForm items={order.items} orderCode={order.code} />
+          <MissingItemsForm items={order.items} accessToken={token} />
         </section>
 
         <p className="text-center text-xs text-gray-300 dark:text-gray-600 pb-4 pt-2">

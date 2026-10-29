@@ -202,3 +202,31 @@ La fila del pedido existe antes que sus items y coordina todas las altas del mis
 Las altas de un mismo pedido se ejecutan en serie y un deploy con datos históricos inconsistentes requiere remediación explícita antes de aplicar la migración.
 
 **Referencia normativa:** `BE-VALID`, `BE-DATA`, `BE-TX`, `BE-ERR`, `SEC-LOG`, `QA-INVARIANT`
+
+---
+
+## D-006 — Token opaco para acceso público a pedidos
+
+**Fecha:** 2026-10-29
+**Estado:** ✅ vigente
+
+**Contexto y amenaza**
+La vista pública exponía cliente, EAN, cantidades, precios, fotos, pallets y OCR mediante el código comercial del pedido, que suele ser numérico y enumerable. Los actores considerados son el destinatario legítimo del enlace, un tercero que recibe el enlace y un atacante anónimo que prueba códigos o genera tráfico. El activo es información operativa compartida: no es pública por defecto, aunque el producto permita entregarla a quien posea el enlace.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Sólo rate limit sobre el código | Cambio pequeño | La enumeración sigue siendo viable y distribuible |
+| Login obligatorio | Máxima atribución | Rompe la experiencia de compartir con clientes sin cuenta |
+| Token opaco + límites por IP/recurso | Conserva el enlace público y evita enumeración práctica | El enlace funciona como credencial y debe protegerse |
+
+**Decisión**
+Separar `orders.code` de un `public_token` aleatorio de 48 caracteres, único y oculto en la serialización general. La API autenticada de detalle entrega el token exclusivamente para construir el link y QR. GET público y solicitud de faltantes resuelven sólo por token; el código comercial deja de ser un localizador válido. La lectura limita 60 requests por IP y 20 por combinación IP/recurso por minuto; la escritura limita 20 y 5 respectivamente, con `429` y `Retry-After`.
+
+La migración asigna tokens a pedidos existentes y los nuevos los generan desde el modelo. Los enlaces históricos basados en `code` se invalidan deliberadamente: sostener compatibilidad mantendría H-001. La aplicación debe regenerar y volver a compartir esos enlaces.
+
+**Riesgo residual y operación**
+Quien obtenga el enlace puede consultar la vista hasta que el token sea rotado por operación administrativa; no se registra cada lectura para evitar ruido y datos innecesarios. La detección se basa en patrones de rate limiting. Una interfaz de rotación y expiración temporal podrá evaluarse si el piloto demuestra esa necesidad.
+
+**Referencia normativa:** `SEC-THREAT`, `SEC-AUTHZ`, `SEC-DATA`, `SEC-ABUSE`, `BE-API`, `QA-CONTRACT`, `QA-SEC`

@@ -24,7 +24,7 @@ export default function OrderDetailActions({
             iconBg="bg-blue-600"
             label="Vista pública"
             sublabel="Ver como cliente vía QR"
-            href={`/order-view/${order.code}`}
+            href={`/order-view/${order.public_token}`}
           />
           <ActionItem
             icon={Icons.Import}
@@ -73,7 +73,7 @@ export default function OrderDetailActions({
             iconBg="bg-blue-600"
             label="Vista pública"
             sublabel="Ver como cliente vía QR"
-            href={`/order-view/${order.code}`}
+            href={`/order-view/${order.public_token}`}
           />
           <ActionItem
             icon={Icons.History}

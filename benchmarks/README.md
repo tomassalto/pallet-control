@@ -12,7 +12,7 @@ profundidad de relaciones cargadas / fragilidad del contrato de eager loading:
 | # | Endpoint | Por qué es candidato a N+1 |
 |---|---|---|
 | 1 | `GET /api/v1/orders/{order}` ([OrderController::show](../pallet-backend/app/Http/Controllers/Api/OrderController.php)) | El endpoint más profundo del backend: `pallets.bases.photos`, `items.bases.pallet`, `tickets.photos` (7 rutas de eager load) + 2 queries extra de `PendingItem`. Además depende de que `OrderService::enrichItemsWithLocations()` reciba exactamente `items.bases.pallet` precargado — el docblock del método lo advierte, pero es un contrato manual, no forzado por tipos. Cualquier caller nuevo que no siga esa receta dispara N+1 fila por fila. |
-| 2 | `GET /api/v1/public/orders/{code}` ([PublicOrderController::show](../pallet-backend/app/Http/Controllers/Api/PublicOrderController.php)) | Misma profundidad que (1) más `pallets.photos` y `pallets.bases.photos`. Es además el endpoint **público, sin auth y sin throttle** — el que más tráfico no controlado puede recibir (clientes escaneando el QR, o alguien iterando códigos). Un N+1 acá es el más caro de los cinco. |
+| 2 | `GET /api/v1/public/orders/{token}` ([PublicOrderController::show](../pallet-backend/app/Http/Controllers/Api/PublicOrderController.php)) | Misma profundidad que (1) más `pallets.photos` y `pallets.bases.photos`. Es público mediante capacidad opaca y tiene rate limit; el test R-06 fija 6 queries con 20 ítems. En k6 sólo los `200` alimentan latencia y los `429` verifican el límite. |
 | 3 | `GET /api/v1/pallets/{pallet}` ([PalletController::show](../pallet-backend/app/Http/Controllers/Api/PalletController.php)) | Misma familia de riesgo que (1) pero del lado del pallet: `orders.items`, `bases.photos`, `bases.orderItems`, con dos `foreach` en PHP sobre esas colecciones para enriquecer con info de producto. |
 | 4 | `GET /api/v1/orders` ([OrderController::index](../pallet-backend/app/Http/Controllers/Api/OrderController.php)) | Es la versión *listado* de (1): la misma complejidad de relaciones, multiplicada por hasta 20 filas por página. Ya usa eager loading y subqueries correlacionadas, pero es justamente donde un solo `with()` olvidado se convierte en 20-100 queries extra en vez de 1. |
 | 5 | `POST /api/v1/telegram/webhook` (`TelegramBotController::handlePhotoWithoutCaption` / `sendMainMenu` / `sendRecentItems`) | Es el endpoint que más se ejecuta en la práctica — cada foto o `/menu` que manda un operario del depósito dispara una de estas queries con `Pallet::with([...])->limit(3-5)->get()` y varios `flatMap()->sum()` en PHP sobre las relaciones. Hoy están eager-loaded, pero es el lugar con más probabilidad de que alguien agregue un campo nuevo (`$order->customer->email`, por ejemplo) sin actualizar el `with()`. |
@@ -49,7 +49,7 @@ BASE_URL=http://localhost:8000 \
 AUTH_EMAIL=admin@ejemplo.com \
 AUTH_PASSWORD=tu-password \
 ORDER_ID=42 \
-ORDER_CODE=12345 \
+ORDER_PUBLIC_TOKEN=token-opaco-de-48-caracteres \
 PALLET_ID=17 \
 k6 run --vus 20 --duration 30s benchmarks/k6-hot-endpoints.js
 ```
@@ -61,7 +61,7 @@ Variables:
 | `BASE_URL` | no (default `http://localhost:8000`) | Origen del backend |
 | `AUTH_EMAIL` / `AUTH_PASSWORD` | sí | Credenciales de un usuario con rol — el script hace login en `setup()` y reusa el token |
 | `ORDER_ID` | sí | Id numérico de un pedido con datos reales para `/orders/{id}` |
-| `ORDER_CODE` | sí | `code` del mismo pedido, para `/public/orders/{code}` |
+| `ORDER_PUBLIC_TOKEN` | sí | Token opaco del mismo pedido, visible en `GET /orders/{id}`, para `/public/orders/{token}` |
 | `PALLET_ID` | sí | Id numérico de un pallet con datos reales |
 | `--vus` / `--duration` | no | Usuarios concurrentes / duración — 20 VUs por 30s es un piso razonable, no un tope |
 

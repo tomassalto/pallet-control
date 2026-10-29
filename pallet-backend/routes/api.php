@@ -36,9 +36,12 @@ Route::prefix('v1')->group(function () {
     Route::get('/products/by-ean/{ean}', [ProductController::class, 'showByEan']);
 
     // Vista pública de pedido — no requiere auth
-    Route::get('/public/orders/{code}', [PublicOrderController::class, 'show']);
-    Route::post('/public/orders/{code}/missing-items', [MissingItemRequestController::class, 'store'])
-        ->middleware('throttle:5,1');
+    Route::get('/public/orders/{token}', [PublicOrderController::class, 'show'])
+        ->where('token', '[A-Za-z0-9]{48}')
+        ->middleware('throttle:public-order-read');
+    Route::post('/public/orders/{token}/missing-items', [MissingItemRequestController::class, 'store'])
+        ->where('token', '[A-Za-z0-9]{48}')
+        ->middleware('throttle:public-order-write');
 
     // Telegram webhook (sin auth Sanctum, valida X-Telegram-Bot-Api-Secret-Token)
     Route::post('/telegram/webhook', [TelegramBotController::class, 'webhook']);

@@ -1,30 +1,30 @@
 import { useState } from "react";
 import { apiPost } from "../api/client";
 
-const STORAGE_KEY = (code) => `mir_${code}`;
+const STORAGE_KEY = (token) => `mir_${token}`;
 
-function readSubmittedFlag(orderCode) {
+function readSubmittedFlag(accessToken) {
   try {
-    return !!localStorage.getItem(STORAGE_KEY(orderCode));
+    return !!localStorage.getItem(STORAGE_KEY(accessToken));
   } catch {
     return false;
   }
 }
 
-function persistSubmittedFlag(orderCode) {
+function persistSubmittedFlag(accessToken) {
   try {
-    localStorage.setItem(STORAGE_KEY(orderCode), "1");
+    localStorage.setItem(STORAGE_KEY(accessToken), "1");
   } catch {
     // Ignorar bloqueos de storage en navegadores privados o embebidos.
   }
 }
 
-export default function MissingItemsForm({ items, orderCode }) {
+export default function MissingItemsForm({ items, accessToken }) {
   const [selected, setSelected] = useState({}); // { order_item_id: qty }
   const [requesterName, setRequesterName] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(() => readSubmittedFlag(orderCode));
+  const [submitted, setSubmitted] = useState(() => readSubmittedFlag(accessToken));
   const [error, setError] = useState(null);
 
   if (!items?.length) return null;
@@ -62,14 +62,14 @@ export default function MissingItemsForm({ items, orderCode }) {
     setError(null);
     try {
       for (const itemId of selectedIds) {
-        await apiPost(`/public/orders/${orderCode}/missing-items`, {
+        await apiPost(`/public/orders/${accessToken}/missing-items`, {
           order_item_id: itemId,
           qty_missing: Number(selected[itemId]),
           requester_name: requesterName.trim() || null,
           note: note.trim() || null,
         });
       }
-      persistSubmittedFlag(orderCode);
+      persistSubmittedFlag(accessToken);
       setSubmitted(true);
     } catch (err) {
       const msg = err?.response?.data?.message || "Ocurrió un error al enviar la solicitud";
