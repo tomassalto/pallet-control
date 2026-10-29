@@ -29,8 +29,8 @@ cmds = [
 [phases.build]
 cmds = [
   "cd pallet-frontend && npm run build",
-  "cd pallet-backend && php artisan config:cache && php artisan route:cache && php artisan view:cache"
+  "cd pallet-backend && php artisan route:cache && php artisan view:cache"
 ]
 
 [start]
-cmd = "cd pallet-backend && php artisan migrate --force && php artisan storage:link && php artisan serve --host=0.0.0.0 --port=$PORT"
+cmd = ". ./deploy-env.sh && cd pallet-backend && php artisan config:cache && php artisan migrate --force && php artisan storage:link && php artisan serve --host=0.0.0.0 --port=$PORT"

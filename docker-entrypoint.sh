@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+. /deploy-env.sh
+
 cd pallet-backend
 
 php artisan package:discover --ansi

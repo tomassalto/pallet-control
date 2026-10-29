@@ -51,13 +51,19 @@ RUN cd pallet-backend && composer dump-autoload --no-scripts --optimize
 # Copiar el frontend ya compilado desde Stage 1
 COPY --from=frontend-build /app/pallet-backend/public/app/ ./pallet-backend/public/app/
 
-# Permisos de storage
-RUN chown -R www-data:www-data pallet-backend/storage pallet-backend/bootstrap/cache
+# Permisos de runtime: cache, logs, uploads y enlace de storage.
+RUN chown -R www-data:www-data \
+    pallet-backend/storage \
+    pallet-backend/bootstrap/cache \
+    pallet-backend/public
 
 # Entrypoint y supervisor
 COPY supervisord.conf /etc/supervisord.conf
+COPY deploy-env.sh /deploy-env.sh
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+RUN chmod +x /deploy-env.sh /docker-entrypoint.sh
+
+USER www-data
 
 EXPOSE 8000
 

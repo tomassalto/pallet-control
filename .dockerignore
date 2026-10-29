@@ -6,4 +6,5 @@ pallet-frontend/node_modules
 whatsapp-bot/.env
 whatsapp-bot/node_modules
 .git
+**/.env
 .claude

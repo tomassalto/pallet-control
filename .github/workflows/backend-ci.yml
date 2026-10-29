@@ -138,3 +138,23 @@ jobs:
       - name: PostgreSQL concurrency gate
         working-directory: pallet-backend
         run: ./vendor/bin/phpunit --configuration phpunit.postgres.xml --group postgres
+
+  container-security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build production image
+        run: docker build --tag pallet-control:ci .
+
+      - name: Verify non-root runtime
+        run: |
+          test "$(docker image inspect --format '{{.Config.User}}' pallet-control:ci)" = "www-data"
+          test "$(docker run --rm --entrypoint id pallet-control:ci -u)" != "0"
+
+      - name: Verify production debug guard
+        run: |
+          output="$(docker run --rm --entrypoint sh -e APP_ENV=production -e APP_DEBUG=true pallet-control:ci -c '. /deploy-env.sh && printf %s "$APP_DEBUG"')"
+          test "$(printf %s "$output" | tail -n 1)" = "false"
