@@ -99,7 +99,7 @@ Implementado localmente:
 
 Evidencia final: commit funcional `82af27c`; Actions run `40929456582` con jobs `ci` y `postgres-concurrency` verdes. El commit `2ffc4de` limita los reintentos de `composer audit` a fallos operativos de red; los hallazgos de vulnerabilidades continúan fallando de inmediato. Antes de un deploy real, ejecutar el preflight de duplicados en una copia o ventana controlada.
 
-## Sesión actual — R-05 reducción segura de cantidad
+## Última sesión cerrada — R-05 reducción segura de cantidad
 
 Crear la rama desde el cierre documental de R-04, nunca desde `master`. Volver a recorrer `ROUTER.md` y aplicar como mínimo `DOMINIO.md`, `BE-VALID`, `BE-ERR`, `BE-TX`, `BE-DATA`, `SEC-AUTHZ`, `SEC-LOG`, `QA-INVARIANT`, `QA-RISK` y `BE-GATE`. El objetivo es impedir que `PATCH /order-items/{item}` reduzca `qty` por debajo de la cantidad ya asignada a pallets, incluso ante concurrencia.
 
@@ -113,7 +113,11 @@ Implementado localmente:
 6. Presupuesto de 6 queries con 20 asignaciones, guardado en `benchmarks/results/2026-10-29-r05-update-order-item.md`.
 7. Gate PostgreSQL agregado: una reducción a 5 compite con una asignación que llevaría el total de 4 a 6; sólo una operación puede confirmar y siempre queda `asignado ≤ pedido`.
 
-Pendiente para cerrar: push, pipeline remoto y registro de evidencia.
+Evidencia final: commit `85daa84`; Actions run `40931851828` con jobs `ci` y `postgres-concurrency` verdes.
+
+## Próxima sesión — R-06 acceso público a pedidos
+
+Crear la rama desde el cierre documental de R-05, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `PRODUCTO.md`, `SEC-THREAT`, `SEC-AUTHZ`, `SEC-ABUSE`, `SEC-DATA`, `BE-API`, `BE-ERR`, `QA-RISK`, `QA-SEC` y `QA-CONTRACT`. Antes de cambiar el contrato público, registrar la decisión sobre código enumerable, token opaco y compatibilidad.
 
 ## Sesiones R-02 a R-07
 
