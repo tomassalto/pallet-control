@@ -3,6 +3,7 @@
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\BotSecretMiddleware;
 use App\Http\Middleware\EnsureHasRole;
+use App\Http\Middleware\EnsureUserIsActive;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => AdminMiddleware::class,
             'has.role' => EnsureHasRole::class,
+            'user.active' => EnsureUserIsActive::class,
             'bot.secret' => BotSecretMiddleware::class,
         ]);
     })

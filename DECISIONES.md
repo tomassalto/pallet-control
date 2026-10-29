@@ -230,3 +230,23 @@ La migración asigna tokens a pedidos existentes y los nuevos los generan desde 
 Quien obtenga el enlace puede consultar la vista hasta que el token sea rotado por operación administrativa; no se registra cada lectura para evitar ruido y datos innecesarios. La detección se basa en patrones de rate limiting. Una interfaz de rotación y expiración temporal podrá evaluarse si el piloto demuestra esa necesidad.
 
 **Referencia normativa:** `SEC-THREAT`, `SEC-AUTHZ`, `SEC-DATA`, `SEC-ABUSE`, `BE-API`, `QA-CONTRACT`, `QA-SEC`
+
+---
+
+## D-007 — Ciclo de vida de sesiones Sanctum
+
+**Fecha:** 2026-10-29
+**Estado:** ✅ vigente
+
+**Contexto**
+La PWA usa tokens bearer de Laravel Sanctum. El token se almacena hoy en `localStorage`, se envía en `Authorization` y se persiste hasheado por Sanctum. El riesgo inmediato era que desactivar una cuenta no revocaba credenciales y que los cambios de rol conservaban el mismo identificador de sesión.
+
+**Decisión**
+Mantener Sanctum bearer para el cliente actual, con emisión sólo tras login válido, revocación del token actual en logout y revocación de todos los tokens al desactivar una cuenta o cambiar su rol. Toda ruta autenticada verifica además `is_active`, de modo que una credencial residual no habilita operación. Login inexistente, password incorrecto y cuenta inactiva comparten el mismo `401` genérico y el límite de intentos existente.
+
+Los cambios de estado y privilegio se bloquean por usuario, confirman junto con la revocación y el activity log, y obligan a iniciar una sesión nueva. Telegram conserva una credencial independiente y falla cerrado cuando su secreto no está configurado.
+
+**Trade-off y riesgo residual**
+Un cambio administrativo expulsa al usuario de todos sus dispositivos. `localStorage` mantiene exposición ante XSS; migrar a cookies `HttpOnly` requiere una decisión coordinada de dominios, CSRF y despliegue y no se improvisa dentro de R-07.
+
+**Referencia normativa:** `BE-AUTH`, `BE-ERR`, `SEC-IDENTITY`, `SEC-SECRET`, `SEC-LOG`, `QA-SEC`, `QA-CONTRACT`

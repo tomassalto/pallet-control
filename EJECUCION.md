@@ -134,9 +134,24 @@ Implementado localmente:
 
 Evidencia final: commit `f344770`; Actions run `40933450650` con jobs `ci` y `postgres-concurrency` verdes.
 
-## Próxima sesión — R-07 autenticación y Telegram
+## Sesión actual — R-07 autenticación y Telegram
 
 Crear la rama desde el cierre documental de R-06, nunca desde `master`. Volver a recorrer `ROUTER.md` y aplicar `BE-AUTH`, `BE-ASYNC`, `BE-ERR`, `SEC-IDENTITY`, `SEC-SECRET`, `SEC-ABUSE`, `SEC-LOG`, `QA-RISK`, `QA-SEC`, `QA-CONTRACT` y `QA-RESILIENCE`. El bot activo es Telegram dentro del backend; `whatsapp-bot/` permanece fuera de alcance.
+
+Implementado localmente:
+
+1. `D-007` registra el ciclo de vida actual de tokens Sanctum y su riesgo residual.
+2. Login inexistente, password incorrecto y cuenta inactiva devuelven el mismo `401` genérico.
+3. `user.active` protege toda ruta autenticada aunque sobreviva una credencial residual.
+4. Desactivar una cuenta bloquea la fila, revoca todos sus tokens y audita dentro de una transacción; reactivar también se audita.
+5. Cambiar un rol revoca sesiones y audita el cambio de privilegio en la misma transacción.
+6. Un fallo forzado de auditoría revierte estado y tokens.
+7. Telegram devuelve `503` y registra un error crítico si falta `TELEGRAM_WEBHOOK_SECRET`; un valor incorrecto devuelve `401` y sólo el correcto permite procesar el update.
+8. `.env.example` documenta Telegram como integración activa y el secreto obligatorio. WhatsApp no fue modificado.
+9. Reglas administrativas prohibidas usan `403`; un admin no puede degradar ni desactivar a un superadmin.
+10. Suite completa local verde: 90 tests, 256 assertions; Pint, PHPStan, audits, lint y build verdes.
+
+Pendiente para cerrar: push, pipeline remoto y evidencia.
 
 ## Sesiones R-02 a R-07
 

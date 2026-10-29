@@ -32,7 +32,13 @@ class TelegramBotController extends Controller
     public function webhook(Request $request): JsonResponse
     {
         $secret = config('services.telegram.webhook_secret');
-        if ($secret && ! hash_equals(
+        if (! is_string($secret) || $secret === '') {
+            Log::critical('Telegram webhook rejected because its secret is not configured.');
+
+            return response()->json(['error' => 'Webhook unavailable'], 503);
+        }
+
+        if (! hash_equals(
             (string) $secret,
             (string) $request->header('X-Telegram-Bot-Api-Secret-Token', ''),
         )) {

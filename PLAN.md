@@ -204,18 +204,19 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 
 ---
 
-### R-07 · Auth transversal (login / desactivación / webhook bot)
+### R-07 · Auth transversal (login / desactivación / webhook Telegram)
 ```
-□ 1. Auth                  → login inválido: 422→401 · toggle-active: revocar tokens
-□ 2. Validación             → —
-□ 3. Negocio                 → invertir el `if ($secret)` de TelegramBotController a fail-closed
-□ 4. Datos                   → —
-□ 5. Respuesta (HTTP)        → 401 en login inválido
-□ 6. Audit log                → —
-□ 7. Tests                    → login inválido, token revocado tras desactivación, webhook sin secret
-□ 8. Medición                  → n/a
+✅ 1. Auth                  → 401 genérico; inactivos bloqueados; tokens revocados (`D-007`)
+✅ 2. Validación            → identidad inexistente, password e inactivo no son distinguibles
+✅ 3. Negocio               → Telegram falla cerrado sin secret y compara de forma segura
+✅ 4. Datos                 → desactivación/rol, tokens y auditoría comparten transacción
+✅ 5. Respuesta (HTTP)      → login inválido 401; secret inválido 401; config ausente 503
+✅ 6. Audit log             → desactivación, reactivación y cambio de rol auditados sin secretos
+🟡 7. Tests                 → 90 tests/256 assertions; auth, revocación, rollback y webhook; pendiente CI
+✅ 8. Medición              → n/a; operaciones acotadas por usuario
 ```
-**Hallazgos que resuelve:** H-002, H-003, H-021.
+**Estado:** 🟡 implementación local verde; pendiente CI.
+**Hallazgos que resuelve:** H-002, H-003, H-021, H-022.
 
 ---
 

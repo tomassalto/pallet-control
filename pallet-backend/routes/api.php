@@ -59,7 +59,7 @@ Route::prefix('v1')->group(function () {
     // Reenvío de verificación: no requiere auth (el usuario no puede estar logueado aún)
     Route::post('/auth/email/resend', [AuthController::class, 'resendVerification']);
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'user.active'])->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
 

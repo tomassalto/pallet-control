@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\ActivityLogger;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
@@ -36,27 +38,77 @@ class UserController extends Controller
 
         // No puede cambiarse el rol a sí mismo
         if ($user->id === $request->user()->id) {
-            return response()->json(['error' => 'No podés cambiar tu propio rol'], 422);
+            return response()->json(['error' => 'No podés cambiar tu propio rol'], 403);
         }
 
-        $user->update(['role' => $newRole]);
+        if ($user->isSuperAdmin() && ! $request->user()->isSuperAdmin()) {
+            return response()->json(['error' => 'Solo otro superadmin puede modificar esa cuenta'], 403);
+        }
 
-        return response()->json(['ok' => true, 'user' => $user->refresh()->only(['id', 'name', 'email', 'role', 'is_active'])]);
+        $updatedUser = DB::transaction(function () use ($user, $newRole) {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            $oldRole = $lockedUser->role;
+
+            if ($oldRole !== $newRole) {
+                $lockedUser->update(['role' => $newRole]);
+                $lockedUser->tokens()->delete();
+
+                ActivityLogger::log(
+                    action: 'user_role_changed',
+                    entityType: 'user',
+                    entityId: $lockedUser->id,
+                    description: "Rol del usuario '{$lockedUser->email}' actualizado; sesiones revocadas",
+                    oldValues: ['role' => $oldRole],
+                    newValues: ['role' => $newRole],
+                );
+            }
+
+            return $lockedUser->refresh();
+        });
+
+        return response()->json(['ok' => true, 'user' => $updatedUser->only(['id', 'name', 'email', 'role', 'is_active'])]);
     }
 
     /** POST /api/v1/admin/users/{user}/toggle-active */
     public function toggleActive(Request $request, User $user)
     {
         if ($user->id === $request->user()->id) {
-            return response()->json(['error' => 'No podés desactivar tu propia cuenta'], 422);
+            return response()->json(['error' => 'No podés desactivar tu propia cuenta'], 403);
         }
 
-        if ($user->isSuperAdmin()) {
-            return response()->json(['error' => 'No podés desactivar al superadmin'], 422);
+        $result = DB::transaction(function () use ($user) {
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+
+            if ($lockedUser->isSuperAdmin()) {
+                return ['error' => 'No podés desactivar al superadmin', 'status' => 403];
+            }
+
+            $wasActive = $lockedUser->is_active;
+            $isActive = ! $wasActive;
+            $lockedUser->update(['is_active' => $isActive]);
+
+            if (! $isActive) {
+                $lockedUser->tokens()->delete();
+            }
+
+            ActivityLogger::log(
+                action: $isActive ? 'user_reactivated' : 'user_deactivated',
+                entityType: 'user',
+                entityId: $lockedUser->id,
+                description: $isActive
+                    ? "Usuario '{$lockedUser->email}' reactivado"
+                    : "Usuario '{$lockedUser->email}' desactivado y sesiones revocadas",
+                oldValues: ['is_active' => $wasActive],
+                newValues: ['is_active' => $isActive],
+            );
+
+            return ['is_active' => $isActive];
+        });
+
+        if (isset($result['error'])) {
+            return response()->json(['error' => $result['error']], $result['status']);
         }
 
-        $user->update(['is_active' => ! $user->is_active]);
-
-        return response()->json(['ok' => true, 'is_active' => $user->fresh()->is_active]);
+        return response()->json(['ok' => true, 'is_active' => $result['is_active']]);
     }
 }
