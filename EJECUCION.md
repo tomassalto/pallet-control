@@ -406,9 +406,23 @@ Evidencia funcional: commit `b40db93`. El workflow sólo se disparaba en `master
 
 Pendiente: `MyClients.jsx` conserva callbacks `onError` muertos en sus queries; se tratará con los flujos críticos.
 
+## Última sesión cerrada — flujos críticos frontend
+
+Rama `quality/frontend-critical-flows`, creada desde `quality/frontend-test-foundation` (`bbbe30c`). Se aplicaron `FE-DATA`, `FE-STATE`, `FE-SESSION`, `BE-ERR`, `BE-ASYNC`, `QA-LEVELS`, `QA-CONTRACT`, `QA-RESILIENCE` y `QA-A11Y` (los IDs solicitados `FE-ERR`, `FE-AUTH` y `QA-ACCESS` no existen; se usaron sus equivalentes vigentes).
+
+1. `376b3f9` caracteriza login, sesión expirada, `RequireAuth`, crear base con `409` sin perder el formulario, apertura del modal de conflicto de cantidad, subida de foto con `FormData` y `422` de D-022, polling OCR y visibilidad de opciones administrativas por rol (sólo presentación; la autorización real es el `403` backend).
+2. La caracterización expuso dos defectos: un `401` por contraseña incorrecta se mostraba como "Sesión expirada", y el polling OCR no tenía límite de tiempo ni de errores.
+3. D-024 limita el polling a cinco minutos o cinco errores consecutivos, con mensaje recuperable; el flujo de sesión expirada corre sólo para peticiones con token. Logout y `401` autenticado cancelan y limpian la cache de queries. `MyClients.jsx` emite sus toasts desde efectos.
+4. Los tests que fijaban los defectos se actualizaron al comportamiento corregido, y se agregaron casos de corte por tiempo, corte por errores, reinicio del contador y limpieza de cache.
+5. Gates locales: lint, 32 tests frontend en tres corridas, build y audit desde moderado verdes; el backend no cambió.
+
+Evidencia funcional: commits `376b3f9` y `46d4f54`.
+
+Pendiente: un E2E con navegador real para cámara, escáner y service worker.
+
 ## Próxima sesión
 
-`quality/frontend-critical-flows`: regresión de recorridos críticos del frontend.
+`hardening/api-status-consistency`: inventario de status HTTP y corrección por recurso (H-021/H-022/H-023/H-027).
 
 ## Sesiones R-02 a R-07
 

@@ -645,3 +645,27 @@ Adoptar Vitest con entorno jsdom y `@testing-library/react`, más `@testing-libr
 jsdom no reproduce layout, cámara ni service worker; esos riesgos siguen en revisión manual y en E2E futuros. El job `ci` tarda más por el paso frontend.
 
 **Referencia normativa:** `FE-GATE`, `FE-DATA`, `FE-STATE`, `QA-LEVELS`, `QA-CONTRACT`, `QA-DATA`, `QA-FLAKY`, `QA-GATE`, `DO-CI`, `DO-SUPPLY`, `SEC-SUPPLY`
+
+---
+
+## D-024 — Correcciones acotadas reveladas por los flujos críticos frontend
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+Al caracterizar los recorridos críticos del frontend aparecieron tres desvíos frente a `FE-DATA` y `QA-RESILIENCE`:
+- El polling del OCR consulta cada dos segundos sin límite y silencia todo error. Un job que falla definitivamente sólo deja log en el backend (D-019), así que la pantalla queda escaneando para siempre.
+- Logout y una respuesta `401` eliminan el token pero conservan la cache de React Query con datos privados de la sesión anterior.
+- `MyClients.jsx` declara callbacks `onError` que React Query v5 ya no ejecuta.
+
+**Decisión**
+- El polling OCR termina al confirmarse el resultado, al superar cinco minutos desde el inicio (más que dos intentos de 110 segundos con backoff de 30) o tras cinco errores consecutivos de consulta. En ambos cortes muestra un mensaje recuperable y permite cerrar. No se cambia el contrato backend.
+- Logout y `401` cancelan y limpian la cache de queries mediante un callback registrado en el cliente API, igual que la navegación ya existente.
+- `MyClients.jsx` emite sus toasts de error desde efectos sobre el estado de la query.
+- No hay rediseño visual: los mensajes reutilizan componentes y estilos existentes.
+
+**Trade-off aceptado**
+Un OCR legítimo que tarde más de cinco minutos se muestra como demorado aunque luego termine. El resultado sigue disponible al reabrir la foto. Limpiar la cache obliga a recargar datos tras volver a iniciar sesión.
+
+**Referencia normativa:** `FE-DATA`, `FE-STATE`, `FE-SESSION`, `BE-ASYNC`, `QA-RESILIENCE`, `QA-CONTRACT`, `QA-LEVELS`
