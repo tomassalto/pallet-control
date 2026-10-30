@@ -333,7 +333,7 @@ Rama `hardening/storage-cleanup-operability`, creada desde `hardening/photo-dele
 7. Dieciséis tests cubren consistencia de timeouts, retry, job duplicado, registro resuelto, proceso interrumpido, saneamiento, fallo terminal auditable con rollback, estado y alerta.
 8. Gates locales: Pint, PHPStan, 166 tests/570 assertions y Composer audit verdes.
 
-Evidencia funcional: commit `f485f1b`.
+Evidencia funcional: commit `f485f1b`; Actions run `41016913079` sobre `60b2b76` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 Pendiente: conectar `storage:cleanup-status` a un monitor externo depende de la plataforma real (H-029/H-038); `composer dev` no ejecuta el barrido, que en desarrollo se corre manualmente.
 
