@@ -13,19 +13,36 @@ class PendingItemController extends Controller
     // GET /pending-items
     public function index(Request $request)
     {
-        $items = PendingItem::with([
+        $filters = $request->validate([
+            'status' => ['nullable', 'in:pending,resolved'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+        $perPage = (int) ($filters['per_page'] ?? 25);
+
+        $paginator = PendingItem::with([
             'order',
             'orderItem.product',
             'creator',
             'resolver',
         ])
-            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
+            ->when(isset($filters['status']), fn ($q) => $q->where('status', $filters['status']))
             ->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(fn ($item) => $this->format($item));
+            ->orderBy('id', 'desc')
+            ->paginate($perPage);
 
-        return response()->json($items);
+        return response()->json([
+            'data' => collect($paginator->items())
+                ->map(fn (PendingItem $item) => $this->format($item))
+                ->values(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+        ]);
     }
 
     // GET /pending-items/summary

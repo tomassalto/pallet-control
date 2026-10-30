@@ -58,10 +58,11 @@ export default function PendingItems() {
     setShowCreate,
     loading,
     loadingRequests,
-    pendingList,
-    resolvedList,
+    pendingTotal,
+    resolvedTotal,
     pendingRequestsCount,
     current,
+    pagination,
     handleRequestUpdated,
     handleResolve,
     handleReopen,
@@ -106,14 +107,14 @@ export default function PendingItems() {
         </div>
       </div>
 
-      {!loading && pendingList.length > 0 && (
+      {!loading && pendingTotal > 0 && (
         <div className="flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-2xl px-4 py-3">
           <span className="text-2xl shrink-0">🚨</span>
           <div>
             <p className="text-sm font-semibold text-red-700 dark:text-red-400">
-              {pendingList.length === 1
+              {pendingTotal === 1
                 ? "1 pendiente sin resolver"
-                : `${pendingList.length} pendientes sin resolver`}
+                : `${pendingTotal} pendientes sin resolver`}
             </p>
             <p className="text-xs text-red-500 dark:text-red-500 mt-0.5">
               Hay productos que todavía no fueron entregados al cliente
@@ -125,7 +126,7 @@ export default function PendingItems() {
       <div className="flex gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl">
         <TabButton
           active={tab === "pending"}
-          count={pendingList.length}
+          count={pendingTotal}
           countClassName="bg-red-500"
           onClick={() => setTab("pending")}
         >
@@ -133,7 +134,7 @@ export default function PendingItems() {
         </TabButton>
         <TabButton
           active={tab === "resolved"}
-          count={resolvedList.length}
+          count={resolvedTotal}
           countClassName="bg-gray-400 dark:bg-gray-600"
           onClick={() => setTab("resolved")}
         >
@@ -182,6 +183,33 @@ export default function PendingItems() {
             />
           ))}
         </div>
+      )}
+
+      {pagination && pagination.last_page > 1 && (
+        <nav
+          className="flex items-center justify-between gap-3"
+          aria-label="Paginación de pendientes"
+        >
+          <button
+            type="button"
+            onClick={() => pagination.setPage((page) => Math.max(1, page - 1))}
+            disabled={pagination.current_page <= 1 || pagination.fetching}
+            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-semibold disabled:opacity-40"
+          >
+            Anterior
+          </button>
+          <span className="text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
+            Página {pagination.current_page} de {pagination.last_page} · {pagination.total} en total
+          </span>
+          <button
+            type="button"
+            onClick={() => pagination.setPage((page) => Math.min(pagination.last_page, page + 1))}
+            disabled={pagination.current_page >= pagination.last_page || pagination.fetching}
+            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-semibold disabled:opacity-40"
+          >
+            Siguiente
+          </button>
+        </nav>
       )}
 
       {showCreate && (
