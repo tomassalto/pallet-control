@@ -337,9 +337,27 @@ Evidencia funcional: commit `f485f1b`; Actions run `41016913079` sobre `60b2b76`
 
 Pendiente: conectar `storage:cleanup-status` a un monitor externo depende de la plataforma real (H-029/H-038); `composer dev` no ejecuta el barrido, que en desarrollo se corre manualmente.
 
+## Última sesión cerrada — invariante agregada asignado ≤ pedido
+
+Rama `hardening/aggregate-stock-invariant`, creada desde `hardening/storage-cleanup-operability` (`a069e22`). Se aplicaron `DOMINIO.md`, `BE-TX`, `BE-DATA`, `BE-VALID`, `BE-ERR`, `SEC-LOG`, `DO-RELEASE`, `QA-INVARIANT`, `QA-DATA` y `QA-RESILIENCE`.
+
+1. Inventario de escritores de `pallet_base_order_items` y `order_items.qty`: adjust-item, crear/actualizar/migrar base, actualizar y crear ítem, import, desvinculación de pallet, cascadas y reset manual. El import y la desvinculación estaban fuera de la regla D-003.
+2. D-020 fija el orden global de locks `pallets → bases → order_items → orders → asignaciones`; los recorridos existentes ya lo respetan.
+3. Triggers en PostgreSQL bloquean el `order_item`, recalculan la suma y rechazan con `23514` tanto asignaciones excesivas como reducciones de cantidad. SQLite aplica triggers equivalentes.
+4. La migración hace preflight y no crea la guarda si ya existe sobreasignación; `down()` la retira por nombre.
+5. El import bloquea ítems y pedido, devuelve `409` con `conflicts` sin escribir nada y audita `order_imported` en la misma transacción.
+6. La desvinculación de pallet confirma asignaciones, pivot y auditoría juntos; Telegram queda después del commit.
+7. Un fixture de migración entre bases partía de un estado sobreasignado (13 sobre 10). Se corrigió la preparación sin cambiar ninguna aserción.
+8. Tests SQLite: guarda directa, límite exacto, preflight, import (conflicto, límite, éxito, rollback) y desvinculación (éxito, rollback, 404). Tests PostgreSQL: triggers, carrera real entre dos conexiones, import contra adjust, recorridos cruzados sin deadlock y migración `down → up`.
+9. Gates locales: Pint, PHPStan, 178 tests/617 assertions y Composer audit verdes. Las pruebas PostgreSQL corren sólo en CI.
+
+Evidencia funcional: commits `39a45ab` y `24b5eea`. Actions run `41018979777` sobre `39a45ab` falló en `postgres-concurrency` sin logs accesibles sin permisos de administrador; el gate no falló en cinco corridas locales contra PostgreSQL 17. La causa más probable, no confirmada, es el plazo de 10 segundos para observar la espera de lock en la carrera entre conexiones. `24b5eea` amplía ese plazo a 30 segundos sin cambiar aserciones y publica los fallos del gate como anotaciones legibles por API. Actions run `41020938251` sobre `24b5eea`: `ci`, `postgres-concurrency` y `container-security` verdes.
+
+Pendiente: el import sigue eliminando ítems ausentes junto con sus asignaciones (política abierta en H-009).
+
 ## Próxima sesión
 
-`hardening/aggregate-stock-invariant`: defensa transversal de `H-006` (asignado ≤ pedido) sobre todos los escritores de `pallet_base_order_items`.
+`hardening/schema-cleanup`: confirmar y resolver `H-014` y `H-016`.
 
 ## Sesiones R-02 a R-07
 

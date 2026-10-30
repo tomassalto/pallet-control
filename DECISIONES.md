@@ -525,3 +525,36 @@ D-018 dejó intenciones durables de borrado, un job y un barrido supervisado, pe
 La alerta existe como comando y log crítico; conectarla a un monitor externo depende de la plataforma y queda pendiente con H-029/H-038. Un worker caído no vuelve no-ready la aplicación. El OCR conserva el reintento ya vigente y su costo potencial en el proveedor.
 
 **Referencia normativa:** `BE-ASYNC`, `BE-ERR`, `DO-CONTAINER`, `DO-RELEASE`, `DO-OBS`, `DO-DR`, `SEC-LOG`, `QA-RESILIENCE`
+
+---
+
+## D-020 — Invariante agregada asignado ≤ pedido en base de datos
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+D-003 protege la invariante en los recorridos R-01 a R-05 mediante el lock del `order_item`, y D-014 dejó fuera la suma entre filas por no ser un `CHECK` por fila. El inventario de escritores de `pallet_base_order_items` y de `order_items.qty` encontró dos recorridos fuera de esa regla: el import de pedidos reescribe `qty` sin locks ni comparación con lo asignado, y la desvinculación de pallet borra asignaciones, pivot y auditoría sin transacción, de modo que una asignación concurrente puede quedar huérfana. Cualquier escritor directo o futuro también puede violar la invariante.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Sólo validación en cada servicio | Sin cambios de esquema | Depende de que cada escritor futuro recuerde la regla |
+| Vista materializada o columna de total | Lectura rápida | Duplica estado y exige mantenerlo consistente |
+| Trigger que bloquea el `order_item` y recalcula la suma | Defensa única para todo escritor; serializa por ítem; reutiliza el lock que los servicios ya toman | Lógica en base y en dos dialectos |
+
+**Decisión**
+- **Orden global de locks:** `pallets` → `bases` → `order_items` (por id) → `orders` (por id) → asignaciones (por `order_item_id`, `base_id`). Los recorridos existentes ya son subsecuencias de este orden.
+- **Trigger en PostgreSQL:** después de insertar o actualizar una asignación, y después de actualizar `order_items.qty`, un trigger bloquea la fila del `order_item` con `FOR UPDATE`, recalcula la suma y rechaza con `SQLSTATE 23514` si la suma supera la cantidad pedida. Los recorridos de aplicación ya poseen ese lock, por lo que el trigger no agrega esperas ni ciclos. Para escritores directos, el lock del ítem serializa la comprobación y evita que dos transacciones lean sumas obsoletas.
+- **Triggers en SQLite:** `AFTER INSERT/UPDATE` con `RAISE(ABORT)` aplican la misma expresión. SQLite serializa escrituras y no acredita concurrencia.
+- **Trigger inmediato, no diferido:** ningún recorrido sobreasigna transitoriamente. Migrar debita el origen antes de acreditar el destino, y una base tiene una sola fila por ítem.
+- **Migración:** un preflight aborta antes de crear los triggers si existen ítems sobreasignados. No corrige datos automáticamente.
+- **Import de pedidos:** bloquea los ítems existentes del pedido por id y luego el pedido, compara cada nueva cantidad con lo asignado y responde `409` con `conflicts` (`ean`, `assigned`, `requested`) sin aplicar ningún cambio. Ítems, productos y un activity log `order_imported` confirman en una transacción.
+- **Desvincular un pallet:** bloquea pallet, bases, ítems del pedido y pedido en ese orden. Asignaciones, pivot y auditoría confirman juntos, y Telegram se envía después del commit.
+- **Respuesta ante el trigger:** si el trigger rechaza una escritura que pasó la validación de aplicación, el error es interno (`5xx`), porque revela un escritor que no respeta la regla.
+
+**Trade-off aceptado**
+Las escrituras de asignaciones ejecutan una suma por fila afectada. El import se vuelve todo-o-nada ante conflictos. Un ítem nuevo creado por R-04 durante un import puede quedar fuera del primer lock; ese caso extremo puede terminar en un deadlock detectado por PostgreSQL y en un `5xx` reintentable, nunca en sobreasignación. El import conserva la eliminación de ítems ausentes con sus asignaciones; la política de conservación sigue abierta en H-009.
+
+**Referencia normativa:** `BE-TX`, `BE-DATA`, `BE-VALID`, `BE-ERR`, `SEC-LOG`, `DO-RELEASE`, `QA-INVARIANT`, `QA-DATA`, `DOMINIO.md`
