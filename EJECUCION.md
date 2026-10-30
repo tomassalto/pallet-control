@@ -311,10 +311,10 @@ Rama `hardening/photo-deletion-recovery`, creada desde el cierre de compensació
 4. `storage:retry-pending-deletions` recupera intenciones vencidas sin depender de la cola, incluidas las perdidas por crash entre commit y dispatch. Supervisor lo ejecuta cada diez minutos como programa propio; no se activó el scheduler para no encender `pallet:archive`.
 5. Tras diez intentos la intención queda agotada, se alerta como crítica y sólo se reprocesa con `--include-exhausted`.
 6. Cola: producción usa `database` con worker supervisado; tests usan `sync`, donde un fallo post-commit del job no convierte en 500 un borrado ya confirmado.
-7. Quince tests cubren rollback por auditoría, intención durable, fallo y recuperación de storage, idempotencia, archivo inexistente, intenciones agotadas, ticket con varias fotos, pallet y base.
+7. Dieciocho tests cubren rollback por auditoría o por fallo al crear la intención, intención durable hasta procesarla, fallo y recuperación de storage, idempotencia, archivo inexistente, intenciones agotadas, ticket con varias fotos, pallet y base.
 8. Migración probada `up → down → up` sobre SQLite temporal.
-9. Gates locales: Pint, PHPStan, 147 tests/495 assertions más un benchmark condicional omitido, y Composer audit verdes.
-10. Actions run `41013814687`: `ci`, `postgres-concurrency` y `container-security` verdes.
+9. Gates locales: Pint, PHPStan, 150 tests/517 assertions más un benchmark condicional omitido, y Composer audit verdes.
+10. Actions run `41013814687`: `ci`, `postgres-concurrency` y `container-security` verdes sobre `5936d07`; los tests adicionales de `03e4ba8` se acreditan en la corrida registrada a continuación.
 
 Evidencia funcional: commit `60a0c6c`.
 
