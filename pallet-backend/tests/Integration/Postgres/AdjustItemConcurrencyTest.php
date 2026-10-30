@@ -295,6 +295,41 @@ class AdjustItemConcurrencyTest extends TestCase
         $this->assertDatabaseCount('activity_logs', 1);
     }
 
+    public function test_los_dos_endpoints_no_duplican_la_misma_asociacion(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $token = $user->createToken('postgres-concurrency')->plainTextToken;
+        $order = Order::factory()->create();
+        $pallet = Pallet::factory()->create();
+
+        $responses = $this->sendJsonConcurrently([
+            [
+                'port' => 18001,
+                'method' => 'POST',
+                'path' => "/api/v1/pallets/{$pallet->id}/attach-order",
+                'payload' => ['order_code' => $order->code],
+                'token' => $token,
+            ],
+            [
+                'port' => 18002,
+                'method' => 'POST',
+                'path' => "/api/v1/orders/{$order->id}/attach-pallet",
+                'payload' => ['pallet_id' => $pallet->id],
+                'token' => $token,
+            ],
+        ]);
+        $statuses = array_column($responses, 'status');
+        sort($statuses);
+
+        $this->assertSame([201, 409], $statuses, json_encode($responses, JSON_PRETTY_PRINT));
+        $this->assertDatabaseHas('order_pallet', [
+            'order_id' => $order->id,
+            'pallet_id' => $pallet->id,
+        ]);
+        $this->assertDatabaseCount('order_pallet', 1);
+        $this->assertDatabaseCount('activity_logs', 1);
+    }
+
     private function startServer(int $port): void
     {
         $server = new Process([

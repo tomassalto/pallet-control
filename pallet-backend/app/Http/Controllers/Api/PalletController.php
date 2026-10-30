@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Order;
 use App\Models\Pallet;
+use App\Services\OrderPalletAssociationService;
 use App\Services\OrderService;
 use App\Services\PalletService;
 use Illuminate\Http\Request;
@@ -15,6 +16,10 @@ use Illuminate\Support\Facades\Storage;
 
 class PalletController extends Controller
 {
+    public function __construct(
+        private readonly OrderPalletAssociationService $orderPalletAssociationService
+    ) {}
+
     public function index(Request $request)
     {
         $q = Pallet::select('id', 'code', 'status', 'note', 'created_at')
@@ -138,46 +143,23 @@ class PalletController extends Controller
             'order_code' => ['required', 'regex:/^\d+$/'],
         ]);
 
-        $wasNewOrder = ! Order::where('code', $data['order_code'])->exists();
-        $order = Order::firstOrCreate(
-            ['code' => $data['order_code']],
-            ['status' => 'open']
-        );
-
-        // Si el pedido es nuevo, registrar su creación
-        if ($wasNewOrder) {
-            ActivityLogger::log(
-                action: 'order_created',
-                entityType: 'order',
-                entityId: $order->id,
-                description: "Pedido '{$order->code}' creado",
-                newValues: ['code' => $order->code, 'status' => 'open'],
-                orderId: $order->id,
-            );
+        $result = $this->orderPalletAssociationService->attachByCode($pallet, $data['order_code']);
+        if (isset($result['error'])) {
+            return response()->json($result['error'], $result['status']);
         }
 
-        $pallet->orders()->syncWithoutDetaching([$order->id]);
-
-        ActivityLogger::log(
-            action: 'order_assigned',
-            entityType: 'order',
-            entityId: $order->id,
-            description: "Pedido '{$order->code}' asignado al pallet '{$pallet->code}'",
-            palletId: $pallet->id,
-            newValues: ['order_code' => $order->code],
-            orderId: $order->id,
-        );
-
-        if ($wasNewOrder) {
-            TelegramNotifier::send("🆕 *Nuevo pedido* `#{$order->code}` creado y asignado al pallet `{$pallet->code}`");
+        $order = $result['order'];
+        $associatedPallet = $result['pallet'];
+        if ($result['order_created']) {
+            TelegramNotifier::send("🆕 *Nuevo pedido* `#{$order->code}` creado y asignado al pallet `{$associatedPallet->code}`");
         } else {
-            TelegramNotifier::send("🔗 Pedido `#{$order->code}` asignado al pallet `{$pallet->code}`");
+            TelegramNotifier::send("🔗 Pedido `#{$order->code}` asignado al pallet `{$associatedPallet->code}`");
         }
 
         return response()->json([
             'message' => 'Pedido asignado al pallet.',
             'order' => $order,
-            'orders' => $pallet->orders()->get(),
+            'orders' => $associatedPallet->orders()->get(),
         ], 201);
     }
 

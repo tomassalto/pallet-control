@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Pallet;
 use App\Models\PendingItem;
+use App\Services\OrderPalletAssociationService;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -19,6 +20,10 @@ use Illuminate\Support\Facades\Schema;
 
 class OrderController extends Controller
 {
+    public function __construct(
+        private readonly OrderPalletAssociationService $orderPalletAssociationService
+    ) {}
+
     public function index(Request $request)
     {
         $hasPendingTable = Schema::hasTable('pending_items');
@@ -217,25 +222,17 @@ class OrderController extends Controller
 
         $pallet = Pallet::findOrFail($data['pallet_id']);
 
-        // Asociar el pedido al pallet
-        $pallet->orders()->syncWithoutDetaching([$order->id]);
-
-        ActivityLogger::log(
-            action: 'order_assigned',
-            entityType: 'order',
-            entityId: $order->id,
-            description: "Pedido '{$order->code}' asociado al pallet '{$pallet->code}'",
-            palletId: $pallet->id,
-            newValues: ['order_code' => $order->code],
-            orderId: $order->id,
-        );
+        $result = $this->orderPalletAssociationService->attachExisting($order, $pallet);
+        if (isset($result['error'])) {
+            return response()->json($result['error'], $result['status']);
+        }
 
         TelegramNotifier::send("🔗 Pedido `#{$order->code}` asociado al pallet `{$pallet->code}`");
 
         return response()->json([
             'message' => 'Pedido asociado al pallet.',
-            'pallet' => $pallet,
-            'pallets' => $order->pallets()->get(),
+            'pallet' => $result['pallet'],
+            'pallets' => $result['order']->pallets()->get(),
         ], 201);
     }
 
