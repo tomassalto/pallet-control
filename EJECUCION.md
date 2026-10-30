@@ -314,7 +314,7 @@ Rama `hardening/photo-deletion-recovery`, creada desde el cierre de compensació
 7. Dieciocho tests cubren rollback por auditoría o por fallo al crear la intención, intención durable hasta procesarla, fallo y recuperación de storage, idempotencia, archivo inexistente, intenciones agotadas, ticket con varias fotos, pallet y base.
 8. Migración probada `up → down → up` sobre SQLite temporal.
 9. Gates locales: Pint, PHPStan, 150 tests/517 assertions más un benchmark condicional omitido, y Composer audit verdes.
-10. Actions run `41013814687`: `ci`, `postgres-concurrency` y `container-security` verdes sobre `5936d07`; los tests adicionales de `03e4ba8` se acreditan en la corrida registrada a continuación.
+10. Actions run `41013814687`: `ci`, `postgres-concurrency` y `container-security` verdes sobre `5936d07`; los tests adicionales de `03e4ba8` se acreditan en Actions run `41015014288` sobre `e7ed05b`, con los tres jobs verdes.
 
 Evidencia funcional: commit `60a0c6c`.
 
