@@ -40,7 +40,10 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // Debe superar el --timeout del worker (120s en supervisord) y
+            // el $timeout de cada job: un trabajo reservado no debe
+            // relanzarse mientras sigue ejecutándose.
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 150),
             'after_commit' => false,
         ],
 
@@ -125,5 +128,17 @@ return [
         'database' => env('DB_CONNECTION', 'sqlite'),
         'table' => 'failed_jobs',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Alerta de limpieza de storage
+    |--------------------------------------------------------------------------
+    |
+    | Minutos que una intención de borrado puede permanecer pendiente antes
+    | de que storage:cleanup-status y el barrido la reporten como alerta.
+    |
+    */
+
+    'storage_cleanup_alert_minutes' => (int) env('STORAGE_CLEANUP_ALERT_MINUTES', 60),
 
 ];
