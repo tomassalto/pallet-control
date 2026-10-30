@@ -402,7 +402,7 @@ Rama `quality/frontend-test-foundation`, creada desde `hardening/photo-request-v
 7. Audit frontend sin hallazgos nuevos: siguen los cuatro bajos de D-004.
 8. Gates locales: lint, 14 tests en tres corridas deterministas, build y audit desde moderado verdes.
 
-Evidencia funcional: commit `b40db93`.
+Evidencia funcional: commit `b40db93`. El workflow sólo se disparaba en `master`, `modernizacion/**` y `hardening/**`, por lo que `e717409` no tuvo corrida. `67888c3` agrega `quality/**` al trigger. Actions run `41032563385` sobre `67888c3`: `ci` (incluye lint, tests y build frontend), `postgres-concurrency` y `container-security` verdes.
 
 Pendiente: `MyClients.jsx` conserva callbacks `onError` muertos en sus queries; se tratará con los flujos críticos.
 
