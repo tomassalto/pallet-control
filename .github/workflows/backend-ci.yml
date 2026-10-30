@@ -51,7 +51,7 @@ jobs:
 
       - name: Build frontend for integration tests
         working-directory: pallet-frontend
-        run: npm ci && npm run build
+        run: npm ci && npm run lint && npm test && npm run build
 
       # 1. LINT — estilo de código
       - name: Lint (Pint)

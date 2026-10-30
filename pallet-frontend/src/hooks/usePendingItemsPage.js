@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { apiGet, apiPatch, apiDelete } from "../api/client";
@@ -13,25 +13,53 @@ export function usePendingItemsPage() {
   const [pendingPage, setPendingPage] = useState(1);
   const [resolvedPage, setResolvedPage] = useState(1);
 
-  const { data: pendingResponse, isLoading: loadingPending, isFetching: fetchingPending } = useQuery({
+  const {
+    data: pendingResponse,
+    isLoading: loadingPending,
+    isFetching: fetchingPending,
+    isError: errorPending,
+    errorUpdatedAt: errorAtPending,
+    refetch: refetchPending,
+  } = useQuery({
     queryKey: ["pending-items", "pending", pendingPage],
     queryFn: () => apiGet(`/pending-items?status=pending&page=${pendingPage}&per_page=25`),
     placeholderData: (previous) => previous,
-    onError: () => toastError("Error al cargar los pendientes"),
   });
 
-  const { data: resolvedResponse, isLoading: loadingResolved, isFetching: fetchingResolved } = useQuery({
+  const {
+    data: resolvedResponse,
+    isLoading: loadingResolved,
+    isFetching: fetchingResolved,
+    isError: errorResolved,
+    errorUpdatedAt: errorAtResolved,
+    refetch: refetchResolved,
+  } = useQuery({
     queryKey: ["pending-items", "resolved", resolvedPage],
     queryFn: () => apiGet(`/pending-items?status=resolved&page=${resolvedPage}&per_page=25`),
     placeholderData: (previous) => previous,
-    onError: () => toastError("Error al cargar los pendientes resueltos"),
   });
 
-  const { data: requests = [], isLoading: loadingRequests } = useQuery({
+  const {
+    data: requests = [],
+    isLoading: loadingRequests,
+    isError: errorRequests,
+    errorUpdatedAt: errorAtRequests,
+    refetch: refetchRequests,
+  } = useQuery({
     queryKey: ["missing-item-requests"],
     queryFn: () => apiGet("/admin/missing-item-requests"),
-    onError: () => toastError("Error al cargar las solicitudes"),
   });
+
+  // Un toast por fallo: isError + errorUpdatedAt evita repetir por render.
+  useEffect(() => {
+    if (errorPending) toastError("Error al cargar los pendientes");
+  }, [errorPending, errorAtPending]);
+  useEffect(() => {
+    if (errorResolved) toastError("Error al cargar los pendientes resueltos");
+  }, [errorResolved, errorAtResolved]);
+  useEffect(() => {
+    if (errorRequests) toastError("Error al cargar las solicitudes");
+  }, [errorRequests, errorAtRequests]);
 
   const pendingList = pendingResponse?.data ?? [];
   const resolvedList = resolvedResponse?.data ?? [];
@@ -52,6 +80,16 @@ export function usePendingItemsPage() {
       ? { ...resolvedMeta, setPage: setResolvedPage, fetching: fetchingResolved }
       : null;
   const loading = tab === "pending" ? loadingPending : loadingResolved;
+  const loadError = tab === "pending"
+    ? errorPending
+    : tab === "resolved"
+      ? errorResolved
+      : errorRequests;
+  const retryLoad = tab === "pending"
+    ? refetchPending
+    : tab === "resolved"
+      ? refetchResolved
+      : refetchRequests;
 
   function handleRequestUpdated(updated) {
     queryClient.setQueryData(["missing-item-requests"], (prev = []) =>
@@ -122,6 +160,8 @@ export function usePendingItemsPage() {
     pendingRequestsCount,
     current,
     pagination,
+    loadError,
+    retryLoad,
     handleRequestUpdated,
     handleResolve,
     handleReopen,

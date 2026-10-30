@@ -63,6 +63,8 @@ export default function PendingItems() {
     pendingRequestsCount,
     current,
     pagination,
+    loadError,
+    retryLoad,
     handleRequestUpdated,
     handleResolve,
     handleReopen,
@@ -158,6 +160,19 @@ export default function PendingItems() {
               className="h-28 rounded-2xl bg-gray-100 dark:bg-gray-800 animate-pulse"
             />
           ))}
+        </div>
+      ) : loadError ? (
+        <div className="text-center py-16" role="alert">
+          <p className="text-5xl mb-4">⚠️</p>
+          <p className="text-base font-semibold text-gray-700 dark:text-gray-300">
+            No se pudieron cargar los datos.
+          </p>
+          <button
+            onClick={() => retryLoad()}
+            className="mt-4 px-4 py-2.5 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold text-sm hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
+          >
+            Reintentar
+          </button>
         </div>
       ) : current.length === 0 ? (
         <EmptyState tab={tab} />
