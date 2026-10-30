@@ -181,9 +181,24 @@ Evidencia funcional: commits `7cf1875`, `2aadfc6` y `f01bc14`.
 
 `H-028` y `H-029` siguen abiertos porque requieren verificar el estado externo de Render; este cambio no presume ni reemplaza esa comprobación.
 
-## Próxima sesión — higiene y operabilidad de imagen
+## Última sesión cerrada — higiene y operabilidad de imagen
 
-Crear la rama desde este cierre, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `DO-CONTAINER`, `DO-SUPPLY`, `DO-RELEASE`, `SEC-SUPPLY`, `QA-SEC` y `QA-RESILIENCE` para atender `H-033` a `H-036`: Composer en runtime, cobertura de `.dockerignore`, versiones base y healthcheck/readiness. No mezclar las verificaciones externas `H-028/H-029` con cambios inferidos desde el repositorio.
+Rama creada desde el cierre de hardening anterior. Se aplicaron `DO-CONTAINER`, `DO-SUPPLY`, `DO-RELEASE`, `SEC-SUPPLY`, `QA-SEC` y `QA-RESILIENCE`.
+
+1. `D-010` define stages separados y política de actualización de digests.
+2. Runtime ya no contiene Composer; recibe `vendor/` desde una etapa aislada.
+3. Node, PHP y Composer están fijados por tag legible + digest oficial.
+4. `.dockerignore` excluye material de desarrollo, secretos y el bot legado.
+5. `/up` es liveness; `/ready` comprueba DB y devuelve 503 mínimo ante fallo.
+6. Docker declara `HEALTHCHECK` sobre `/ready`.
+7. Suite local verde: 94 tests, 278 assertions; Pint, PHPStan, Composer audit, backend npm audit, frontend lint/build y audit desde severidad moderada verdes. Los cuatro bajos frontend siguen gobernados por `D-004`.
+8. Actions run `40981608096`: `ci`, `postgres-concurrency` y `container-security` verdes.
+
+Evidencia funcional: commit `0860d46`.
+
+## Próxima sesión — deploy legado y comando destructivo
+
+Crear la rama desde este cierre, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `DO-ENV`, `DO-CONTAINER`, `DO-RELEASE`, `DO-DR`, `SEC-SECRET`, `QA-SEC` y `QA-RESILIENCE`. Atender `H-037` y decidir `H-038` con evidencia del camino de deploy vigente; no eliminar Nixpacks ni asumir configuración de Render sin acreditarla. `H-028/H-029` continúan como verificaciones externas críticas.
 
 ## Sesiones R-02 a R-07
 

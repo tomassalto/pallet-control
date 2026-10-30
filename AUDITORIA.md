@@ -407,28 +407,32 @@ Referencia:  `DO-ENV`, `SEC-SECRET`
 Severidad:   🟡 medio · Categoría: seguridad/calidad
 Ubicación:   Dockerfile:38
 ```
-**Estado:** 🔲 abierto
+**Resolución:** Composer se usa sólo en `vendor-build`; runtime copia `vendor/` ya resuelto. CI ejecuta `command -v composer` dentro de la imagen y exige resultado vacío.
+**Estado:** ✅ resuelto en `0860d46`; Actions run `40981608096`, job `container-security` verde.
 
 #### H-034 — `.dockerignore` incompleto
 ```
 Severidad:   🟡 medio · Categoría: calidad
 Ubicación:   .dockerignore (falta *.md, tests/, storage/logs/*, scraper/node_modules)
 ```
-**Estado:** 🔲 abierto
+**Resolución:** el contexto excluye documentación, tests backend, logs, caches, secretos, VCS, `scraper/node_modules` y el bot de WhatsApp inactivo. CI acredita que tests y README backend no existen en runtime.
+**Estado:** ✅ resuelto en `0860d46`; Actions run `40981608096` verde.
 
 #### H-035 — Imágenes base sin pinear a patch/digest
 ```
 Severidad:   🟡 medio · Categoría: calidad
 Ubicación:   Dockerfile (php:8.4-cli-alpine, node:22-alpine, composer:2)
 ```
-**Estado:** 🔲 abierto
+**Resolución:** Node 22 Alpine, PHP 8.4 CLI Alpine y Composer 2 quedaron fijados a sus digests oficiales vigentes al 2026-10-29; `D-010` exige actualización revisada y repetición de gates.
+**Estado:** ✅ resuelto en `0860d46`; Actions run `40981608096` verde.
 
 #### H-036 — Sin `HEALTHCHECK` en el Dockerfile
 ```
 Severidad:   🟡 medio · Categoría: calidad
 Ubicación:   Dockerfile
 ```
-**Estado:** 🔲 abierto
+**Resolución:** `/up` conserva liveness y `/ready` verifica DB con respuesta mínima 200/503. Docker declara healthcheck contra readiness y existen tests de disponibilidad y fallo sin fuga de detalles.
+**Estado:** ✅ resuelto en `0860d46`; Actions run `40981608096` verde.
 
 #### H-037 — `ResetForProduction` referencia tabla inexistente
 ```

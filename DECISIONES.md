@@ -290,3 +290,25 @@ El `.env` local del frontend deja de ser un artefacto versionado; `.env.example`
 Una intención de depurar producción se ignora deliberadamente y debe reproducirse en un entorno controlado. La imagen tarda más en CI porque el gate compila el artefacto real; esa evidencia es necesaria para no declarar seguridad sólo por inspección del Dockerfile.
 
 **Referencia normativa:** `DO-ENV`, `DO-CONTAINER`, `DO-RELEASE`, `DO-SUPPLY`, `SEC-SECRET`, `SEC-SUPPLY`, `QA-SEC`, `QA-RESILIENCE`
+
+---
+
+## D-010 — Imagen reproducible y readiness mínimo
+
+**Fecha:** 2026-10-29
+**Estado:** ✅ vigente
+
+**Contexto**
+La imagen productiva incluía Composer, dependía de tags mutables y sólo exponía `/up`, que acredita proceso vivo pero no capacidad de consultar la base de datos. El contexto de build enviaba tests, documentación y componentes inactivos innecesarios.
+
+**Decisión**
+Separar cuatro etapas: frontend, base PHP, resolución de vendor y runtime. Composer existe únicamente en `vendor-build`; runtime recibe `vendor/` ya resuelto. Node 22 Alpine, PHP 8.4 CLI Alpine y Composer 2 conservan tags legibles y quedan fijados además al digest oficial consultado el 2026-10-29.
+
+`/up` permanece como liveness y `/ready` comprueba una consulta mínima a la base. Readiness responde sólo estado y servicio, con 503 genérico ante fallo. El `HEALTHCHECK` de Docker consume `/ready`. `.dockerignore` excluye secretos, VCS, tests, logs, documentación, caches y el bot legado.
+
+CI construye la imagen real y verifica que no contenga Composer, tests ni documentación backend, que el healthcheck apunte a `/ready`, que runtime no sea root y que el guard productivo siga vigente.
+
+**Trade-off aceptado**
+Los digests aportan reproducibilidad pero no reciben actualizaciones implícitas. Deben renovarse mediante cambio revisado cuando exista parche de seguridad o actualización planificada, ejecutando nuevamente build, audits y gates. Readiness sólo acredita la dependencia crítica inmediata —base de datos— y no convierte R2, OCR o Telegram en requisitos para servir tráfico general.
+
+**Referencia normativa:** `DO-CONTAINER`, `DO-SUPPLY`, `DO-RELEASE`, `SEC-SUPPLY`, `QA-SEC`, `QA-RESILIENCE`

@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-29
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** guard de producción, usuario no root y `.env` cerrados; siguiente bloque: higiene y operabilidad de imagen (`H-033` a `H-036`).
+**Trabajo actual:** imagen reproducible y operable cerrada; siguiente bloque de repositorio: comandos/configuración de deploy legada (`H-037`, `H-038`).
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -96,7 +96,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | H-021 / H-022 / H-023 / H-027 | Códigos HTTP inconsistentes (401/403/409 vs 422/400) | 🟢 bajo c/u | Bajo | 🟡 parcial (CI puede flaggear, no decidir) |
 | H-024 | Formato de error no estandarizado — ✅ resuelto | 🟡 medio (depende de H-018) | Bajo | ❌ no |
 | H-041 | Larastan/PHPStan no instalado | 🟢 bajo | Medio | ✅ sí |
-| H-033 / H-034 / H-035 / H-036 | Docker: composer en imagen, dockerignore incompleto, versiones sin pinear a patch, sin healthcheck | 🟢 bajo c/u | Bajo | ✅ sí |
+| H-033 / H-034 / H-035 / H-036 | Docker: Composer, contexto, digests y healthcheck — ✅ resueltos | 🟢 bajo c/u | Bajo | ✅ sí |
 | H-004 / H-014 / H-016 / H-026 / H-037 / H-038 | Varios ⚪ (rutas rotas, columna muerta, índice duplicado, etc.) | 🟢 bajo c/u | Bajo | ✅ sí (salvo H-038, es decisión) |
 
 ---
@@ -253,10 +253,10 @@ Constraints e índices (una migración, bajo riesgo, alto retorno):
 Docker/infra (mecánico, bajo riesgo):
 ✅ USER no-root en Dockerfile + user= en supervisord.conf         → H-030
 ✅ Sacar pallet-frontend/.env de git (git rm --cached) + gitignore → H-032
-□ .dockerignore: agregar *.md, tests/, storage/logs/*            → H-034
-□ HEALTHCHECK en Dockerfile                                       → H-036
-□ Pinear versiones de imágenes base a digest                      → H-035
-□ Sacar Composer de la imagen final (stage vendor separado)       → H-033
+✅ .dockerignore: agregar *.md, tests/, storage/logs/*            → H-034
+✅ HEALTHCHECK en Dockerfile                                       → H-036
+✅ Pinear versiones de imágenes base a digest                      → H-035
+✅ Sacar Composer de la imagen final (stage vendor separado)       → H-033
 □ Decidir si nixpacks.toml sigue vigente o se borra                → H-038
 
 Decisiones que necesitan entrada en DECISIONES.md antes de ejecutarse:
