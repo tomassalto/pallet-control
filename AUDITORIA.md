@@ -280,7 +280,7 @@ Ubicación:   ver lista completa en conversación — AuthController, OrderContr
 Referencia:  `BE-VALID`
 ```
 **Avance:** R-04 introdujo `StoreOrderItemRequest`. Las tres subidas web de fotos comparten ahora un contrato único (D-022): jpeg/png/webp verificados por contenido, 20 MB, mensajes en español y `422` estándar. Se retiró el fallback de base, que según los tests de caracterización nunca producía un alta.
-**Estado:** 🟡 parcial: subidas de fotos en `e987c13` (CI en `EJECUCION.md`); el resto de los controladores sigue validando inline.
+**Estado:** 🟡 parcial: subidas de fotos en `e987c13` (Actions run `41028487256`); el resto de los controladores sigue validando inline.
 
 #### H-021 — Login inválido devuelve 422 en vez de 401
 ```

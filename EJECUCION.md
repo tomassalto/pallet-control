@@ -385,7 +385,7 @@ Rama `hardening/photo-request-validation`, creada desde `hardening/schema-cleanu
 4. `e987c13` actualiza los tests afectados como cambios de contrato documentados: gif en pallet pasa a `422`, y base usa el `422` estándar sin `error_code`.
 5. Gates locales: Pint, PHPStan, 199 tests/678 assertions y Composer audit verdes.
 
-Evidencia funcional: commits `f3aeb3f` y `e987c13`.
+Evidencia funcional: commits `f3aeb3f` y `e987c13`. Actions run `41028487256` sobre `211f267`: `ci`, `postgres-concurrency` y `container-security` verdes. `f3aeb3f` se publicó junto a la implementación y no tuvo corrida propia; su verde contra el código anterior se acreditó localmente.
 
 Pendiente: el resto de H-020 (otros controladores con validación inline) y el endpoint legado del bot, fuera de alcance.
 
