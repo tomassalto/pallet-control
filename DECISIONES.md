@@ -432,3 +432,23 @@ Cuando el recorrido por código crea un pedido, creación, log de alta, pivot y 
 Repetir la misma asociación deja de ser un éxito idempotente silencioso y pasa a ser conflicto explícito, evitando evidencia duplicada. La notificación Telegram es best-effort posterior al commit: su fallo no revierte una asociación durable ni mantiene abierta la transacción.
 
 **Referencia normativa:** `BE-ARCH`, `BE-TX`, `BE-VALID`, `BE-ERR`, `SEC-LOG`, `QA-INVARIANT`, `QA-RESILIENCE`
+
+---
+
+## D-017 — Subidas de fotos con compensación explícita
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+Las subidas escribían primero el object storage y luego la fila de foto y el audit log sin una unidad de confirmación. Una falla de base dejaba archivos huérfanos; el alta de tickets por bot además creaba el ticket antes de convertir la imagen. El driver de storage puede devolver `false` sin lanzar una excepción.
+
+**Decisión**
+Guardar y convertir el objeto antes de abrir la transacción de base. Después, confirmar fila de negocio y auditoría en una única transacción. Ante cualquier excepción de esa transacción, intentar eliminar el objeto recién creado y relanzar el error original. Si la compensación falla y el objeto continúa presente, registrar un evento crítico con disco y ruta, sin filtrar esa información al cliente.
+
+Aplicar el mismo servicio a los endpoints web y al servicio activo usado por Telegram. Para tickets creados por el bot, usar una ruta que no dependa del identificador del ticket y crear ticket, foto y auditoría juntos después de almacenar el objeto. Tratar un `put()` con resultado `false` como fallo de almacenamiento.
+
+**Trade-off aceptado**
+La compensación no convierte DB y object storage en una transacción distribuida: una caída durante el cleanup aún puede dejar un objeto huérfano, que queda señalado críticamente para reconciliación. El patrón sirve para altas; los borrados requieren intención durable y reintento, y se resuelven por separado.
+
+**Referencia normativa:** `BE-ARCH`, `BE-TX`, `BE-ERR`, `SEC-FILE`, `SEC-LOG`, `DO-INFRA`, `QA-INVARIANT`, `QA-RESILIENCE`

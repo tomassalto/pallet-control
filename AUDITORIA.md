@@ -183,7 +183,9 @@ Referencia:  `BE-TX`, `QA-INVARIANT`
 
 `PalletController::attachOrder` y `OrderController::attachPallet` comparten un servicio que bloquea pallet y pedido en ese orden, inserta pivot y audit log en una transacción y devuelve `409` para una asociación existente. Crear un pedido por código también confirma o revierte junto a la asociación. Telegram se ejecuta después del commit. PostgreSQL cruza ambos endpoints simultáneamente y acredita `201/409`, una fila pivot y un log.
 
-**Estado:** 🟡 resuelto para solicitudes faltantes en `eaadf87` y asociaciones pedido/pallet en `a59022b`; Actions runs `41003369719` y `41003991454` con los tres jobs verdes. Permanece abierto para los controladores de archivos enumerados.
+Las subidas de fotos web y del servicio activo de Telegram guardan primero el objeto y luego confirman registro y auditoría dentro de una transacción. Si cualquier escritura falla, un servicio común elimina el objeto; `ImageConverter` ahora también falla explícitamente cuando el driver devuelve `false`. En el alta de tickets por bot, ticket, foto y auditoría se crean dentro de la misma transacción, después de almacenar la imagen.
+
+**Estado:** 🟡 resuelto para solicitudes faltantes en `eaadf87`, asociaciones pedido/pallet en `a59022b` y subidas de fotos en `ee41860`. Permanece abierto para los borrados físicos de fotos/tickets, que necesitan recuperación durable ante fallos del object storage.
 
 #### H-012 — Foreign keys sin índice (Postgres no las indexa solo)
 ```
@@ -240,7 +242,7 @@ Severidad:   ⚪ bajo · Categoría: integridad de datos
 Ubicación:   app/Helpers/ActivityLogger.php
 ```
 **Qué está pasando:** al no correr dentro de la misma transacción que el cambio de negocio (ver H-011), una falla del insert de auditoría después de un commit ya aplicado pierde esa entrada del log silenciosamente.
-**Estado:** 🟡 resuelto para `adjust-item` en R-01, crear/actualizar bases en R-02, revisión de solicitudes en `eaadf87` y asociación pedido/pallet en `a59022b`; abierto en los controladores de archivos citados por H-011. Tests fuerzan la falla de `activity_logs` y acreditan rollback del estado asociado.
+**Estado:** 🟡 resuelto para `adjust-item` en R-01, crear/actualizar bases en R-02, revisión de solicitudes en `eaadf87`, asociación pedido/pallet en `a59022b` y subidas web/Telegram en `ee41860`; abierto en los borrados de archivos citados por H-011. Tests fuerzan la falla de `activity_logs` y acreditan rollback del estado asociado y compensación del objeto subido.
 
 ---
 

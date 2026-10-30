@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-30
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** revisión de solicitudes y asociación pedido/pallet ya son atómicas y seguras ante concurrencia (`H-011`/`H-017`, parcial). `H-006` sigue abierto; `H-029` y `H-038` requieren evidencia real de Render. Siguiente bloque autónomo: consistencia DB/Storage en controladores de fotos de `H-011`.
+**Trabajo actual:** las subidas web y Telegram compensan el objeto si falla la transacción de registro y auditoría (`H-011`/`H-017`, parcial; `D-017`). `H-006` sigue abierto; `H-029` y `H-038` requieren evidencia real de Render. Siguiente bloque autónomo: borrado recuperable de fotos y tickets sin asumir una transacción distribuida.
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 

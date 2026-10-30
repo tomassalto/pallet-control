@@ -287,9 +287,22 @@ Rama creada desde el cierre documental de solicitudes faltantes. Se aplicaron `B
 
 Evidencia funcional: commit `a59022b`.
 
-## Próxima sesión — consistencia entre fotos y Storage
+## Última sesión cerrada — compensación de subidas de fotos
 
-Crear la rama desde este cierre, nunca desde `master`. Recorrer `ROUTER.md` y combinar `BE-TX`, `SEC-FILE`, `SEC-LOG`, `DO-INFRA`, `QA-INVARIANT` y `QA-RESILIENCE`. Auditar `PalletPhotoController`, `PalletBasePhotoController` y `OrderTicketController`; definir compensación explícita porque DB y object storage no comparten transacción. Probar fallos antes y después de cada efecto sin asumir atomicidad distribuida.
+Rama creada desde el cierre documental de asociación pedido/pallet. Se aplicaron `BE-ARCH`, `BE-TX`, `BE-ERR`, `SEC-FILE`, `SEC-LOG`, `DO-INFRA`, `QA-INVARIANT` y `QA-RESILIENCE`.
+
+1. D-017 define storage primero, transacción DB después y compensación del objeto ante cualquier rollback.
+2. Un servicio común aplica la misma regla a pallet, base y ticket tanto en endpoints web como en el servicio usado por Telegram.
+3. `ImageConverter` deja de tratar como éxito un `put()` que devuelve `false`.
+4. El ticket creado por Telegram ya no puede quedar huérfano si falla la conversión, la foto o la auditoría.
+5. Cuatro tests fuerzan el fallo de `activity_logs` y acreditan ausencia de filas y archivos residuales.
+6. Gates locales: Pint, PHPStan, 132 tests/388 assertions y Composer audit verdes.
+
+Evidencia funcional: commit `ee41860`.
+
+## Próxima sesión — borrado recuperable de fotos y tickets
+
+Crear la rama desde este cierre, nunca desde `master`. Repetir la ruta `BE-TX`, `BE-ASYNC`, `SEC-FILE`, `SEC-LOG`, `DO-INFRA`, `QA-INVARIANT` y `QA-RESILIENCE`. Diseñar un mecanismo durable de limpieza/reintento para que la base siga siendo autoritativa y una falla del object storage no pierda la intención de borrado. Cubrir foto de pallet, foto de base, foto de ticket y ticket completo; no presentar el borrado directo como atómico con la base.
 
 ## Sesiones R-02 a R-07
 
