@@ -256,9 +256,24 @@ Rama creada desde el cierre documental de H-012/H-013. Se aplicaron `BE-DATA`, `
 
 Evidencia funcional: commit `1020075`.
 
-## Próxima sesión — atomicidad restante
+## Última sesión cerrada — revisión atómica de solicitudes faltantes
 
-Crear la rama desde este cierre, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `BE-TX`, `BE-VALID`, `SEC-LOG`, `QA-INVARIANT`, `QA-RESILIENCE` y `DOMINIO.md`. Relevar las escrituras todavía enumeradas en H-011/H-017, empezando por `MissingItemRequestController::update`, y cerrar cada operación sólo con rollback forzado y auditoría atómica.
+Rama creada desde el cierre documental de H-015. Se aplicaron `BE-TX`, `BE-VALID`, `BE-ERR`, `SEC-LOG`, `QA-INVARIANT`, `QA-RESILIENCE` y `DOMINIO.md`.
+
+1. D-015 permite revisar una solicitud exactamente una vez.
+2. El servicio bloquea la solicitud y reevalúa su estado dentro de la transacción.
+3. Aprobación, pendiente derivado y audit log confirman o revierten juntos.
+4. Una revisión repetida devuelve `409` sin duplicar efectos.
+5. Fallos forzados al crear pendiente o log acreditan rollback total.
+6. PostgreSQL enfrenta dos aprobaciones reales: resultado `200/409`, un pendiente y un log.
+7. Gates locales: Pint, PHPStan, 124 tests/358 assertions y Composer audit verdes.
+8. Actions run `41003369719`: `ci`, `postgres-concurrency` y `container-security` verdes.
+
+Evidencia funcional: commit `eaadf87`.
+
+## Próxima sesión — asociación pedido/pallet atómica
+
+Crear la rama desde este cierre, nunca desde `master`. Reaplicar `BE-TX`, `BE-VALID`, `SEC-LOG`, `QA-INVARIANT` y `QA-RESILIENCE`. Auditar juntos `PalletController::attachOrder` y `OrderController::attachPallet`, porque escriben la misma relación desde extremos distintos. Definir lock/duplicado/status y probar rollback de auditoría antes de cerrar esa parte de H-011/H-017.
 
 ## Sesiones R-02 a R-07
 

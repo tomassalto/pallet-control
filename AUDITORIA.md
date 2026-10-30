@@ -179,7 +179,9 @@ Referencia:  `BE-TX`, `QA-INVARIANT`
 ```
 **Qué está pasando:** cada uno hace 2-4 escrituras en tablas distintas (crear/actualizar registro + `ActivityLogger::log()` + a veces `Storage`) sin `DB::transaction()`.
 **Por qué importa acá:** el más grave es `MissingItemRequestController::update` — si `PendingItem::create()` falla después de marcar la solicitud "approved", la aprobación queda registrada sin su pendiente correspondiente, silenciosamente.
-**Estado:** 🔲 abierto. R-02 cerrará la parte de crear/actualizar bases, que ya no figura en esta lista; estas escrituras restantes conservan el hallazgo.
+**Resolución parcial:** `MissingItemRequestController::update` delega en un servicio transaccional que bloquea la solicitud, reevalúa `pending_review` y confirma estado, pendiente y auditoría como una unidad. Una segunda revisión devuelve `409`. Tests fuerzan fallos al crear el pendiente y el log; PostgreSQL enfrenta dos aprobaciones simultáneas y acredita `200/409`, un pendiente y un log.
+
+**Estado:** 🟡 resuelto para solicitudes faltantes en commit `eaadf87`, Actions run `41003369719` con `ci`, `postgres-concurrency` y `container-security` verdes. Permanece abierto para las asociaciones y controladores de archivos enumerados.
 
 #### H-012 — Foreign keys sin índice (Postgres no las indexa solo)
 ```
@@ -236,7 +238,7 @@ Severidad:   ⚪ bajo · Categoría: integridad de datos
 Ubicación:   app/Helpers/ActivityLogger.php
 ```
 **Qué está pasando:** al no correr dentro de la misma transacción que el cambio de negocio (ver H-011), una falla del insert de auditoría después de un commit ya aplicado pierde esa entrada del log silenciosamente.
-**Estado:** 🟡 resuelto para `adjust-item` en R-01 y para crear/actualizar bases en R-02; abierto en las demás escrituras citadas por H-011. Tests fuerzan la falla de `activity_logs` y acreditan rollback de stock, base y metadatos.
+**Estado:** 🟡 resuelto para `adjust-item` en R-01, crear/actualizar bases en R-02 y revisión de solicitudes faltantes en `eaadf87`; abierto en las demás escrituras citadas por H-011. Tests fuerzan la falla de `activity_logs` y acreditan rollback del estado asociado.
 
 ---
 

@@ -392,3 +392,23 @@ La migración admite sólo los dos motores soportados, aborta ante datos incompa
 SQLite y PostgreSQL usan mecanismos distintos, pero comparten comportamiento probado. Los triggers SQLite no se presentan como arquitectura productiva. La suma global asignada entre bases queda fuera: H-006 requiere coordinación transaccional o una defensa agregada, no un `CHECK` simple.
 
 **Referencia normativa:** `BE-DATA`, `BE-VALID`, `BE-TX`, `DO-RELEASE`, `QA-DATA`, `QA-INVARIANT`, `QA-RESILIENCE`
+
+---
+
+## D-015 — Revisión única y atómica de solicitudes faltantes
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+La aprobación actualizaba primero la solicitud y luego creaba un pendiente y su audit log. Un fallo intermedio dejaba una aprobación sin pendiente; dos administradores simultáneos podían crear efectos duplicados.
+
+**Decisión**
+Bloquear la fila `missing_item_requests` dentro de una transacción y reevaluar su estado después de adquirir el lock. Sólo `pending_review` puede transicionar a `approved` o `rejected`. Estado, metadatos de revisión, pendiente derivado y audit log confirman o revierten juntos.
+
+Una revisión posterior o concurrente devuelve `409` y no cambia la decisión previa. No se reintenta automáticamente una operación que ya pudo esperar por el lock.
+
+**Trade-off aceptado**
+La revisión queda serializada por solicitud, no globalmente. Un administrador que intenta cambiar una decisión ya confirmada debe usar un flujo futuro explícito de corrección; reutilizar el endpoint de revisión ocultaría historia y podría duplicar pendientes.
+
+**Referencia normativa:** `BE-TX`, `BE-VALID`, `BE-ERR`, `SEC-LOG`, `QA-INVARIANT`, `QA-RESILIENCE`

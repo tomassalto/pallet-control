@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-30
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** `H-015` cerrado con reglas por fila en PostgreSQL y enforcement equivalente en SQLite. `H-006` sigue abierto como invariante agregada; `H-029` y `H-038` requieren evidencia del entorno real de Render. Siguiente bloque autónomo: atomicidad restante de `H-011`/`H-017`.
+**Trabajo actual:** revisión de solicitudes faltantes ya es atómica y segura ante concurrencia (`H-011`/`H-017`, parcial). `H-006` sigue abierto como invariante agregada; `H-029` y `H-038` requieren evidencia real de Render. Siguiente bloque autónomo: asociaciones pedido/pallet restantes de `H-011`/`H-017`.
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
