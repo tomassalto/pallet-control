@@ -2,6 +2,7 @@
 
 namespace Tests\Integration\Postgres;
 
+use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -43,7 +44,7 @@ class PalletCreatedBySchemaTest extends TestCase
             ),
         );
 
-        $userId = \App\Models\User::factory()->create()->id;
+        $userId = User::factory()->create()->id;
         $palletId = DB::table('pallets')->insertGetId([
             'code' => 'PAL-FK-PG',
             'status' => 'open',
