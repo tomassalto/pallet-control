@@ -389,9 +389,26 @@ Evidencia funcional: commits `f3aeb3f` y `e987c13`. Actions run `41028487256` so
 
 Pendiente: el resto de H-020 (otros controladores con validación inline) y el endpoint legado del bot, fuera de alcance.
 
+## Última sesión cerrada — base de tests frontend
+
+Rama `quality/frontend-test-foundation`, creada desde `hardening/photo-request-validation` (`85e1647`). Se aplicaron `FE-GATE`, `FE-DATA`, `FE-STATE`, `QA-LEVELS`, `QA-CONTRACT`, `QA-DATA`, `QA-FLAKY`, `QA-GATE`, `DO-CI`, `DO-SUPPLY` y `SEC-SUPPLY`. La elección de herramienta es una decisión de proyecto según `BIBLIAS-GOBERNANZA.md`; no hubo GAP teórico.
+
+1. D-023 adopta Vitest 5.0.5, jsdom 30.1.3, Testing Library React 16.3.3, DOM 10.4.2 y user-event 14.6.8, todas publicadas al menos siete días antes y compatibles con Vite 7, React 19 y Node 22.
+2. `vitest.config.js` es independiente para que el plugin PWA no corra en tests. El setup común limpia DOM, `localStorage`, temporizadores y globals; cada test crea su propio `QueryClient` sin reintentos.
+3. Nueve tests del cliente API cubren token, headers, FormData, errores, 401 con redirección y timeouts de 15 y 30 segundos con reloj controlado.
+4. Cinco tests de pendientes paginados cubren carga, totales desde `meta`, vacío, error recuperable y navegación de página, con `fetch` reemplazado en el límite.
+5. El test de error reveló que los callbacks `onError` de `useQuery` no existen en React Query v5: un fallo mostraba el estado vacío. Ahora la pantalla muestra una alerta con "Reintentar" y el toast se emite una vez por fallo.
+6. CI ejecuta ESLint, tests y build frontend en el job `ci`; antes no corría ESLint frontend.
+7. Audit frontend sin hallazgos nuevos: siguen los cuatro bajos de D-004.
+8. Gates locales: lint, 14 tests en tres corridas deterministas, build y audit desde moderado verdes.
+
+Evidencia funcional: commit `b40db93`.
+
+Pendiente: `MyClients.jsx` conserva callbacks `onError` muertos en sus queries; se tratará con los flujos críticos.
+
 ## Próxima sesión
 
-`quality/frontend-test-foundation`: runner de tests frontend según `FE-GATE` y `QA-LEVELS`.
+`quality/frontend-critical-flows`: regresión de recorridos críticos del frontend.
 
 ## Sesiones R-02 a R-07
 

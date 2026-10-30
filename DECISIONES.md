@@ -617,3 +617,31 @@ Los errores siguen el contrato estándar `422` con `message` y `errors.photo`. D
 Una foto de pallet en gif o bmp pasa a recibir `422`. El mensaje de error de base cambia de texto aunque conserva status y campo `message`.
 
 **Referencia normativa:** `BE-API`, `BE-VALID`, `BE-ERR`, `SEC-FILE`, `SEC-INPUT`, `QA-CONTRACT`
+
+---
+
+## D-023 — Runner de tests frontend
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+`FE-GATE` exige ejecutar las pruebas definidas por Quality, pero el frontend no tenía runner. La única verificación automatizada era el build dentro del job backend; CI no ejecutaba ESLint frontend. `BIBLIAS-GOBERNANZA.md` deja la herramienta concreta a una decisión del proyecto. `QA-LEVELS`, `QA-CONTRACT`, `QA-DATA` y `QA-FLAKY` definen niveles, aislamiento de red, determinismo y contratos; `QUALITY-BIBLIA.md` cita los principios de Testing Library como fuente oficial. No existe hueco teórico.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Jest + transformador | Ecosistema amplio | Segunda cadena de transformación distinta de Vite; configuración ESM adicional |
+| Vitest + jsdom + Testing Library | Reutiliza la configuración de Vite, ESM nativo, API compatible con Jest, consultas orientadas al usuario | Dependencias de desarrollo nuevas |
+| Sólo E2E con navegador | Prueba recorridos completos | Lento y contrario a `QA-LEVELS` para contratos de componente |
+
+**Decisión**
+Adoptar Vitest con entorno jsdom y `@testing-library/react`, más `@testing-library/user-event` para interacción. Las versiones son estables, compatibles con Vite 7 y React 19, publicadas hace al menos siete días y fijadas por lockfile. No se agregan librerías de mock de red: los tests reemplazan `fetch` en el límite del cliente API. Un setup común limpia DOM, `localStorage`, mocks y temporizadores entre tests. Cada test crea su propio `QueryClient` sin reintentos.
+
+`npm test` ejecuta la suite una vez, sin modo watch. CI ejecuta ESLint, tests y build del frontend en el job `ci`. El audit frontend conserva el umbral moderado y las excepciones de `D-004`; cualquier hallazgo nuevo introducido por estas dependencias se registra, no se oculta.
+
+**Trade-off aceptado**
+jsdom no reproduce layout, cámara ni service worker; esos riesgos siguen en revisión manual y en E2E futuros. El job `ci` tarda más por el paso frontend.
+
+**Referencia normativa:** `FE-GATE`, `FE-DATA`, `FE-STATE`, `QA-LEVELS`, `QA-CONTRACT`, `QA-DATA`, `QA-FLAKY`, `QA-GATE`, `DO-CI`, `DO-SUPPLY`, `SEC-SUPPLY`
