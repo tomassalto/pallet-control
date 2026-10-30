@@ -355,8 +355,8 @@ Rama `hardening/aggregate-stock-invariant`, creada desde `hardening/storage-clea
 12. Actions run `41024434735` sobre `9d1e11d`: `ci`, `postgres-concurrency` y `container-security` verdes.
 
 10. La corrida `41021357373` sobre `1a8562b` reveló, mediante la anotación nueva, un deadlock intermitente entre desvinculación y adjust-item: las FKs toman `FOR KEY SHARE` sobre el padre después del lock del ítem. Se reprodujo de forma determinista con dos conexiones SQL locales. `6b4b48b` adquiere `FOR SHARE` sobre los padres antes del ítem en seis recorridos y agrega la carrera migrar contra adjust. Repetir 30 veces cada carrera cruzada no produjo fallos.
-12. Actions run `41024434735` sobre `9d1e11d`: `ci`, `postgres-concurrency` y `container-security` verdes.
 11. Presupuestos de queries actualizados por los locks nuevos: crear base 14→15, adjust-item 9→11, agregar ítem 7→8, actualizar ítem 6→8. Las mediciones históricas de `benchmarks/` conservan los valores originales.
+12. Actions run `41024434735` sobre `9d1e11d`: `ci`, `postgres-concurrency` y `container-security` verdes.
 
 Evidencia funcional: commits `39a45ab` y `24b5eea`. Actions run `41018979777` sobre `39a45ab` falló en `postgres-concurrency` sin logs accesibles sin permisos de administrador; el gate no falló en cinco corridas locales contra PostgreSQL 17. La causa más probable, no confirmada, es el plazo de 10 segundos para observar la espera de lock en la carrera entre conexiones. `24b5eea` amplía ese plazo a 30 segundos sin cambiar aserciones y publica los fallos del gate como anotaciones legibles por API. Actions run `41020938251` sobre `24b5eea`: `ci`, `postgres-concurrency` y `container-security` verdes.
 
