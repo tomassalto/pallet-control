@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-30
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** subidas con compensación (`D-017`) y borrados de fotos/tickets/pallets/bases con intención durable, job post-commit y barrido supervisado (`D-018`); `H-011`/`H-017` resueltos para los flujos auditados. `H-006` sigue abierto; `H-029` y `H-038` requieren evidencia real de Render (Nixpacks no ejecuta worker ni barrido).
+**Trabajo actual:** subidas con compensación (`D-017`) y borrados de fotos/tickets/pallets/bases con intención durable, job post-commit y barrido supervisado (`D-018`); `H-011`/`H-017` resueltos para los flujos auditados. Colas y limpieza operables con estado, alerta por antigüedad y fallos terminales auditados (`D-019`). Siguiente: defensa transversal de `H-006`. `H-006` sigue abierto; `H-029` y `H-038` requieren evidencia real de Render (Nixpacks no ejecuta worker ni barrido).
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 

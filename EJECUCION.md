@@ -320,9 +320,26 @@ Evidencia funcional: commit `60a0c6c`.
 
 Pendiente: `pallet:archive` sigue borrando objetos antes que filas, pero no se ejecuta porque no hay scheduler activo; Nixpacks no corre worker ni barrido (H-038); las intenciones completadas aún no tienen política de retención.
 
+## Última sesión cerrada — operabilidad de colas y limpieza
+
+Rama `hardening/storage-cleanup-operability`, creada desde `hardening/photo-deletion-recovery` (`122aea8`). Se aplicaron `BE-ASYNC`, `BE-ERR`, `DO-CONTAINER`, `DO-RELEASE`, `DO-OBS`, `DO-DR`, `SEC-LOG` y `QA-RESILIENCE`.
+
+1. D-019 fija `retry_after=150` por encima del timeout del worker (120) y de cada job; un test lo verifica contra `supervisord.conf`.
+2. `ProcessTicketOcr` declara dos intentos, backoff de 30 y timeout de 110, y registra su fallo terminal sin mensaje interno.
+3. El borrado de objetos relanza una excepción saneada: `failed_jobs` y logs no reciben mensajes ni URLs del proveedor.
+4. La transición a intención agotada y su activity log confirman juntos; reprocesar agotadas queda auditado.
+5. `storage:cleanup-status` informa pendientes, antigüedad, agotadas, completadas y jobs fallidos, y falla al superar `STORAGE_CLEANUP_ALERT_MINUTES` o con agotadas. El barrido emite log crítico con el mismo criterio.
+6. El procedimiento de recuperación tras crash está en D-019; `/ready` conserva el alcance de D-010.
+7. Dieciséis tests cubren consistencia de timeouts, retry, job duplicado, registro resuelto, proceso interrumpido, saneamiento, fallo terminal auditable con rollback, estado y alerta.
+8. Gates locales: Pint, PHPStan, 166 tests/570 assertions y Composer audit verdes.
+
+Evidencia funcional: commit `f485f1b`.
+
+Pendiente: conectar `storage:cleanup-status` a un monitor externo depende de la plataforma real (H-029/H-038); `composer dev` no ejecuta el barrido, que en desarrollo se corre manualmente.
+
 ## Próxima sesión
 
-Elegir desde `PLAN.md`: `H-006` (defensa transversal asignado ≤ pedido) o la verificación externa de `H-029`/`H-038` en Render.
+`hardening/aggregate-stock-invariant`: defensa transversal de `H-006` (asignado ≤ pedido) sobre todos los escritores de `pallet_base_order_items`.
 
 ## Sesiones R-02 a R-07
 

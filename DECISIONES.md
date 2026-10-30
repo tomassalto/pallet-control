@@ -486,3 +486,42 @@ El mismo mecanismo cubre borrado de pallet y de base, cuyas fotos se eliminaban 
 El borrado físico es eventual: durante una caída de R2 el objeto sigue existiendo, inaccesible desde la aplicación porque ninguna fila operativa lo referencia, hasta que un reintento confirme su eliminación. El usuario recibe éxito cuando la base confirmó. Las intenciones completadas se conservan como evidencia; su depuración requiere una política de retención posterior. Nixpacks no ejecuta worker ni barrido, por lo que en ese camino la limpieza queda pendiente hasta resolver H-038.
 
 **Referencia normativa:** `BE-TX`, `BE-ASYNC`, `BE-ERR`, `BE-DATA`, `SEC-FILE`, `SEC-LOG`, `DO-INFRA`, `QA-INVARIANT`, `QA-RESILIENCE`
+
+---
+
+## D-019 — Operabilidad de colas y limpieza de archivos
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+D-018 dejó intenciones durables de borrado, un job y un barrido supervisado, pero la operación no era verificable: el worker productivo corre con `--timeout=120` mientras la conexión `database` reserva trabajos por `retry_after=90`, de modo que un OCR largo podía ejecutarse dos veces. `ProcessTicketOcr` no declaraba intentos, backoff ni timeout. El job de borrado relanzaba la excepción original, cuyo texto termina en `failed_jobs`. Una intención agotada no dejaba auditoría y no existía un conteo operativo ni un criterio de antigüedad para detectar worker o barrido detenidos.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Hacer fallar `/ready` si hay pendientes viejos | Señal automática de plataforma | Un R2 caído o un barrido detenido dejaría sin servicio a toda la aplicación |
+| Job único con lock de cache | Evita duplicados en cola | Depende del cache store y no reemplaza la idempotencia ya existente |
+| Comando de estado con umbral + auditoría de fallos terminales | Señal accionable, no afecta servicio, verificable en tests | Requiere un chequeo externo que lo invoque |
+
+**Decisión**
+- `retry_after` de la conexión `database` pasa a 150 segundos por defecto, mayor que el timeout del worker (120) y de cada job. Un test protege esa relación leyendo `supervisord.conf`.
+- `ProcessTicketOcr` declara explícitamente el comportamiento efectivo vigente: dos intentos, backoff de 30 segundos y timeout de 110; su fallo terminal se registra sin mensaje interno.
+- El borrado de objetos relanza una excepción saneada con la clase original y el identificador de la intención, sin mensaje ni excepción encadenada.
+- Cuando una intención alcanza el máximo de intentos, el cambio de estado y un activity log `file_deletion_exhausted` confirman juntos. Reprocesar agotadas con `--include-exhausted` deja un activity log `file_deletion_exhausted_retried`.
+- `storage:cleanup-status` informa pendientes, antigüedad del más viejo, agotadas, completadas en 24 horas y jobs fallidos de borrado. Sale con error si existe alguna agotada o si el pendiente más antiguo supera `STORAGE_CLEANUP_ALERT_MINUTES` (60 por defecto). El barrido emite un log crítico con el mismo criterio.
+- Se reutiliza `storage:retry-pending-deletions` como comando de reconciliación; no se crea un segundo comando equivalente. Duplicados en cola se resuelven por idempotencia, sin `ShouldBeUnique`.
+- `/ready` conserva el alcance de D-010: la limpieza es eventual y no condiciona servir tráfico.
+
+**Recuperación operativa**
+1. Ejecutar `php artisan storage:cleanup-status`.
+2. Si hay pendientes viejos, verificar que los programas `worker` y `file-cleanup` estén vivos y ejecutar `php artisan storage:retry-pending-deletions`.
+3. Si hay agotadas, diagnosticar el storage y luego ejecutar `php artisan storage:retry-pending-deletions --include-exhausted`.
+4. Los jobs de borrado en `failed_jobs` pueden reintentarse con `php artisan queue:retry` o descartarse: la intención en base sigue siendo la fuente autoritativa.
+5. Después de un crash no hace falta acción manual: el barrido retoma intenciones cuyo job nunca se encoló o cuyo resultado no llegó a registrarse.
+
+**Trade-off aceptado**
+La alerta existe como comando y log crítico; conectarla a un monitor externo depende de la plataforma y queda pendiente con H-029/H-038. Un worker caído no vuelve no-ready la aplicación. El OCR conserva el reintento ya vigente y su costo potencial en el proveedor.
+
+**Referencia normativa:** `BE-ASYNC`, `BE-ERR`, `DO-CONTAINER`, `DO-RELEASE`, `DO-OBS`, `DO-DR`, `SEC-LOG`, `QA-RESILIENCE`
