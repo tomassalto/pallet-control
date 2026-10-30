@@ -18,7 +18,7 @@ class OrderImportService
      * y devuelve el conflicto.
      *
      * @param array<int, array{ean: string, ean_last4: string|null, description: string, qty: int, done_qty: int, status: string, price: float|null, desc_medio_pago: float|null, is_controlled: bool}> $parsed
-     * @return array{count: int}|array{error: array{message: string, conflicts: array<int, array{ean: string, assigned: int, requested: int}>}, status: int}
+     * @return array{count: int}|array{error: array{message: string, conflicts: array<int, array{ean: string, assigned: int, requested: int, reason: 'reduced'|'removed'}>}, status: int}
      */
     public function import(Order $order, array $parsed): array
     {
@@ -50,6 +50,9 @@ class OrderImportService
                 fn (OrderItem $item) => [$item->ean => (int) ($assignedByItem[$item->id] ?? 0)]
             );
 
+            $importEans = array_column($parsed, 'ean');
+            $importEanSet = array_fill_keys($importEans, true);
+
             $conflicts = [];
             foreach ($parsed as $row) {
                 $assigned = $assignedByEan[$row['ean']] ?? 0;
@@ -58,6 +61,24 @@ class OrderImportService
                         'ean' => $row['ean'],
                         'assigned' => $assigned,
                         'requested' => $row['qty'],
+                        'reason' => 'reduced',
+                    ];
+                }
+            }
+
+            // Un ítem ausente del archivo se borraría junto con sus
+            // asignaciones (cascade): si tiene qty asignada, es conflicto.
+            foreach ($items as $item) {
+                if (isset($importEanSet[$item->ean])) {
+                    continue;
+                }
+                $assigned = (int) ($assignedByItem[$item->id] ?? 0);
+                if ($assigned > 0) {
+                    $conflicts[] = [
+                        'ean' => $item->ean,
+                        'assigned' => $assigned,
+                        'requested' => 0,
+                        'reason' => 'removed',
                     ];
                 }
             }
@@ -72,15 +93,15 @@ class OrderImportService
                 ];
             }
 
-            // Obtener EANS del import para eliminar solo los que ya no están
-            $importEans = array_column($parsed, 'ean');
-            $removed = OrderItem::where('order_id', $lockedOrder->id)
-                ->whereNotIn('ean', $importEans)
-                ->count();
+            // Borrar sólo los ítems bloqueados que quedaron fuera del
+            // archivo: uno creado por otra request después del lock no se
+            // toca.
+            $toDelete = $items->reject(fn (OrderItem $i) => isset($importEanSet[$i->ean]));
+            $removed = $toDelete->count();
 
-            OrderItem::where('order_id', $lockedOrder->id)
-                ->whereNotIn('ean', $importEans)
-                ->delete();
+            if ($removed > 0) {
+                OrderItem::whereIn('id', $toDelete->pluck('id'))->delete();
+            }
 
             foreach ($parsed as $row) {
                 Product::updateOrCreate(

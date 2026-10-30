@@ -207,6 +207,62 @@ class AggregateAllocationGuardTest extends TestCase
         );
     }
 
+    public function test_import_que_omite_item_vs_adjust_concurrente_respeta_la_invariante(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $token = $user->createToken('postgres-concurrency')->plainTextToken;
+        $order = Order::factory()->create();
+        $itemA = OrderItem::factory()->for($order)->create(['ean' => '7790000000001', 'qty' => 10]);
+        OrderItem::factory()->for($order)->create(['ean' => '7790000000002', 'qty' => 5]);
+        $pallet = Pallet::factory()->create();
+        $pallet->orders()->attach($order->id);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+
+        // El archivo sólo trae B: importar quiere borrar A (sin asignar)
+        // mientras adjust quiere asignarle 6 unidades en la base.
+        $responses = $this->sendJsonConcurrently([
+            [
+                'port' => 18011,
+                'method' => 'POST',
+                'path' => "/api/v1/orders/{$order->id}/import",
+                'payload' => ['raw' => implode("\t", ['7790000000002', 'Producto B', 5, 5, '', '', '', '', ''])],
+                'token' => $token,
+            ],
+            [
+                'port' => 18012,
+                'method' => 'PATCH',
+                'path' => "/api/v1/pallets/{$pallet->id}/bases/{$base->id}/adjust-item",
+                'payload' => ['order_item_id' => $itemA->id, 'qty' => 6],
+                'token' => $token,
+            ],
+        ]);
+
+        $importStatus = $responses[0]['status'];
+        $adjustStatus = $responses[1]['status'];
+
+        foreach ($responses as $response) {
+            $this->assertLessThan(500, $response['status'], json_encode($responses, JSON_PRETTY_PRINT));
+        }
+
+        // Nunca ambos 2xx: o import borró A y adjust no lo encontró, o
+        // adjust asignó primero e import detectó el ítem ausente asignado.
+        if ($importStatus === 201) {
+            $this->assertNotSame(200, $adjustStatus, json_encode($responses, JSON_PRETTY_PRINT));
+            $this->assertDatabaseMissing('order_items', ['id' => $itemA->id]);
+            $this->assertSame(0, $this->assignedTotal($itemA->id));
+        } else {
+            $this->assertSame(409, $importStatus, json_encode($responses, JSON_PRETTY_PRINT));
+            $this->assertSame(200, $adjustStatus, json_encode($responses, JSON_PRETTY_PRINT));
+            $this->assertDatabaseHas('order_items', ['id' => $itemA->id]);
+            $this->assertSame(6, $this->assignedTotal($itemA->id));
+        }
+
+        $qty = DB::table('order_items')->where('id', $itemA->id)->value('qty');
+        if ($qty !== null) {
+            $this->assertLessThanOrEqual((int) $qty, $this->assignedTotal($itemA->id));
+        }
+    }
+
     public function test_detach_vs_adjust_concurrentes_no_producen_deadlock(): void
     {
         $user = User::factory()->withRole()->create();
