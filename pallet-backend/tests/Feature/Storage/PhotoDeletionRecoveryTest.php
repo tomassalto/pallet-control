@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Storage;
 
+use App\Jobs\DeleteStoredFile;
 use App\Models\Order;
 use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
@@ -15,6 +16,7 @@ use App\Services\StorageCleanupService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
 use RuntimeException;
@@ -413,6 +415,82 @@ class PhotoDeletionRecoveryTest extends TestCase
         Storage::disk('public')->assertMissing($foto2->path);
     }
 
+    // ── Fallo al crear la intención: revierte borrado y auditoría ────────
+
+    public function test_fallo_al_crear_intencion_revierte_borrado_de_foto_de_pallet_y_auditoria(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $pallet = Pallet::factory()->create();
+        $photo = $this->fotoDePallet($pallet, "pallets/{$pallet->id}/a.webp");
+        $this->failIntentCreations();
+
+        $this->actingAs($user)
+            ->delete("/api/v1/pallets/{$pallet->id}/photos/{$photo->id}")
+            ->assertStatus(500);
+
+        $this->assertDatabaseHas('pallet_photos', ['id' => $photo->id]);
+        Storage::disk('public')->assertExists($photo->path);
+        $this->assertDatabaseMissing('activity_logs', ['action' => 'pallet_photo_deleted']);
+        $this->assertDatabaseCount('pending_file_deletions', 0);
+    }
+
+    public function test_fallo_al_crear_intencion_revierte_borrado_de_ticket_y_auditoria(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $ticket = OrderTicket::create(['order_id' => Order::factory()->create()->id, 'code' => 'T-1']);
+        $photos = collect(range(1, 3))->map(
+            fn ($i) => $this->fotoDeTicket($ticket, "orders/{$ticket->order_id}/tickets/{$ticket->id}/{$i}.webp")
+        );
+        $this->failIntentCreations();
+
+        $this->actingAs($user)
+            ->delete("/api/v1/orders/{$ticket->order_id}/tickets/{$ticket->id}")
+            ->assertStatus(500);
+
+        $this->assertDatabaseHas('order_tickets', ['id' => $ticket->id]);
+        $this->assertDatabaseCount('order_ticket_photos', 3);
+        foreach ($photos as $photo) {
+            Storage::disk('public')->assertExists($photo->path);
+        }
+        $this->assertDatabaseMissing('activity_logs', ['action' => 'order_ticket_deleted']);
+        $this->assertDatabaseCount('pending_file_deletions', 0);
+    }
+
+    // ── La intención sobrevive al commit hasta que el job la procesa ──────
+
+    public function test_commit_conserva_la_intencion_hasta_procesarla(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->withRole()->create();
+        $pallet = Pallet::factory()->create();
+        $photo = $this->fotoDePallet($pallet, "pallets/{$pallet->id}/a.webp");
+
+        $this->actingAs($user)
+            ->delete("/api/v1/pallets/{$pallet->id}/photos/{$photo->id}")
+            ->assertOk();
+
+        $this->assertDatabaseMissing('pallet_photos', ['id' => $photo->id]);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'pallet_photo_deleted']);
+
+        // El commit dejó la intención durable y el archivo sigue en disco:
+        // con el job sin ejecutar, el borrado físico aún no ocurrió.
+        $intent = PendingFileDeletion::sole();
+        $this->assertNull($intent->completed_at);
+        Storage::disk('public')->assertExists($photo->path);
+
+        Queue::assertPushed(
+            DeleteStoredFile::class,
+            fn (DeleteStoredFile $job) => $job->intentId === $intent->id,
+        );
+
+        // El worker (o el barrido) la procesa después.
+        $this->assertTrue(app(StorageCleanupService::class)->process($intent->id));
+
+        $this->assertNotNull($intent->fresh()->completed_at);
+        Storage::disk('public')->assertMissing($photo->path);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private function fotoDePallet(Pallet $pallet, string $path): PalletPhoto
@@ -455,6 +533,17 @@ class PhotoDeletionRecoveryTest extends TestCase
             BEFORE INSERT ON activity_logs
             BEGIN
                 SELECT RAISE(ABORT, 'forced audit failure');
+            END
+        SQL);
+    }
+
+    private function failIntentCreations(): void
+    {
+        DB::statement(<<<'SQL'
+            CREATE TRIGGER fail_pending_file_deletion
+            BEFORE INSERT ON pending_file_deletions
+            BEGIN
+                SELECT RAISE(ABORT, 'forced intent failure');
             END
         SQL);
     }
