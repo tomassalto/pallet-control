@@ -1,6 +1,6 @@
 # Ejecución de la modernización
 
-**Última actualización:** 2026-10-29
+**Última actualización:** 2026-10-30
 **Entrada obligatoria:** `ROUTER.md`
 
 Una sesión aborda una tarea acotada en una rama/worktree propio. Antes de planear se combinan todas las rutas del router. Al cerrar se ejecutan gates y se actualizan evidencia, decisiones y plan.
@@ -213,9 +213,23 @@ Evidencia funcional: commit `f908d39`.
 
 `H-038` continúa abierto: decidir Docker vs. Nixpacks exige acreditar el entorno real de Render. `H-029` también requiere comprobar storage externo. Ninguno se cierra por inferencia desde el repositorio.
 
-## Próxima sesión — baseline y paginación de pendientes
+## Última sesión cerrada — baseline y paginación de pendientes
 
-Crear la rama desde este cierre, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `BE-PERF`, `BE-API`, `FE-DATA`, `QA-PERF`, `QA-CONTRACT` y `DO-OBS`. Medir primero `H-040`, caracterizar el contrato consumidor y recién entonces paginar sin afirmar mejoras no observadas.
+Rama creada desde el cierre del comando destructivo. Se aplicaron `BE-PERF`, `BE-API`, `FE-DATA`, `QA-PERF`, `QA-CONTRACT` y `DO-OBS`.
+
+1. Se midió el contrato original con 120 registros antes de modificarlo.
+2. `D-012` establece paginación por estado, 25 filas por defecto, máximo 100 y respuesta `{ data, meta }`.
+3. El frontend mantiene páginas independientes, usa totales reales y expone navegación accesible.
+4. Tests cubren contrato, validación, páginas y presupuesto constante de seis queries.
+5. La comparación local redujo payload 79,6% y p95 71,9%; no se extrapola a producción.
+6. Gates locales: Pint, PHPStan, 100 tests/310 assertions más un benchmark condicional, audits, lint y build verdes; las cuatro vulnerabilidades npm bajas siguen aceptadas por `D-004`.
+7. Actions run `41000461628`: `ci`, `postgres-concurrency` y `container-security` verdes.
+
+Evidencia funcional: commit `1b67a32`; medición en `benchmarks/results/2026-10-29-h040-pending-items.md`.
+
+## Próxima sesión — integridad del esquema
+
+Crear la rama desde este cierre, nunca desde `master`. Recorrer `ROUTER.md` y aplicar como mínimo `BE-DATA`, `BE-VALID`, `BE-TX`, `DO-RELEASE`, `QA-DATA`, `QA-INVARIANT` y `QA-RESILIENCE`. Auditar primero el esquema y las migraciones reales de SQLite/PostgreSQL para cerrar sólo lo demostrado de `H-012`, `H-013` y `H-015`; toda migración debe tener preflight, reversión y tests.
 
 ## Sesiones R-02 a R-07
 

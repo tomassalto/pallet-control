@@ -459,7 +459,11 @@ Ubicación:   nixpacks.toml
 Severidad:   🟡 medio · Categoría: performance
 Ubicación:   app/Http/Controllers/Api/PendingItemController.php:14-29 (usa ->get(), no ->paginate())
 ```
-**Estado:** 🔲 abierto
+**Resolución:** el listado ahora exige un estado válido, pagina en servidor con 25 registros por defecto y máximo 100, y devuelve metadatos estables. El frontend consulta pendientes y resueltos por separado, conserva totales del servidor y ofrece navegación accesible. Un test de contrato cubre límites, páginas y presupuesto constante de consultas.
+
+Con 120 registros sobre SQLite local, el escenario reproducible pasó de 120 a 25 filas por respuesta, de 44.332 a 9.060 bytes y de p95 23,56 ms a 6,63 ms. Es evidencia comparativa local, no una afirmación de latencia productiva; detalle en `benchmarks/results/2026-10-29-h040-pending-items.md`.
+
+**Estado:** ✅ resuelto en commit `1b67a32`; Actions run `41000461628` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 **N+1 — candidatos identificados, sin medir todavía:** ver `benchmarks/README.md` (5 endpoints priorizados: `orders/{id}`, `public/orders/{token}`, `pallets/{id}`, `orders` listado, webhook de Telegram). `Model::preventLazyLoading()` y Debugbar ya están activos en local (`BE-PERF`) — el baseline con k6 está pendiente de correr.
 
@@ -483,6 +487,7 @@ Ubicación:   app/Http/Controllers/Api/PendingItemController.php:14-29 (usa ->ge
 
 | Endpoint | p50 | p95 | Queries | Fecha |
 |---|---|---|---|---|
+| `GET /api/v1/pending-items?status=pending&per_page=25` (120 registros, SQLite local) | 5,76 ms | 6,63 ms | 6 | 2026-10-29 |
 | _(pendiente — correr `benchmarks/k6-hot-endpoints.js`)_ | | | | |
 
 **Cómo se mide:** ver `benchmarks/README.md`.

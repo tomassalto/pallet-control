@@ -332,3 +332,23 @@ El comando hace preflight de todas las tablas esperadas antes de modificar datos
 El reset deja de poder automatizarse con una variable de Render y requiere acceso operativo consciente. Base de datos y object storage no comparten transacción: si falla la limpieza de archivos después del commit, el comando falla y puede dejar objetos huérfanos, pero nunca borra archivos antes de saber que la base confirmó.
 
 **Referencia normativa:** `DO-ENV`, `DO-RELEASE`, `DO-DR`, `SEC-SECRET`, `QA-SEC`, `QA-RESILIENCE`
+
+---
+
+## D-012 — Listados de pendientes paginados por estado
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+`GET /pending-items` cargaba y serializaba todo el historial, y el frontend descargaba el conjunto completo para separar pendientes y resueltos. El costo crecía con datos que la pantalla no mostraba y los contadores visibles dependían sólo de lo descargado.
+
+**Decisión**
+El contrato acepta `status`, `page` y `per_page`; valida el estado, usa 25 filas por defecto y limita cada página a 100. La respuesta estable es `{ data, meta }`, con página actual, última página, tamaño y total. El orden agrega `id` como desempate determinista.
+
+El frontend mantiene paginación independiente para pendientes y resueltos, utiliza los totales del servidor e invalida ambas consultas después de mutaciones. Backend y único consumidor versionado migran juntos; no se conserva temporalmente la respuesta plana porque no existe otro consumidor activo acreditado.
+
+**Trade-off aceptado**
+Cambiar de pestaña puede requerir una consulta adicional, a cambio de acotar transferencia, serialización y memoria. La medición SQLite permite comparar el cambio en un entorno controlado, pero no sustituye observabilidad ni un baseline productivo.
+
+**Referencia normativa:** `BE-API`, `BE-PERF`, `FE-DATA`, `QA-CONTRACT`, `QA-PERF`, `DO-OBS`

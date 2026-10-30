@@ -4,10 +4,10 @@
 > **Se actualiza:** en cada sesión de trabajo. Es lo primero que lee la IA para saber dónde estamos.
 > **Referencia a teoría:** con `§`, nunca copiando texto de las biblias. El detalle de cada hallazgo vive en `AUDITORIA.md` (`H-XXX`) — acá solo se prioriza y se ordena el trabajo.
 
-**Última actualización:** 2026-10-29
+**Última actualización:** 2026-10-30
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** reset automático eliminado y comando destructivo endurecido; `H-038` requiere acreditar el modo real de Render. Siguiente bloque autónomo: baseline/performance (`H-040`).
+**Trabajo actual:** `H-040` cerrado con paginación por estado y medición antes/después. `H-029` y `H-038` requieren evidencia del entorno real de Render. Siguiente bloque autónomo: integridad del esquema (`H-012`, `H-013`, `H-015`).
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -21,7 +21,7 @@ Fase 1 — Red de seguridad      ✅ hecho (gates activos y caracterización com
 Fase Fundacional — Normativa  ✅ cinco autoridades y router por IDs estables
 Fase 2 — Rebanadas verticales  ✅ 7 de 7 cerradas
 Fase 3 — Dominio específico    🔲
-Fase 4 — Performance           🔲 (benchmarks/ armado, baseline sin correr — H-040)
+Fase 4 — Performance           🟡 (H-040 medido y cerrado; baseline k6 transversal pendiente)
 Fase 5 — Infraestructura       🔲
 Fase 6 — Presentación          🔲
 ```
@@ -82,7 +82,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 
 | ID | Hallazgo | Esfuerzo | Impacto | Automatizable |
 |---|---|---|---|---|
-| H-040 | `PendingItemController::index` sin paginación | 🟢 bajo | Medio | ✅ sí |
+| H-040 | `PendingItemController::index` sin paginación — ✅ resuelto | 🟢 bajo | Medio | ✅ sí |
 | — | Baseline k6 de los 5 endpoints candidatos a N+1 | 🟢 bajo (correr el script ya armado) | — (es medición, no fix) | ✅ sí |
 
 ### ⚪ Calidad
@@ -267,7 +267,7 @@ Decisiones que necesitan entrada en DECISIONES.md antes de ejecutarse:
 Más adelante (Fase 3+):
 □ Migración de los 16 controladores a Form Request                  → H-020
 □ Códigos HTTP: pasada de consistencia (422→409/403/401 según caso) → H-021,022,023,027
-□ PendingItemController::index con paginación                        → H-040
+✅ PendingItemController::index con paginación y evidencia             → H-040, D-012
 □ Infraestructura futura                                                → `DO-INFRA`, `DO-EDGE`, `DO-RELEASE`
 □ Observabilidad y uptime                                               → `DO-OBS`
 □ Backups + restauración probada                                       → `DO-DR`
