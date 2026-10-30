@@ -4,10 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
-use App\Models\OrderItem;
-use App\Models\Product;
+use App\Services\OrderImportService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Columnas fijas del archivo (separadas por TAB):
@@ -125,37 +123,11 @@ class OrderImportController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($order, $parsed) {
-            // Obtener EANS del import para eliminar solo los que ya no están
-            $importEans = array_column($parsed, 'ean');
-            OrderItem::where('order_id', $order->id)
-                ->whereNotIn('ean', $importEans)
-                ->delete();
+        $result = app(OrderImportService::class)->import($order, $parsed);
 
-            foreach ($parsed as $row) {
-                Product::updateOrCreate(
-                    ['ean' => $row['ean']],
-                    ['name' => $row['description'], 'ean_last4' => $row['ean_last4']]
-                );
-
-                OrderItem::updateOrCreate(
-                    [
-                        'order_id' => $order->id,
-                        'ean' => $row['ean'],
-                    ],
-                    [
-                        'ean_last4' => $row['ean_last4'],
-                        'description' => $row['description'],
-                        'qty' => $row['qty'],
-                        'done_qty' => $row['done_qty'],
-                        'status' => $row['status'],
-                        'price' => $row['price'],
-                        'desc_medio_pago' => $row['desc_medio_pago'],
-                        'is_controlled' => $row['is_controlled'],
-                    ]
-                );
-            }
-        });
+        if (isset($result['error'])) {
+            return response()->json($result['error'], $result['status']);
+        }
 
         return response()->json([
             'message' => 'Pedido importado: ' . count($parsed) . ' productos encontrados.',

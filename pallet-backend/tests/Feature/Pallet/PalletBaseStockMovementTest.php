@@ -700,7 +700,13 @@ class PalletBaseStockMovementTest extends TestCase
 
     public function test_migrate_a_pallet_y_base_destino_existentes_acumula_la_cantidad(): void
     {
-        [$pallet, $order, $item, $base] = $this->baseWithStock(10);
+        // Item qty=10 con sólo 7 asignados (no baseWithStock(10)): la
+        // guarda agregada D-020 exige asignado ≤ pedido desde el alta —
+        // 10+3 ya sería sobreasignación. Así 7+3 ≤ 10 y tras migrar 5
+        // queda 2+8 ≤ 10, conservando el objetivo del test.
+        [$pallet, $order, $item] = $this->palletWithAssignableItem(10);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+        $base->orderItems()->attach($item->id, ['qty' => 7]);
         $destPallet = Pallet::factory()->create();
         $destPallet->orders()->attach($order->id);
         $destBase = PalletBase::factory()->for($destPallet, 'pallet')->create();

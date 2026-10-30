@@ -3,7 +3,9 @@
 namespace Tests\Feature\Pallet;
 
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Pallet;
+use App\Models\PalletBase;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -81,6 +83,79 @@ class OrderPalletAssociationTest extends TestCase
 
         $this->assertDatabaseCount('order_pallet', 0);
         $this->assertDatabaseCount('activity_logs', 0);
+    }
+
+    public function test_detach_removes_allocations_pivot_and_audits(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $order = Order::factory()->create();
+        $pallet = Pallet::factory()->create();
+        $order->pallets()->attach($pallet->id);
+        $item = OrderItem::factory()->for($order)->create(['qty' => 10]);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+        DB::table('pallet_base_order_items')->insert([
+            'base_id' => $base->id,
+            'order_item_id' => $item->id,
+            'qty' => 6,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->delete("/api/v1/orders/{$order->id}/detach-pallet/{$pallet->id}")
+            ->assertOk()
+            ->assertJsonPath('pallets', []);
+
+        $this->assertDatabaseCount('order_pallet', 0);
+        $this->assertDatabaseCount('pallet_base_order_items', 0);
+        $this->assertDatabaseHas('activity_logs', [
+            'action' => 'pallet_detached',
+            'order_id' => $order->id,
+            'pallet_id' => $pallet->id,
+        ]);
+    }
+
+    public function test_detach_rolls_back_allocations_and_pivot_when_audit_fails(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $order = Order::factory()->create();
+        $pallet = Pallet::factory()->create();
+        $order->pallets()->attach($pallet->id);
+        $item = OrderItem::factory()->for($order)->create(['qty' => 10]);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+        DB::table('pallet_base_order_items')->insert([
+            'base_id' => $base->id,
+            'order_item_id' => $item->id,
+            'qty' => 6,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->failActivityLogInserts();
+
+        $this->actingAs($user)
+            ->delete("/api/v1/orders/{$order->id}/detach-pallet/{$pallet->id}")
+            ->assertStatus(500);
+
+        // Nada se escribió: la asignación y el pivot sobreviven al rollback.
+        $this->assertDatabaseCount('order_pallet', 1);
+        $this->assertDatabaseHas('pallet_base_order_items', [
+            'base_id' => $base->id,
+            'order_item_id' => $item->id,
+            'qty' => 6,
+        ]);
+        $this->assertDatabaseMissing('activity_logs', ['action' => 'pallet_detached']);
+    }
+
+    public function test_detach_without_association_returns_404(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $order = Order::factory()->create();
+        $pallet = Pallet::factory()->create();
+
+        $this->actingAs($user)
+            ->delete("/api/v1/orders/{$order->id}/detach-pallet/{$pallet->id}")
+            ->assertNotFound()
+            ->assertJsonPath('message', 'El pallet no está asociado a este pedido');
     }
 
     private function failActivityLogInserts(): void

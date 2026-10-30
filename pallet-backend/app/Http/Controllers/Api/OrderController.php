@@ -327,39 +327,11 @@ class OrderController extends Controller
     // DELETE /orders/{order}/detach-pallet/{pallet}
     public function detachPallet(Order $order, Pallet $pallet)
     {
-        // Verificar que el pallet esté asociado al pedido
-        if (! $order->pallets()->where('pallets.id', $pallet->id)->exists()) {
-            return response()->json([
-                'message' => 'El pallet no está asociado a este pedido',
-            ], 404);
+        $result = $this->orderPalletAssociationService->detach($order, $pallet);
+
+        if (isset($result['error'])) {
+            return response()->json($result['error'], $result['status']);
         }
-
-        // Obtener todas las bases del pallet
-        $baseIds = $pallet->bases()->pluck('id');
-
-        // Obtener todos los items del pedido
-        $orderItemIds = $order->items()->pluck('id');
-
-        // Eliminar relaciones entre items del pedido y bases del pallet
-        if ($baseIds->isNotEmpty() && $orderItemIds->isNotEmpty()) {
-            DB::table('pallet_base_order_items')
-                ->whereIn('base_id', $baseIds)
-                ->whereIn('order_item_id', $orderItemIds)
-                ->delete();
-        }
-
-        // Desvincular el pallet
-        $order->pallets()->detach($pallet->id);
-
-        ActivityLogger::log(
-            action: 'pallet_detached',
-            entityType: 'order',
-            entityId: $order->id,
-            description: "Pallet '{$pallet->code}' desvinculado del pedido '{$order->code}'. Se eliminaron las asignaciones de productos a las bases de este pallet.",
-            palletId: $pallet->id,
-            oldValues: ['pallet_code' => $pallet->code],
-            orderId: $order->id,
-        );
 
         TelegramNotifier::send("⛓️ Pallet `{$pallet->code}` desvinculado del pedido `#{$order->code}`");
 
