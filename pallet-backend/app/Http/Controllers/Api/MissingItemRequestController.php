@@ -47,7 +47,7 @@ class MissingItemRequestController extends Controller
             ->exists();
 
         if ($recentExists) {
-            return response()->json(['message' => 'Ya existe una solicitud reciente para este producto'], 422);
+            return response()->json(['message' => 'Ya existe una solicitud reciente para este producto'], 409);
         }
 
         $req = MissingItemRequest::create([

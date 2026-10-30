@@ -206,7 +206,7 @@ class PalletController extends Controller
             return response()->json([
                 'message' => $check['reason'],
                 ...$check['details'],
-            ], 400);
+            ], 409);
         }
 
         $oldStatus = $pallet->status;
@@ -236,7 +236,7 @@ class PalletController extends Controller
         if ($pallet->status !== 'done') {
             return response()->json([
                 'message' => 'Solo se pueden reabrir pallets que estén finalizados',
-            ], 400);
+            ], 409);
         }
 
         $oldStatus = $pallet->status;

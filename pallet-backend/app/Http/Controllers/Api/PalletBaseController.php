@@ -74,7 +74,7 @@ class PalletBaseController extends Controller
         }
 
         if ($pallet->status === 'done') {
-            return response()->json(['message' => 'El pallet está finalizado. Reabrilo antes de modificar sus bases.'], 422);
+            return response()->json(['message' => 'El pallet está finalizado. Reabrilo antes de modificar sus bases.'], 409);
         }
 
         $data = $request->validated();

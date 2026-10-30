@@ -301,7 +301,7 @@ class OrderController extends Controller
         ['can' => $can, 'reason' => $reason] = OrderService::canFinalize($order);
 
         if (! $can) {
-            return response()->json(['message' => $reason], 422);
+            return response()->json(['message' => $reason], 409);
         }
 
         $order->update(['status' => 'done']);

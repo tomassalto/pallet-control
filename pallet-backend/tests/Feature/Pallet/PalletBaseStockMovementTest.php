@@ -387,7 +387,7 @@ class PalletBaseStockMovementTest extends TestCase
                 'qty' => 5,
             ]);
 
-        $response->assertStatus(422);
+        $response->assertStatus(409);
     }
 
     public function test_adjust_item_crea_la_asignacion_si_no_existia(): void
