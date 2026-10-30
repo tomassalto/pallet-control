@@ -561,3 +561,31 @@ Las escrituras de asignaciones ejecutan una suma por fila afectada. El import se
 PostgreSQL toma `FOR KEY SHARE` sobre la fila padre al insertar o actualizar una fila con FK. Un recorrido que primero bloqueaba el `order_item` y después insertaba asignaciones o activity logs esperaba implícitamente `pallets`/`pallet_bases`/`orders`. Eso invertía el orden global frente a quien bloquea esos padres `FOR UPDATE`, y produjo un deadlock intermitente entre desvinculación y adjust-item. La regla se completa así: todo recorrido adquiere `FOR SHARE` sobre los padres que sus FKs referencian antes del primer lock posterior en el orden. Se aplica en adjust-item, crear, actualizar y eliminar base, actualizar ítem y agregar ítem. El costo es una o dos consultas de lock por operación.
 
 **Referencia normativa:** `BE-TX`, `BE-DATA`, `BE-VALID`, `BE-ERR`, `SEC-LOG`, `DO-RELEASE`, `QA-INVARIANT`, `QA-DATA`, `DOMINIO.md`
+
+---
+
+## D-021 — Atribución de creación de pallets y diagnóstico del índice de auditoría
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+`pallets.created_by` existe desde la creación de la tabla con la intención declarada de asociarlo a un usuario, pero toda alta lo escribe en `null`, no tiene FK ni índice y nadie lo lee (H-014). `DOMINIO.md` exige que una acción significativa sea atribuible, y el modelo multiempresa sigue sin decidir (`GAP-TENANCY`). H-016 reportaba un índice duplicado en `activity_logs.order_id`. La inspección de SQLite y PostgreSQL 17 muestra un único índice `activity_logs_order_id_index`: la segunda migración usa `CREATE INDEX IF NOT EXISTS` con el mismo nombre y no crea nada, pero su `down()` elimina el índice que pertenece a la primera.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Eliminar `created_by` | Esquema mínimo | Descarta una intención de atribución vigente y obliga a recrearla |
+| Conservar sin cambios | Sin riesgo de migración | Columna engañosa y siempre vacía |
+| Poblar con el usuario autenticado + FK `nullOnDelete` + índice | Atribución durable y consultable | No recupera historia previa |
+
+**Decisión**
+Las altas de pallet registran el usuario autenticado en `created_by`. Esto incluye el destino creado al migrar una base; las altas sin usuario quedan en `null`. Una migración agrega FK a `users` con `nullOnDelete` e índice, con preflight que aborta si existe una referencia a un usuario inexistente. No hay backfill: los pallets históricos conservan `null`. `created_by` es atribución, no autorización ni propiedad; ninguna regla de acceso lo consulta hasta resolver `GAP-TENANCY`.
+
+H-016 se cierra sin migración, porque no existe índice duplicado en ningún motor. La asimetría del `down()` histórico no se corrige editando una migración aplicada: un rollback aislado de `2026_04_21_000001` deja `activity_logs.order_id` sin índice y debe evitarse o seguirse de un `migrate`. Un test fija que exista exactamente un índice cuyo primer campo sea `order_id`.
+
+**Trade-off aceptado**
+La atribución empieza con esta release. El rollback histórico conserva su riesgo documentado en lugar de reescribir una migración aplicada.
+
+**Referencia normativa:** `BE-DATA`, `DO-RELEASE`, `SEC-LOG`, `QA-DATA`, `QA-RESILIENCE`, `DOMINIO.md`

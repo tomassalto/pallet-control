@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-30
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** subidas con compensación (`D-017`) y borrados de fotos/tickets/pallets/bases con intención durable, job post-commit y barrido supervisado (`D-018`); `H-011`/`H-017` resueltos para los flujos auditados. Colas y limpieza operables con estado, alerta por antigüedad y fallos terminales auditados (`D-019`). Invariante agregada asignado ≤ pedido protegida en base para todo escritor (`H-006`, `D-020`). Siguiente: limpieza de esquema `H-014`/`H-016`. `H-006` sigue abierto; `H-029` y `H-038` requieren evidencia real de Render (Nixpacks no ejecuta worker ni barrido).
+**Trabajo actual:** subidas con compensación (`D-017`) y borrados de fotos/tickets/pallets/bases con intención durable, job post-commit y barrido supervisado (`D-018`); `H-011`/`H-017` resueltos para los flujos auditados. Colas y limpieza operables con estado, alerta por antigüedad y fallos terminales auditados (`D-019`). Invariante agregada asignado ≤ pedido protegida en base para todo escritor (`H-006`, `D-020`). Atribución de creación de pallets y diagnóstico del índice de auditoría (`H-014`/`H-016`, `D-021`). Siguiente: Form Requests de subidas de fotos (`H-020`, parcial). `H-029` y `H-038` requieren evidencia real de Render (Nixpacks no ejecuta worker ni barrido).
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -97,7 +97,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | H-024 | Formato de error no estandarizado — ✅ resuelto | 🟡 medio (depende de H-018) | Bajo | ❌ no |
 | H-041 | Larastan/PHPStan no instalado | 🟢 bajo | Medio | ✅ sí |
 | H-033 / H-034 / H-035 / H-036 | Docker: Composer, contexto, digests y healthcheck — ✅ resueltos | 🟢 bajo c/u | Bajo | ✅ sí |
-| H-004 / H-014 / H-016 / H-026 / H-037 / H-038 | Varios ⚪ (rutas rotas, columna muerta, índice duplicado, etc.) | 🟢 bajo c/u | Bajo | ✅ sí (salvo H-038, es decisión) |
+| H-004 / H-014 / H-016 / H-026 / H-037 / H-038 | Varios ⚪ (rutas rotas, columna muerta, índice duplicado, etc.) — H-014/H-016 ✅ cerrados (D-021) | 🟢 bajo c/u | Bajo | ✅ sí (salvo H-038, es decisión) |
 
 ---
 

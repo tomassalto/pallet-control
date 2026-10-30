@@ -362,9 +362,22 @@ Evidencia funcional: commits `39a45ab` y `24b5eea`. Actions run `41018979777` so
 
 Pendiente: el import sigue eliminando ítems ausentes junto con sus asignaciones (política abierta en H-009). Los borradores de fotos y tickets bloquean la foto antes de que el activity log tome `FOR KEY SHARE` sobre pallet o pedido. Frente a un borrado simultáneo del pallet o la base puede producirse un deadlock detectado, que termina en `5xx` y rollback completo sin corrupción. Los borradores de fotos y tickets bloquean la foto antes de que el activity log tome `FOR KEY SHARE` sobre pallet o pedido; frente a un borrado simultáneo del pallet o la base puede producirse un deadlock detectado, que termina en `5xx` y rollback completo sin corrupción.
 
+## Última sesión cerrada — limpieza de esquema
+
+Rama `hardening/schema-cleanup`, creada desde `hardening/aggregate-stock-invariant` (`10c17b0`). Se aplicaron `BE-DATA`, `DO-RELEASE`, `SEC-LOG`, `QA-DATA`, `QA-RESILIENCE` y `DOMINIO.md`.
+
+1. H-014 se confirmó: `pallets.created_by` siempre era `null` y nadie lo leía. D-021 lo puebla con el usuario autenticado, agrega FK `nullOnDelete` e índice con preflight, y prohíbe usarlo para autorización.
+2. El test de caracterización que fijaba `created_by = null` se actualizó como cambio de contrato documentado en D-021. El frontend no consume ese campo.
+3. H-016 no se reprodujo: ambos motores tienen un único índice sobre `activity_logs.order_id`. El `down()` histórico que elimina el índice ajeno queda documentado, sin editar una migración aplicada.
+4. Tests SQLite y PostgreSQL de FK, `nullOnDelete`, índice, preflight e índice único de auditoría.
+5. Migración probada `up → down → up` en SQLite temporal y en PostgreSQL 17 local.
+6. Gates locales: Pint, PHPStan, 184 tests/635 assertions, Composer audit y grupo PostgreSQL (16 tests/56 assertions) verdes.
+
+Evidencia funcional: commit `7cc6b07`.
+
 ## Próxima sesión
 
-`hardening/schema-cleanup`: confirmar y resolver `H-014` y `H-016`.
+`hardening/photo-request-validation`: Form Requests para subidas de fotos (H-020 parcial).
 
 ## Sesiones R-02 a R-07
 
