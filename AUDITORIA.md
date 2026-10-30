@@ -220,7 +220,7 @@ Severidad:   ⚪ bajo · Categoría: calidad
 Ubicación:   PalletController::store:53 (siempre `null`)
 ```
 **Resolución:** las altas web y el pallet destino de una migración registran al usuario autenticado; una migración con preflight agrega FK `nullOnDelete` e índice. No es autorización ni tenancy (D-021). Los históricos conservan `null`.
-**Estado:** ✅ resuelto en commit `7cc6b07` (CI en `EJECUCION.md`).
+**Estado:** ✅ resuelto en commit `7cc6b07`; Actions run `41026830057` con los tres jobs verdes.
 
 #### H-015 — Sin CHECK constraints en general
 ```
@@ -240,7 +240,7 @@ Severidad:   ⚪ bajo · Categoría: calidad
 Ubicación:   migrations 2025_12_20_072953 y 2026_04_21_000001
 ```
 **Verificación:** SQLite y PostgreSQL 17 tienen un único índice `activity_logs_order_id_index`; la segunda migración no crea nada por `IF NOT EXISTS`. Su `down()` sí elimina el índice de la primera, y ese riesgo de rollback queda documentado en D-021. Un test fija exactamente un índice que empieza por `order_id` en ambos motores.
-**Estado:** ✅ cerrado sin migración: no existe duplicado (commit `7cc6b07`).
+**Estado:** ✅ cerrado sin migración: no existe duplicado (commit `7cc6b07`; Actions run `41026830057`).
 
 #### H-017 — `ActivityLogger::log()` no es atómico con el cambio que audita
 ```

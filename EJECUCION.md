@@ -373,7 +373,7 @@ Rama `hardening/schema-cleanup`, creada desde `hardening/aggregate-stock-invaria
 5. Migración probada `up → down → up` en SQLite temporal y en PostgreSQL 17 local.
 6. Gates locales: Pint, PHPStan, 184 tests/635 assertions, Composer audit y grupo PostgreSQL (16 tests/56 assertions) verdes.
 
-Evidencia funcional: commit `7cc6b07`.
+Evidencia funcional: commits `7cc6b07` y `6461327` (formato de un test PostgreSQL detectado por Pint en la corrida `41026362144`). Actions run `41026830057` sobre `6461327`: `ci`, `postgres-concurrency` y `container-security` verdes.
 
 ## Próxima sesión
 
