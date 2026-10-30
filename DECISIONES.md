@@ -352,3 +352,23 @@ El frontend mantiene paginación independiente para pendientes y resueltos, util
 Cambiar de pestaña puede requerir una consulta adicional, a cambio de acotar transferencia, serialización y memoria. La medición SQLite permite comparar el cambio en un entorno controlado, pero no sustituye observabilidad ni un baseline productivo.
 
 **Referencia normativa:** `BE-API`, `BE-PERF`, `FE-DATA`, `QA-CONTRACT`, `QA-PERF`, `DO-OBS`
+
+---
+
+## D-013 — Cobertura explícita de FK y conservación del audit log
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+Varias claves foráneas carecían de un índice cuyo primer campo fuera la propia FK en PostgreSQL. `activity_logs.pallet_id` tenía índice compuesto, pero no constraint, por lo que podía conservar referencias imposibles.
+
+**Decisión**
+Agregar índices nombrados únicamente a las nueve FK sin cobertura existente. No duplicar índices cuando una clave única o compuesta ya comienza por la misma columna.
+
+Antes de agregar `activity_logs.pallet_id → pallets.id`, la migración busca huérfanos y falla sin modificar el esquema si encuentra uno. Al eliminar un pallet, la referencia del log pasa a `null`: la evidencia histórica se conserva y no bloquea el borrado de la entidad operativa.
+
+**Trade-off aceptado**
+Cada índice aumenta almacenamiento y costo de escritura; se limita el cambio a FK concretas usadas en joins o acciones referenciales. `nullOnDelete` pierde el enlace navegable al pallet eliminado, pero evita borrar el registro de auditoría. La política general de borrado histórico sigue abierta en H-009.
+
+**Referencia normativa:** `BE-DATA`, `DO-RELEASE`, `QA-DATA`, `QA-RESILIENCE`

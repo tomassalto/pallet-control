@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-30
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** `H-040` cerrado con paginación por estado y medición antes/después. `H-029` y `H-038` requieren evidencia del entorno real de Render. Siguiente bloque autónomo: integridad del esquema (`H-012`, `H-013`, `H-015`).
+**Trabajo actual:** `H-012` y `H-013` cerrados con índices de FK y referencia real de auditoría a pallet. `H-029` y `H-038` requieren evidencia del entorno real de Render. Siguiente bloque autónomo: constraints por fila (`H-015`) sin confundirlos con la invariante agregada `H-006`.
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -73,8 +73,8 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | H-009 | Cero soft deletes en todo el esquema | 🔴 alto | Alto | 🟡 parcial |
 | H-010 | Reducir `qty` sin validar lo ya asignado | 🟡 medio | Medio | ✅ sí |
 | H-011 | Escrituras multi-tabla sin transacción | 🟡 medio | Medio | 🟡 parcial |
-| H-012 | FKs sin índice (Postgres) | 🟢 bajo | Medio | ✅ sí |
-| H-013 | `activity_logs.pallet_id` no es FK real | 🟢 bajo | Bajo | ✅ sí |
+| H-012 | FKs sin índice (Postgres) — ✅ resuelto | 🟢 bajo | Medio | ✅ sí |
+| H-013 | `activity_logs.pallet_id` no es FK real — ✅ resuelto | 🟢 bajo | Bajo | ✅ sí |
 | H-015 | Sin CHECK constraints generales | 🟡 medio | Bajo | 🟡 parcial |
 | H-017 | `ActivityLogger::log()` no atómico | 🟢 bajo | Bajo | ✅ sí (efecto colateral de H-011) |
 
@@ -245,8 +245,8 @@ Antes de tocar código de negocio (Fase 1 — red de seguridad):
                                                                      falta CORRER y guardar baseline
 
 Constraints e índices (una migración, bajo riesgo, alto retorno):
-□ Índices en FKs sin cubrir (Postgres)                           → H-012
-□ activity_logs.pallet_id → FK real                              → H-013
+✅ Índices en FKs sin cubrir (Postgres)                           → H-012, D-013
+✅ activity_logs.pallet_id → FK real + preflight                  → H-013, D-013
 □ CHECK constraint / trigger para "asignado ≤ pedido"            → H-006 (decidir enfoque
                                                                      junto con R-01/R-02)
 

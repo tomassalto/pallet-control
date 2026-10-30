@@ -227,9 +227,23 @@ Rama creada desde el cierre del comando destructivo. Se aplicaron `BE-PERF`, `BE
 
 Evidencia funcional: commit `1b67a32`; medición en `benchmarks/results/2026-10-29-h040-pending-items.md`.
 
-## Próxima sesión — integridad del esquema
+## Última sesión cerrada — índices y FK de auditoría
 
-Crear la rama desde este cierre, nunca desde `master`. Recorrer `ROUTER.md` y aplicar como mínimo `BE-DATA`, `BE-VALID`, `BE-TX`, `DO-RELEASE`, `QA-DATA`, `QA-INVARIANT` y `QA-RESILIENCE`. Auditar primero el esquema y las migraciones reales de SQLite/PostgreSQL para cerrar sólo lo demostrado de `H-012`, `H-013` y `H-015`; toda migración debe tener preflight, reversión y tests.
+Rama creada desde el cierre documental de H-040. Se aplicaron `BE-DATA`, `BE-VALID`, `DO-RELEASE`, `QA-DATA` y `QA-RESILIENCE`.
+
+1. La auditoría distinguió FK sin cobertura de índices ya cubiertos por prefijos compuestos o unicidad.
+2. Se agregaron nueve índices explícitos para H-012, sin duplicar cobertura existente.
+3. `activity_logs.pallet_id` ahora referencia a `pallets`, con preflight de huérfanos y `nullOnDelete` según D-013.
+4. La reversión retira primero la FK y luego cada índice por nombre estable.
+5. Tests inspeccionan el esquema y prueban que eliminar un pallet conserva su log sin referencia inválida.
+6. Gates locales: Pint, PHPStan, 110 tests/322 assertions y Composer audit verdes.
+7. Actions run `41001431227`: `ci`, `postgres-concurrency` y `container-security` verdes.
+
+Evidencia funcional: commit `da4a7f4`.
+
+## Próxima sesión — constraints por fila
+
+Crear la rama desde este cierre, nunca desde `master`. Reaplicar `BE-DATA`, `BE-VALID`, `BE-TX`, `DOMINIO.md`, `DO-RELEASE`, `QA-DATA`, `QA-INVARIANT` y `QA-RESILIENCE`. Caracterizar datos existentes y compatibilidad PostgreSQL/SQLite antes de decidir los `CHECK` de `H-015`. No incluir la suma de asignaciones de H-006: no es una regla por fila.
 
 ## Sesiones R-02 a R-07
 

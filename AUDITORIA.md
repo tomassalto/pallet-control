@@ -190,7 +190,8 @@ Referencia:  `BE-DATA`, `BE-PERF`
 ```
 **Qué está pasando:** a diferencia de MySQL, Postgres no crea un índice automático al agregar un FK constraint. Estas columnas no tienen `->index()` explícito ni están cubiertas por el prefijo izquierdo de un índice compuesto.
 **Por qué importa acá:** joins y cascade-deletes sobre estas tablas van a full scan a medida que crecen — y un cascade-delete lento amplía la ventana de las race conditions de arriba.
-**Estado:** 🔲 abierto
+**Resolución:** una migración agrega nueve índices explícitos sólo sobre las FK que no estaban cubiertas por el primer campo de otro índice. Tests de esquema comprueban la cobertura por columna en SQLite y PostgreSQL.
+**Estado:** ✅ resuelto en commit `da4a7f4`; Actions run `41001431227` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 #### H-013 — `activity_logs.pallet_id` no es FK real
 ```
@@ -200,7 +201,8 @@ Ubicación:   database/migrations/2025_12_20_060000_create_activity_logs_table.p
 Referencia:  `BE-DATA`
 ```
 **Qué está pasando:** es `unsignedBigInteger` suelto, mientras que `user_id` y `order_id` en la misma tabla sí están `constrained()`.
-**Estado:** 🔲 abierto
+**Resolución:** la migración aborta antes de modificar el esquema si detecta una referencia huérfana y luego agrega la FK a `pallets` con `nullOnDelete`. El test elimina el pallet y acredita que el log se conserva con `pallet_id = null`.
+**Estado:** ✅ resuelto en commit `da4a7f4`; Actions run `41001431227` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 #### H-014 — `pallets.created_by` es columna muerta
 ```
@@ -215,7 +217,7 @@ Severidad:   ⚪ bajo · Categoría: integridad de datos
 Ubicación:   todo el esquema
 ```
 **Qué está pasando:** `qty > 0`, `done_qty <= qty`, etc. solo se validan en FormRequests (`min:1`), no en DB — bypasseable por cualquier código que no pase por ahí.
-**Estado:** 🔲 abierto
+**Estado:** 🔲 abierto. Se separó de H-012/H-013: debe definir constraints por fila compatibles con PostgreSQL y SQLite sin presentar un `CHECK` simple como solución de la invariante agregada H-006.
 
 #### H-016 — Índice duplicado en `activity_logs.order_id`
 ```
