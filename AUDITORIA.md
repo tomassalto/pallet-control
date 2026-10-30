@@ -187,7 +187,7 @@ Las subidas de fotos web y del servicio activo de Telegram guardan primero el ob
 
 Los borrados de fotos de pallet, base y ticket, de tickets completos, de pallets y de bases bloquean y releen sus filas, eliminan la entidad, auditan y registran una intención durable por objeto en `pending_file_deletions` dentro de una transacción (D-018). El borrado físico ocurre después del commit mediante un job y un barrido supervisado con backoff, intentos acotados y alerta crítica al agotarse. Tests acreditan que un fallo de auditoría conserva filas y archivos sin intención, que un fallo de storage conserva la intención para reintento y que reprocesar es idempotente.
 
-**Estado:** ✅ resuelto para los flujos auditados: solicitudes faltantes en `eaadf87`, asociaciones pedido/pallet en `a59022b`, subidas de fotos en `ee41860` y borrados de fotos/tickets en la rama `hardening/photo-deletion-recovery` (commit y CI en `EJECUCION.md`). `pallet:archive` conserva el orden anterior pero no se ejecuta mientras no exista scheduler activo.
+**Estado:** ✅ resuelto para los flujos auditados: solicitudes faltantes en `eaadf87`, asociaciones pedido/pallet en `a59022b`, subidas de fotos en `ee41860` y borrados de fotos/tickets en `60a0c6c`; Actions run `41013814687` con los tres jobs verdes. `pallet:archive` conserva el orden anterior pero no se ejecuta mientras no exista scheduler activo.
 
 #### H-012 — Foreign keys sin índice (Postgres no las indexa solo)
 ```

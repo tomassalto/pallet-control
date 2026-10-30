@@ -314,6 +314,9 @@ Rama `hardening/photo-deletion-recovery`, creada desde el cierre de compensació
 7. Quince tests cubren rollback por auditoría, intención durable, fallo y recuperación de storage, idempotencia, archivo inexistente, intenciones agotadas, ticket con varias fotos, pallet y base.
 8. Migración probada `up → down → up` sobre SQLite temporal.
 9. Gates locales: Pint, PHPStan, 147 tests/495 assertions más un benchmark condicional omitido, y Composer audit verdes.
+10. Actions run `41013814687`: `ci`, `postgres-concurrency` y `container-security` verdes.
+
+Evidencia funcional: commit `60a0c6c`.
 
 Pendiente: `pallet:archive` sigue borrando objetos antes que filas, pero no se ejecuta porque no hay scheduler activo; Nixpacks no corre worker ni barrido (H-038); las intenciones completadas aún no tienen política de retención.
 
