@@ -2,6 +2,10 @@
 
 namespace Tests\Feature\Database;
 
+use App\Models\OrderItem;
+use App\Models\PalletBase;
+use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -52,6 +56,51 @@ class SchemaIntegrityTest extends TestCase
         $this->assertNull(DB::table('activity_logs')->where('id', $logId)->value('pallet_id'));
     }
 
+    public function test_row_constraint_migration_has_preflight_and_recovery(): void
+    {
+        $item = OrderItem::factory()->create(['qty' => 10, 'done_qty' => 0]);
+        $migration = require database_path('migrations/2026_10_30_000002_add_row_integrity_constraints.php');
+
+        $migration->down();
+        DB::table('order_items')->where('id', $item->id)->update(['qty' => 0]);
+
+        try {
+            $migration->up();
+            $this->fail('El preflight debía rechazar la fila inválida.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('order_items_qty_positive_check', $exception->getMessage());
+        }
+
+        DB::table('order_items')->where('id', $item->id)->update(['qty' => 10]);
+        $migration->up();
+    }
+
+    #[DataProvider('invalidRowProvider')]
+    public function test_row_constraints_reject_invalid_data(string $case): void
+    {
+        $user = User::factory()->create();
+        $item = OrderItem::factory()->create(['qty' => 10, 'done_qty' => 0]);
+        $base = PalletBase::factory()->create();
+
+        $this->expectException(QueryException::class);
+
+        match ($case) {
+            'order_qty' => DB::table('order_items')->where('id', $item->id)->update(['qty' => 0]),
+            'done_qty' => DB::table('order_items')->where('id', $item->id)->update(['done_qty' => 11]),
+            'assigned_qty' => DB::table('pallet_base_order_items')->insert([
+                'base_id' => $base->id,
+                'order_item_id' => $item->id,
+                'qty' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]),
+            'pending_qty' => $this->insertPending($item, $user, 0, 'pending'),
+            'pending_status' => $this->insertPending($item, $user, 1, 'invalid'),
+            'request_qty' => $this->insertRequest($item, 0, 'pending_review'),
+            'request_status' => $this->insertRequest($item, 1, 'invalid'),
+        };
+    }
+
     /**
      * @return array<string, array{string, string}>
      */
@@ -68,5 +117,46 @@ class SchemaIntegrityTest extends TestCase
             'missing_item_requests.order_item_id' => ['missing_item_requests', 'order_item_id'],
             'missing_item_requests.reviewed_by' => ['missing_item_requests', 'reviewed_by'],
         ];
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidRowProvider(): array
+    {
+        return [
+            'cantidad pedida positiva' => ['order_qty'],
+            'cantidad completada dentro del pedido' => ['done_qty'],
+            'cantidad asignada positiva' => ['assigned_qty'],
+            'cantidad pendiente positiva' => ['pending_qty'],
+            'estado pendiente permitido' => ['pending_status'],
+            'cantidad solicitada positiva' => ['request_qty'],
+            'estado de solicitud permitido' => ['request_status'],
+        ];
+    }
+
+    private function insertPending(OrderItem $item, User $user, int $qty, string $status): void
+    {
+        DB::table('pending_items')->insert([
+            'order_id' => $item->order_id,
+            'order_item_id' => $item->id,
+            'qty_missing' => $qty,
+            'status' => $status,
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function insertRequest(OrderItem $item, int $qty, string $status): void
+    {
+        DB::table('missing_item_requests')->insert([
+            'order_id' => $item->order_id,
+            'order_item_id' => $item->id,
+            'qty_missing' => $qty,
+            'status' => $status,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

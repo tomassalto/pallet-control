@@ -227,6 +227,42 @@ class OrderItemCharacterizationTest extends TestCase
             ->assertJsonValidationErrors(['qty', 'status']);
     }
 
+    public function test_actualizar_item_rechaza_cantidad_completada_mayor_que_la_pedida(): void
+    {
+        $user = $this->actingUser();
+        $item = OrderItem::factory()->create(['qty' => 10, 'done_qty' => 4]);
+
+        $this->actingAs($user)
+            ->patchJson("/api/v1/order-items/{$item->id}", ['done_qty' => 11])
+            ->assertStatus(409)
+            ->assertJsonPath('qty', 10)
+            ->assertJsonPath('done_qty', 11);
+
+        $this->assertDatabaseHas('order_items', [
+            'id' => $item->id,
+            'qty' => 10,
+            'done_qty' => 4,
+        ]);
+    }
+
+    public function test_actualizar_item_rechaza_reducir_qty_por_debajo_de_lo_completado(): void
+    {
+        $user = $this->actingUser();
+        $item = OrderItem::factory()->create(['qty' => 10, 'done_qty' => 6]);
+
+        $this->actingAs($user)
+            ->patchJson("/api/v1/order-items/{$item->id}", ['qty' => 5])
+            ->assertStatus(409)
+            ->assertJsonPath('qty', 5)
+            ->assertJsonPath('done_qty', 6);
+
+        $this->assertDatabaseHas('order_items', [
+            'id' => $item->id,
+            'qty' => 10,
+            'done_qty' => 6,
+        ]);
+    }
+
     public function test_actualizar_item_inexistente_devuelve_404(): void
     {
         $this->actingAs($this->actingUser())

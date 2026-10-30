@@ -33,6 +33,19 @@ class OrderItemService
                 ];
             }
 
+            $finalQty = (int) ($data['qty'] ?? $lockedItem->qty);
+            $finalDoneQty = (int) ($data['done_qty'] ?? $lockedItem->done_qty);
+            if ($finalDoneQty > $finalQty) {
+                return [
+                    'error' => [
+                        'message' => 'La cantidad completada no puede superar la cantidad pedida.',
+                        'qty' => $finalQty,
+                        'done_qty' => $finalDoneQty,
+                    ],
+                    'status' => 409,
+                ];
+            }
+
             [$oldValues, $newValues, $descriptions] = $this->buildUpdateLog($lockedItem, $data);
             $lockedItem->update($data);
 
