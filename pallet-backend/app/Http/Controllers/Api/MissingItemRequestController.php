@@ -2,16 +2,19 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Helpers\ActivityLogger;
 use App\Http\Controllers\Controller;
 use App\Models\MissingItemRequest;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\PendingItem;
+use App\Services\MissingItemRequestService;
 use Illuminate\Http\Request;
 
 class MissingItemRequestController extends Controller
 {
+    public function __construct(
+        private readonly MissingItemRequestService $missingItemRequestService
+    ) {}
+
     // POST /public/orders/{token}/missing-items — sin auth, protegido por token opaco
     public function store(Request $request, string $token)
     {
@@ -82,44 +85,18 @@ class MissingItemRequestController extends Controller
             'status' => ['required', 'in:approved,rejected'],
         ]);
 
-        $wasPendingReview = $missingItemRequest->status === 'pending_review';
+        $result = $this->missingItemRequestService->review(
+            $missingItemRequest,
+            $data['status'],
+            $request->user()->id,
+        );
 
-        $missingItemRequest->update([
-            'status' => $data['status'],
-            'reviewed_at' => now(),
-            'reviewed_by' => $request->user()->id,
-        ]);
-
-        if ($data['status'] === 'approved' && $wasPendingReview) {
-            $pending = PendingItem::create([
-                'order_id' => $missingItemRequest->order_id,
-                'order_item_id' => $missingItemRequest->order_item_id,
-                'qty_missing' => $missingItemRequest->qty_missing,
-                'note' => $missingItemRequest->note,
-                'status' => 'pending',
-                'created_by' => $request->user()->id,
-            ]);
-
-            ActivityLogger::log(
-                action: 'missing_item_request_approved',
-                entityType: 'missing_item_request',
-                entityId: $missingItemRequest->id,
-                description: "Solicitud aprobada → pendiente creado: {$missingItemRequest->orderItem?->description} ({$missingItemRequest->qty_missing} unid.)",
-                newValues: ['pending_item_id' => $pending->id, 'qty_missing' => $missingItemRequest->qty_missing],
-                orderId: $missingItemRequest->order_id,
-            );
-        } elseif ($data['status'] === 'rejected' && $wasPendingReview) {
-            ActivityLogger::log(
-                action: 'missing_item_request_rejected',
-                entityType: 'missing_item_request',
-                entityId: $missingItemRequest->id,
-                description: "Solicitud rechazada: {$missingItemRequest->orderItem?->description}",
-                orderId: $missingItemRequest->order_id,
-            );
+        if (isset($result['error'])) {
+            return response()->json($result['error'], $result['status']);
         }
 
         return response()->json(
-            $this->format($missingItemRequest->fresh(['order', 'orderItem.product', 'reviewer']))
+            $this->format($result['request']->load(['order', 'orderItem.product', 'reviewer']))
         );
     }
 

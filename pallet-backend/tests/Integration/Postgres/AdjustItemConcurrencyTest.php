@@ -2,6 +2,7 @@
 
 namespace Tests\Integration\Postgres;
 
+use App\Models\MissingItemRequest;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Pallet;
@@ -256,6 +257,41 @@ class AdjustItemConcurrencyTest extends TestCase
             ->where('order_item_id', $item->id)
             ->sum('qty');
         $this->assertLessThanOrEqual($item->qty, $assigned);
+        $this->assertDatabaseCount('activity_logs', 1);
+    }
+
+    public function test_dos_aprobaciones_concurrentes_crean_un_solo_pendiente(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('postgres-concurrency')->plainTextToken;
+        $item = OrderItem::factory()->create(['qty' => 10]);
+        $request = MissingItemRequest::create([
+            'order_id' => $item->order_id,
+            'order_item_id' => $item->id,
+            'qty_missing' => 3,
+            'status' => 'pending_review',
+        ]);
+        $operation = [
+            'method' => 'PATCH',
+            'path' => "/api/v1/admin/missing-item-requests/{$request->id}",
+            'payload' => ['status' => 'approved'],
+            'token' => $token,
+        ];
+
+        $responses = $this->sendJsonConcurrently([
+            ['port' => 18001, ...$operation],
+            ['port' => 18002, ...$operation],
+        ]);
+        $statuses = array_column($responses, 'status');
+        sort($statuses);
+
+        $this->assertSame([200, 409], $statuses, json_encode($responses, JSON_PRETTY_PRINT));
+        $this->assertDatabaseHas('missing_item_requests', [
+            'id' => $request->id,
+            'status' => 'approved',
+            'reviewed_by' => $admin->id,
+        ]);
+        $this->assertDatabaseCount('pending_items', 1);
         $this->assertDatabaseCount('activity_logs', 1);
     }
 
