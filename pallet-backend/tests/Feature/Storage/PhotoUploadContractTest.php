@@ -167,69 +167,58 @@ class PhotoUploadContractTest extends TestCase
         $this->actingAs($user)->postJson("/api/v1/orders/{$ticket->order_id}/tickets/{$ticket->id}/photos", ['photo' => $make()])->assertUnprocessable();
     }
 
-    // ── Contrato actual que D-022 reemplaza (sufijo _actual_) ────────────
+    // ── Contrato D-022: validación común con mensajes en español ─────────
 
-    public function test_actual_foto_de_pallet_acepta_gif_hoy(): void
+    public function test_foto_de_pallet_rechaza_gif(): void
     {
         [$user, , , $pallet] = $this->fixture();
 
-        $this->actingAs($user)
+        $response = $this->actingAs($user)
             ->postJson("/api/v1/pallets/{$pallet->id}/photos", [
                 'photo' => UploadedFile::fake()->image('foto.gif'),
-            ])
-            ->assertCreated();
-    }
-
-    public function test_actual_sin_foto_pallet_y_ticket_mensaje_en_ingles(): void
-    {
-        [$user, , $ticket, $pallet] = $this->fixture();
-
-        $palletResponse = $this->actingAs($user)
-            ->postJson("/api/v1/pallets/{$pallet->id}/photos", []);
-        $palletResponse->assertUnprocessable()
-            ->assertJsonValidationErrors('photo');
-        $this->assertSame(
-            __('validation.required'),
-            $palletResponse->json('errors.photo.0'),
-        );
-
-        $ticketResponse = $this->actingAs($user)
-            ->postJson("/api/v1/orders/{$ticket->order_id}/tickets/{$ticket->id}/photos", []);
-        $ticketResponse->assertUnprocessable();
-        $this->assertSame(
-            __('validation.required'),
-            $ticketResponse->json('errors.photo.0'),
-        );
-    }
-
-    public function test_actual_sin_foto_base_mensaje_custom_sin_errors(): void
-    {
-        [$user, $base, , $pallet] = $this->fixture();
-
-        $response = $this->actingAs($user)
-            ->postJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/photos", []);
+            ]);
 
         $response->assertUnprocessable()
-            ->assertJsonPath('message', 'No se recibió ningún archivo')
-            ->assertJsonMissingPath('errors');
+            ->assertJsonPath('errors.photo.0', 'Formato no permitido. Usá JPG, PNG o WEBP.');
     }
 
-    public function test_actual_base_acepta_archivo_en_otro_campo_pero_sin_alta(): void
+    public function test_sin_foto_los_tres_endpoints_responden_en_espanol(): void
+    {
+        [$user, $base, $ticket, $pallet] = $this->fixture();
+        $mensaje = 'No se recibió ningún archivo.';
+
+        $this->actingAs($user)
+            ->postJson("/api/v1/pallets/{$pallet->id}/photos", [])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.photo.0', $mensaje);
+
+        $this->actingAs($user)
+            ->postJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/photos", [])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.photo.0', $mensaje);
+
+        $this->actingAs($user)
+            ->postJson("/api/v1/orders/{$ticket->order_id}/tickets/{$ticket->id}/photos", [])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.photo.0', $mensaje);
+    }
+
+    public function test_base_rechaza_archivo_en_otro_campo_sin_fallback(): void
     {
         [$user, $base, , $pallet] = $this->fixture();
 
-        // El fallback lee el primer archivo de cualquier campo, pero la
-        // validación exige 'photo': jamás produce un alta.
+        // Sin fallback: solo se acepta el campo 'photo'.
         $response = $this->actingAs($user)
             ->postJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/photos", [
                 'file' => UploadedFile::fake()->image('foto.jpg', 50, 50),
             ]);
 
-        $response->assertUnprocessable();
+        $response->assertUnprocessable()
+            ->assertJsonPath('errors.photo.0', 'No se recibió ningún archivo.');
         $this->assertDatabaseCount('pallet_base_photos', 0);
     }
 
-    public function test_actual_base_con_error_de_subida_devuelve_error_code(): void
+    public function test_base_con_error_de_subida_devuelve_422_estandar(): void
     {
         [$user, $base, , $pallet] = $this->fixture();
         $path = tempnam(sys_get_temp_dir(), 'err');
@@ -241,8 +230,8 @@ class PhotoUploadContractTest extends TestCase
             ]);
 
         $response->assertUnprocessable()
-            ->assertJsonStructure(['message', 'error_code'])
-            ->assertJsonPath('error_code', UPLOAD_ERR_INI_SIZE);
+            ->assertJsonPath('errors.photo.0', 'El archivo no se pudo subir. Verificá el tamaño e intentá de nuevo.')
+            ->assertJsonMissingPath('error_code');
         $this->assertDatabaseCount('pallet_base_photos', 0);
 
         @unlink($path);

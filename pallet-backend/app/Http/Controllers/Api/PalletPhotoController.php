@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Helpers\ActivityLogger;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StorePalletPhotoRequest;
 use App\Models\Pallet;
 use App\Models\PalletPhoto;
 use App\Services\PhotoPersistenceService;
 use App\Services\StorageCleanupService;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class PalletPhotoController extends Controller
@@ -25,12 +25,9 @@ class PalletPhotoController extends Controller
         return response()->json($photos);
     }
 
-    public function store(Request $request, Pallet $pallet)
+    public function store(StorePalletPhotoRequest $request, Pallet $pallet)
     {
-        $data = $request->validate([
-            'photo' => ['required', 'file', 'image', 'max:20480'], // 20MB
-            'note' => ['nullable', 'string', 'max:1000'],
-        ]);
+        $data = $request->validated();
 
         $file = $data['photo'];
 

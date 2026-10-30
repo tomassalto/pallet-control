@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Helpers\ActivityLogger;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreTicketPhotoRequest;
 use App\Jobs\ProcessTicketOcr;
 use App\Models\Order;
 use App\Models\OrderTicket;
@@ -63,10 +64,12 @@ class OrderTicketController extends Controller
             return response()->json(['message' => 'Ticket no encontrado'], 404);
         }
 
-        $data = $request->validate([
-            'photo' => ['required', 'file', 'mimes:jpeg,jpg,png,webp', 'max:20480'], // 20MB
-            'note' => ['nullable', 'string', 'max:1000'],
-        ]);
+        // Las reglas/mensajes vienen de StoreTicketPhotoRequest pero se
+        // aplican aquí: la comprobación de pertenencia (404) va primero.
+        $data = $request->validate(
+            StoreTicketPhotoRequest::reglas(),
+            StoreTicketPhotoRequest::mensajes(),
+        );
 
         $file = $data['photo'];
 

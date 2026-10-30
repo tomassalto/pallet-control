@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Helpers\ActivityLogger;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StorePalletBasePhotoRequest;
 use App\Models\Pallet;
 use App\Models\PalletBase;
 use App\Models\PalletBasePhoto;
@@ -29,24 +30,12 @@ class PalletBasePhotoController extends Controller
             return response()->json(['message' => 'Base no encontrada'], 404);
         }
 
-        // Obtener el archivo — intentar campo 'photo' primero, luego primer archivo disponible
-        $file = $request->file('photo') ?? (($all = $request->allFiles()) ? reset($all) : null);
-
-        if (! $file) {
-            return response()->json(['message' => 'No se recibió ningún archivo'], 422);
-        }
-
-        if (! $file->isValid()) {
-            return response()->json([
-                'message' => 'El archivo no es válido: ' . $file->getErrorMessage(),
-                'error_code' => $file->getError(),
-            ], 422);
-        }
-
-        $data = $request->validate([
-            'photo' => ['required', 'file', 'mimes:jpeg,jpg,png,webp', 'max:20480'],
-            'note' => ['nullable', 'string', 'max:1000'],
-        ]);
+        // Las reglas/mensajes vienen de StorePalletBasePhotoRequest pero se
+        // aplican aquí: la comprobación de pertenencia (404) va primero.
+        $data = $request->validate(
+            StorePalletBasePhotoRequest::reglas(),
+            StorePalletBasePhotoRequest::mensajes(),
+        );
 
         $file = $data['photo'];
 
