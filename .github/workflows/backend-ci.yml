@@ -137,7 +137,22 @@ jobs:
 
       - name: PostgreSQL concurrency gate
         working-directory: pallet-backend
-        run: ./vendor/bin/phpunit --configuration phpunit.postgres.xml --group postgres
+        run: ./vendor/bin/phpunit --configuration phpunit.postgres.xml --group postgres --log-junit postgres-junit.xml
+
+      - name: Report PostgreSQL gate failures
+        if: failure()
+        working-directory: pallet-backend
+        run: |
+          php -r '
+          if (! is_file("postgres-junit.xml")) { exit(0); }
+          $xml = simplexml_load_file("postgres-junit.xml");
+          foreach ($xml->xpath("//testcase[failure or error]") as $case) {
+              $node = $case->failure ?: $case->error;
+              $detail = substr(trim((string) $node), 0, 1500);
+              $detail = str_replace(["%", "\r", "\n"], ["%25", "%0D", "%0A"], $detail);
+              echo "::error title={$case["class"]}::{$case["name"]}%0A{$detail}\n";
+          }
+          '
 
   container-security:
     runs-on: ubuntu-latest

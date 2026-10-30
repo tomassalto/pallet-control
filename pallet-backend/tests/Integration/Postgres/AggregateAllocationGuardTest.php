@@ -137,8 +137,9 @@ class AggregateAllocationGuardTest extends TestCase
         $this->processes[] = $connB;
 
         // Determinismo: esperar a que B esté efectivamente bloqueado en
-        // un lock antes de commitear A.
-        $deadline = microtime(true) + 10;
+        // un lock antes de commitear A. Margen amplio: en CI lento el
+        // spawn de PHP + conexión puede tardar varios segundos.
+        $deadline = microtime(true) + 30;
         $blocked = false;
         while (microtime(true) < $deadline) {
             $waiting = (int) DB::scalar(
