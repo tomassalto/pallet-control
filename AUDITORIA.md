@@ -181,7 +181,9 @@ Referencia:  `BE-TX`, `QA-INVARIANT`
 **Por qué importa acá:** el más grave es `MissingItemRequestController::update` — si `PendingItem::create()` falla después de marcar la solicitud "approved", la aprobación queda registrada sin su pendiente correspondiente, silenciosamente.
 **Resolución parcial:** `MissingItemRequestController::update` delega en un servicio transaccional que bloquea la solicitud, reevalúa `pending_review` y confirma estado, pendiente y auditoría como una unidad. Una segunda revisión devuelve `409`. Tests fuerzan fallos al crear el pendiente y el log; PostgreSQL enfrenta dos aprobaciones simultáneas y acredita `200/409`, un pendiente y un log.
 
-**Estado:** 🟡 resuelto para solicitudes faltantes en commit `eaadf87`, Actions run `41003369719` con `ci`, `postgres-concurrency` y `container-security` verdes. Permanece abierto para las asociaciones y controladores de archivos enumerados.
+`PalletController::attachOrder` y `OrderController::attachPallet` comparten un servicio que bloquea pallet y pedido en ese orden, inserta pivot y audit log en una transacción y devuelve `409` para una asociación existente. Crear un pedido por código también confirma o revierte junto a la asociación. Telegram se ejecuta después del commit. PostgreSQL cruza ambos endpoints simultáneamente y acredita `201/409`, una fila pivot y un log.
+
+**Estado:** 🟡 resuelto para solicitudes faltantes en `eaadf87` y asociaciones pedido/pallet en `a59022b`; Actions runs `41003369719` y `41003991454` con los tres jobs verdes. Permanece abierto para los controladores de archivos enumerados.
 
 #### H-012 — Foreign keys sin índice (Postgres no las indexa solo)
 ```
@@ -238,7 +240,7 @@ Severidad:   ⚪ bajo · Categoría: integridad de datos
 Ubicación:   app/Helpers/ActivityLogger.php
 ```
 **Qué está pasando:** al no correr dentro de la misma transacción que el cambio de negocio (ver H-011), una falla del insert de auditoría después de un commit ya aplicado pierde esa entrada del log silenciosamente.
-**Estado:** 🟡 resuelto para `adjust-item` en R-01, crear/actualizar bases en R-02 y revisión de solicitudes faltantes en `eaadf87`; abierto en las demás escrituras citadas por H-011. Tests fuerzan la falla de `activity_logs` y acreditan rollback del estado asociado.
+**Estado:** 🟡 resuelto para `adjust-item` en R-01, crear/actualizar bases en R-02, revisión de solicitudes en `eaadf87` y asociación pedido/pallet en `a59022b`; abierto en los controladores de archivos citados por H-011. Tests fuerzan la falla de `activity_logs` y acreditan rollback del estado asociado.
 
 ---
 

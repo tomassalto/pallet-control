@@ -412,3 +412,23 @@ Una revisión posterior o concurrente devuelve `409` y no cambia la decisión pr
 La revisión queda serializada por solicitud, no globalmente. Un administrador que intenta cambiar una decisión ya confirmada debe usar un flujo futuro explícito de corrección; reutilizar el endpoint de revisión ocultaría historia y podría duplicar pendientes.
 
 **Referencia normativa:** `BE-TX`, `BE-VALID`, `BE-ERR`, `SEC-LOG`, `QA-INVARIANT`, `QA-RESILIENCE`
+
+---
+
+## D-016 — Asociación pedido/pallet única y atómica
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+Dos endpoints asociaban la misma relación con implementaciones distintas. `syncWithoutDetaching` ocultaba duplicados, pero cada repetición emitía un nuevo audit log y Telegram. La creación por código tampoco confirmaba junto a pivot y auditoría.
+
+**Decisión**
+Centralizar ambos recorridos en un servicio. Toda operación bloquea primero el pallet y luego el pedido, comprueba la fila pivot, inserta la relación y registra auditoría dentro de una transacción. Una asociación existente devuelve `409` sin efectos secundarios.
+
+Cuando el recorrido por código crea un pedido, creación, log de alta, pivot y log de asociación confirman juntos. Telegram se envía únicamente después de que la transacción termina y nunca mientras se mantienen locks.
+
+**Trade-off aceptado**
+Repetir la misma asociación deja de ser un éxito idempotente silencioso y pasa a ser conflicto explícito, evitando evidencia duplicada. La notificación Telegram es best-effort posterior al commit: su fallo no revierte una asociación durable ni mantiene abierta la transacción.
+
+**Referencia normativa:** `BE-ARCH`, `BE-TX`, `BE-VALID`, `BE-ERR`, `SEC-LOG`, `QA-INVARIANT`, `QA-RESILIENCE`

@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-30
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** revisión de solicitudes faltantes ya es atómica y segura ante concurrencia (`H-011`/`H-017`, parcial). `H-006` sigue abierto como invariante agregada; `H-029` y `H-038` requieren evidencia real de Render. Siguiente bloque autónomo: asociaciones pedido/pallet restantes de `H-011`/`H-017`.
+**Trabajo actual:** revisión de solicitudes y asociación pedido/pallet ya son atómicas y seguras ante concurrencia (`H-011`/`H-017`, parcial). `H-006` sigue abierto; `H-029` y `H-038` requieren evidencia real de Render. Siguiente bloque autónomo: consistencia DB/Storage en controladores de fotos de `H-011`.
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 

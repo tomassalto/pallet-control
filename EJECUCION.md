@@ -271,9 +271,25 @@ Rama creada desde el cierre documental de H-015. Se aplicaron `BE-TX`, `BE-VALID
 
 Evidencia funcional: commit `eaadf87`.
 
-## Próxima sesión — asociación pedido/pallet atómica
+## Última sesión cerrada — asociación pedido/pallet atómica
 
-Crear la rama desde este cierre, nunca desde `master`. Reaplicar `BE-TX`, `BE-VALID`, `SEC-LOG`, `QA-INVARIANT` y `QA-RESILIENCE`. Auditar juntos `PalletController::attachOrder` y `OrderController::attachPallet`, porque escriben la misma relación desde extremos distintos. Definir lock/duplicado/status y probar rollback de auditoría antes de cerrar esa parte de H-011/H-017.
+Rama creada desde el cierre documental de solicitudes faltantes. Se aplicaron `BE-ARCH`, `BE-TX`, `BE-VALID`, `BE-ERR`, `SEC-LOG`, `QA-INVARIANT` y `QA-RESILIENCE`.
+
+1. D-016 centraliza los dos endpoints que escriben `order_pallet`.
+2. El orden de locks es pallet y luego pedido en ambos recorridos.
+3. Pivot y audit log confirman o revierten juntos; crear por código incluye también pedido y log de alta.
+4. Una asociación existente devuelve `409` sin nuevo log ni notificación.
+5. Telegram se ejecuta después del commit, fuera de los locks.
+6. Fallos forzados de auditoría acreditan rollback para pedido nuevo y existente.
+7. PostgreSQL cruza ambos endpoints: `201/409`, una fila pivot y un log.
+8. Gates locales: Pint, PHPStan, 128 tests/375 assertions y Composer audit verdes.
+9. Actions run `41003991454`: `ci`, `postgres-concurrency` y `container-security` verdes.
+
+Evidencia funcional: commit `a59022b`.
+
+## Próxima sesión — consistencia entre fotos y Storage
+
+Crear la rama desde este cierre, nunca desde `master`. Recorrer `ROUTER.md` y combinar `BE-TX`, `SEC-FILE`, `SEC-LOG`, `DO-INFRA`, `QA-INVARIANT` y `QA-RESILIENCE`. Auditar `PalletPhotoController`, `PalletBasePhotoController` y `OrderTicketController`; definir compensación explícita porque DB y object storage no comparten transacción. Probar fallos antes y después de cada efecto sin asumir atomicidad distribuida.
 
 ## Sesiones R-02 a R-07
 
