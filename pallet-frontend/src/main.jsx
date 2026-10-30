@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./auth/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import App from "./App.jsx";
-import { setOnUnauthorized } from "./api/client";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -17,13 +16,6 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
     },
   },
-});
-
-// Un 401 autenticado invalida la sesión: cancelar y vaciar la cache de
-// queries para no dejar datos privados de la sesión anterior.
-setOnUnauthorized(() => {
-  queryClient.cancelQueries();
-  queryClient.clear();
 });
 
 createRoot(document.getElementById("root")).render(

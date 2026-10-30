@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiGet, apiPost, setNavigate } from "./client";
+import { apiGet, apiPost, setOnUnauthorized } from "./client";
 
 function fetchOk(payload = { ok: true }) {
   return Promise.resolve(
@@ -24,7 +24,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  setNavigate(null);
+  setOnUnauthorized(null);
 });
 
 describe("cabeceras", () => {
@@ -91,18 +91,82 @@ describe("respuestas", () => {
     expect(err.response.status).toBe(500);
   });
 
-  it("en 401 limpia el token, navega a /login y lanza 'Sesión expirada'", async () => {
+  it("en 401 con handler registrado lo invoca una vez y lanza 'Sesión expirada'", async () => {
     localStorage.setItem("token", "tok-viejo");
-    const navigate = vi.fn();
-    setNavigate(navigate);
+    const onUnauthorized = vi.fn(() => localStorage.removeItem("token"));
+    setOnUnauthorized(onUnauthorized);
     fetch.mockImplementation(() => fetchError(401, { message: "Unauthenticated." }));
 
     const err = await apiGet("/recurso").catch((e) => e);
 
     expect(err.message).toBe("Sesión expirada");
     expect(err.response.status).toBe(401);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("en 401 sin handler registrado limpia el token", async () => {
+    localStorage.setItem("token", "tok-viejo");
+    fetch.mockImplementation(() => fetchError(401, { message: "Unauthenticated." }));
+
+    const err = await apiGet("/recurso").catch((e) => e);
+
+    expect(err.message).toBe("Sesión expirada");
     expect(localStorage.getItem("token")).toBeNull();
-    expect(navigate).toHaveBeenCalledWith("/login", { replace: true });
+  });
+
+  it("401s concurrentes con el mismo token invocan el handler una sola vez", async () => {
+    localStorage.setItem("token", "tok-viejo");
+    const onUnauthorized = vi.fn(() => localStorage.removeItem("token"));
+    setOnUnauthorized(onUnauthorized);
+    fetch.mockImplementation(() => fetchError(401, { message: "Unauthenticated." }));
+
+    const [err1, err2] = await Promise.all([
+      apiGet("/recurso-a").catch((e) => e),
+      apiGet("/recurso-b").catch((e) => e),
+    ]);
+
+    expect(err1.message).toBe("Sesión expirada");
+    expect(err2.message).toBe("Sesión expirada");
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("un 401 tardío de un token viejo no invalida la sesión nueva", async () => {
+    localStorage.setItem("token", "tok-viejo");
+    const onUnauthorized = vi.fn(() => localStorage.removeItem("token"));
+    setOnUnauthorized(onUnauthorized);
+
+    let resolveFetch;
+    fetch.mockImplementation(
+      () => new Promise((resolve) => (resolveFetch = resolve)),
+    );
+    const promise = apiGet("/recurso");
+
+    // Re-login antes de que llegue el 401: el token ya es otro.
+    localStorage.setItem("token", "tok-nuevo");
+    resolveFetch(
+      new Response(JSON.stringify({ message: "Unauthenticated." }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const err = await promise.catch((e) => e);
+    expect(err.message).toBe("Sesión expirada");
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(localStorage.getItem("token")).toBe("tok-nuevo");
+  });
+
+  it("401 sin token no invoca el handler y conserva el mensaje del body", async () => {
+    const onUnauthorized = vi.fn();
+    setOnUnauthorized(onUnauthorized);
+    fetch.mockImplementation(() =>
+      fetchError(401, { message: "Credenciales inválidas." }),
+    );
+
+    const err = await apiPost("/auth/login", {}).catch((e) => e);
+
+    expect(err.message).toBe("Credenciales inválidas.");
+    expect(onUnauthorized).not.toHaveBeenCalled();
   });
 });
 

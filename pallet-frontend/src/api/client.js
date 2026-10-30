@@ -2,12 +2,7 @@
 // Si no, usar URL relativa (funciona en desarrollo con proxy de Vite)
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
-let navigateFn = null;
 let onUnauthorizedFn = null;
-
-export function setNavigate(navigate) {
-  navigateFn = navigate;
-}
 
 export function setOnUnauthorized(fn) {
   onUnauthorizedFn = fn;
@@ -50,16 +45,20 @@ async function apiFetch(path, options = {}) {
   const data = await res.json().catch(() => null);
 
   if (!res.ok) {
-    // Token expirado o inválido → limpiar sesión y redirigir al login
+    // Token expirado o inválido → invalidar la sesión; RequireAuth
+    // redirige a /login al ver user = null.
     // Sesión expirada sólo aplica a peticiones autenticadas: un 401 sin
     // token (p.ej. login con credenciales malas) es un error normal.
     if (res.status === 401 && token) {
-      localStorage.removeItem("token");
-      onUnauthorizedFn?.();
-      if (navigateFn) {
-        navigateFn("/login", { replace: true });
-      } else {
-        window.location.href = "/login";
+      // Sólo invalida si la sesión sigue siendo la de esta petición:
+      // evita que 401s concurrentes repitan la invalidación y que un
+      // 401 tardío de un token viejo mate una sesión nueva (re-login).
+      if (localStorage.getItem("token") === token) {
+        if (onUnauthorizedFn) {
+          onUnauthorizedFn();
+        } else {
+          localStorage.removeItem("token");
+        }
       }
       const authErr = new Error("Sesión expirada");
       authErr.response = { status: 401 };

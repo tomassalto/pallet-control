@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost } from "../api/client";
+import { apiGet, apiPost, setOnUnauthorized } from "../api/client";
 import { toastError } from "../ui/toast";
 import { AuthContext } from "./AuthContextValue";
 
@@ -10,15 +10,28 @@ export function AuthProvider({ children }) {
   // AuthProvider vive dentro de QueryClientProvider (main.jsx).
   const queryClient = useQueryClient();
 
-  async function refreshMe() {
+  // Única autoridad de invalidación de sesión: un 401 autenticado
+  // (registrado en api/client) o un logout terminan acá. Idempotente.
+  const endSession = useCallback(() => {
+    localStorage.removeItem("token");
+    queryClient.cancelQueries();
+    queryClient.clear();
+    setUser(null);
+  }, [queryClient]);
+
+  useEffect(() => {
+    setOnUnauthorized(endSession);
+    return () => setOnUnauthorized(null);
+  }, [endSession]);
+
+  const refreshMe = useCallback(async () => {
     try {
       const data = await apiGet("/auth/me");
       setUser(data.user);
     } catch {
-      setUser(null);
-      localStorage.removeItem("token");
+      endSession();
     }
-  }
+  }, [endSession]);
 
   useEffect(() => {
     (async () => {
@@ -26,7 +39,7 @@ export function AuthProvider({ children }) {
       if (token) await refreshMe();
       setBooting(false);
     })();
-  }, []);
+  }, [refreshMe]);
 
   async function login(email, password) {
     const data = await apiPost("/auth/login", { email, password });
@@ -65,11 +78,7 @@ export function AuthProvider({ children }) {
     } catch (e) {
       toastError(e?.message || "Error en logout");
     } finally {
-      localStorage.removeItem("token");
-      // La cache puede contener datos privados de la sesión que termina.
-      queryClient.cancelQueries();
-      queryClient.clear();
-      setUser(null);
+      endSession();
     }
   }
 
