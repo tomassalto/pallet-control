@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../api/client";
@@ -11,18 +11,35 @@ import Accordion from "../ui/Accordion";
 export default function MyClients() {
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
 
-  const { data: customers = [], isLoading } = useQuery({
+  const {
+    data: customers = [],
+    isLoading,
+    isError: errorCustomers,
+    errorUpdatedAt: errorAtCustomers,
+  } = useQuery({
     queryKey: ["customers"],
     queryFn: () => apiGet("/customers"),
-    onError: (e) => toastError(e?.message || "No se pudo cargar clientes"),
   });
 
-  const { data: selectedCustomer, isLoading: loadingOrders } = useQuery({
+  const {
+    data: selectedCustomer,
+    isLoading: loadingOrders,
+    isError: errorOrders,
+    errorUpdatedAt: errorAtOrders,
+  } = useQuery({
     queryKey: ["customer", selectedCustomerId],
     queryFn: () => apiGet(`/customers/${selectedCustomerId}`),
     enabled: !!selectedCustomerId,
-    onError: (e) => toastError(e?.message || "No se pudo cargar pedidos"),
   });
+
+  // React Query v5 no ejecuta onError en las opciones: los toasts salen
+  // del estado de la query, una vez por fallo.
+  useEffect(() => {
+    if (errorCustomers) toastError("No se pudo cargar clientes");
+  }, [errorCustomers, errorAtCustomers]);
+  useEffect(() => {
+    if (errorOrders) toastError("No se pudo cargar pedidos");
+  }, [errorOrders, errorAtOrders]);
 
   const customerOrders = selectedCustomer?.orders ?? [];
 

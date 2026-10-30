@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost } from "../api/client";
 import { toastError } from "../ui/toast";
 import { AuthContext } from "./AuthContextValue";
@@ -6,6 +7,8 @@ import { AuthContext } from "./AuthContextValue";
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(true);
+  // AuthProvider vive dentro de QueryClientProvider (main.jsx).
+  const queryClient = useQueryClient();
 
   async function refreshMe() {
     try {
@@ -63,6 +66,9 @@ export function AuthProvider({ children }) {
       toastError(e?.message || "Error en logout");
     } finally {
       localStorage.removeItem("token");
+      // La cache puede contener datos privados de la sesión que termina.
+      queryClient.cancelQueries();
+      queryClient.clear();
       setUser(null);
     }
   }

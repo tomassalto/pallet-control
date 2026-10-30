@@ -3,9 +3,14 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
 let navigateFn = null;
+let onUnauthorizedFn = null;
 
 export function setNavigate(navigate) {
   navigateFn = navigate;
+}
+
+export function setOnUnauthorized(fn) {
+  onUnauthorizedFn = fn;
 }
 
 function getToken() {
@@ -46,8 +51,11 @@ async function apiFetch(path, options = {}) {
 
   if (!res.ok) {
     // Token expirado o inválido → limpiar sesión y redirigir al login
-    if (res.status === 401) {
+    // Sesión expirada sólo aplica a peticiones autenticadas: un 401 sin
+    // token (p.ej. login con credenciales malas) es un error normal.
+    if (res.status === 401 && token) {
       localStorage.removeItem("token");
+      onUnauthorizedFn?.();
       if (navigateFn) {
         navigateFn("/login", { replace: true });
       } else {

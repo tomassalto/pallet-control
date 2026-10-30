@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { usePhotoOcr } from "./usePhotoOcr";
+import { usePhotoOcr, OCR_MAX_ERRORS, OCR_MAX_MS } from "./usePhotoOcr";
 
 function json(body, status = 200) {
   return Promise.resolve(
@@ -68,7 +68,7 @@ describe("usePhotoOcr", () => {
     expect(result.current.scanState.done).toBe(true);
   });
 
-  it("_actual_: errores de sondeo se silencian y el polling sigue para siempre", async () => {
+  it("corta a los 5 errores consecutivos con mensaje recuperable", async () => {
     fetch.mockImplementation((url) => {
       if (url.includes("trigger-ocr")) return json({});
       if (url.includes("ocr-status")) return json({ message: "boom" }, 500);
@@ -79,19 +79,51 @@ describe("usePhotoOcr", () => {
     act(() => result.current.openScan(9));
     await act(async () => result.current.confirmScan());
 
-    // Tras muchos errores seguidos el polling continúa sin avisar.
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
-    const callsBefore = fetch.mock.calls.filter(([u]) => u.includes("ocr-status")).length;
-    expect(callsBefore).toBeGreaterThan(20);
-    expect(result.current.scanState.done).toBe(false);
+    expect(result.current.scanState.done).toBe(true);
+    expect(result.current.scanState.log).toBe(
+      "No se pudo consultar el estado del escaneo. Intentá de nuevo más tarde.",
+    );
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+    // Ya no hay más consultas tras el corte.
+    const callsAtStop = fetch.mock.calls.filter(([u]) => u.includes("ocr-status")).length;
+    expect(callsAtStop).toBe(OCR_MAX_ERRORS);
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     expect(
       fetch.mock.calls.filter(([u]) => u.includes("ocr-status")).length,
-    ).toBeGreaterThan(callsBefore);
+    ).toBe(callsAtStop);
   });
 
-  it("_actual_: nunca corta por tiempo total transcurrido", async () => {
+  it("un éxito reinicia el contador de errores", async () => {
+    let calls = 0;
+    fetch.mockImplementation((url) => {
+      if (url.includes("trigger-ocr")) return json({});
+      if (url.includes("ocr-status")) {
+        calls += 1;
+        // Errores en 1-4 y 6-10; un único éxito en el 5 reinicia la cuenta.
+        if (calls === 5) return json({ ocr_processed_at: null, ocr_log: "ok" });
+        return json({ message: "boom" }, 500);
+      }
+      return json({}, 404);
+    });
+    const { result } = renderHook(() => usePhotoOcr(deps));
+
+    act(() => result.current.openScan(9));
+    await act(async () => result.current.confirmScan());
+
+    // 4 errores + 1 éxito (reset) + 4 errores: sigue sondeando.
+    await act(async () => { await vi.advanceTimersByTimeAsync(18_000); });
+    expect(result.current.scanState.done).toBe(false);
+
+    // El 5º error consecutivo tras el reset corta.
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expect(result.current.scanState.done).toBe(true);
+    expect(result.current.scanState.log).toBe(
+      "No se pudo consultar el estado del escaneo. Intentá de nuevo más tarde.",
+    );
+  });
+
+  it("corta al superar 5 minutos totales con mensaje recuperable", async () => {
     fetch.mockImplementation((url) => {
       if (url.includes("trigger-ocr")) return json({});
       return json({ ocr_processed_at: null, ocr_log: "…" });
@@ -101,10 +133,16 @@ describe("usePhotoOcr", () => {
     act(() => result.current.openScan(9));
     await act(async () => result.current.confirmScan());
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(6 * 60 * 1000); });
-    expect(result.current.scanState.done).toBe(false);
+    await act(async () => { await vi.advanceTimersByTimeAsync(OCR_MAX_MS); });
+    expect(result.current.scanState.done).toBe(true);
+    expect(result.current.scanState.log).toBe(
+      "El escaneo está demorando más de lo esperado. Cerrá y volvé a abrir la foto más tarde.",
+    );
+
+    const callsAtStop = fetch.mock.calls.filter(([u]) => u.includes("ocr-status")).length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     expect(
       fetch.mock.calls.filter(([u]) => u.includes("ocr-status")).length,
-    ).toBeGreaterThan(150);
+    ).toBe(callsAtStop);
   });
 });

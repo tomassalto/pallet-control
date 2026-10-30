@@ -16,6 +16,9 @@
 import { useEffect, useRef, useState } from "react";
 import { apiGet, apiPost } from "../api/client";
 
+export const OCR_MAX_MS = 5 * 60 * 1000;
+export const OCR_MAX_ERRORS = 5;
+
 export function usePhotoOcr({ orderId, ticketId, onDone }) {
   const [scanState, setScanState] = useState(null);
   const pollRef    = useRef(null);
@@ -50,11 +53,26 @@ export function usePhotoOcr({ orderId, ticketId, onDone }) {
       return;
     }
     clearInterval(pollRef.current);
+    // Límites del sondeo: 5 minutos totales o 5 errores consecutivos.
+    const startedAt = Date.now();
+    let consecutiveErrors = 0;
     pollRef.current = setInterval(async () => {
+      if (Date.now() - startedAt >= OCR_MAX_MS) {
+        clearInterval(pollRef.current);
+        setScanState((prev) =>
+          prev && {
+            ...prev,
+            done: true,
+            log: "El escaneo está demorando más de lo esperado. Cerrá y volvé a abrir la foto más tarde.",
+          },
+        );
+        return;
+      }
       try {
         const data = await apiGet(
           `/orders/${orderId}/tickets/${ticketId}/photos/${photoId}/ocr-status`,
         );
+        consecutiveErrors = 0;
         if (data.ocr_log)
           setScanState((prev) => prev && { ...prev, log: data.ocr_log });
         if (data.ocr_processed_at !== null) {
@@ -65,7 +83,17 @@ export function usePhotoOcr({ orderId, ticketId, onDone }) {
           onDone?.(photoId, data);
         }
       } catch {
-        // silenciar errores de polling
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= OCR_MAX_ERRORS) {
+          clearInterval(pollRef.current);
+          setScanState((prev) =>
+            prev && {
+              ...prev,
+              done: true,
+              log: "No se pudo consultar el estado del escaneo. Intentá de nuevo más tarde.",
+            },
+          );
+        }
       }
     }, 2000);
   }
