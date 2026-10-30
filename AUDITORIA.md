@@ -185,7 +185,7 @@ Referencia:  `BE-TX`, `QA-INVARIANT`
 
 Las subidas de fotos web y del servicio activo de Telegram guardan primero el objeto y luego confirman registro y auditoría dentro de una transacción. Si cualquier escritura falla, un servicio común elimina el objeto; `ImageConverter` ahora también falla explícitamente cuando el driver devuelve `false`. En el alta de tickets por bot, ticket, foto y auditoría se crean dentro de la misma transacción, después de almacenar la imagen.
 
-**Estado:** 🟡 resuelto para solicitudes faltantes en `eaadf87`, asociaciones pedido/pallet en `a59022b` y subidas de fotos en `ee41860`. Permanece abierto para los borrados físicos de fotos/tickets, que necesitan recuperación durable ante fallos del object storage.
+**Estado:** 🟡 resuelto para solicitudes faltantes en `eaadf87`, asociaciones pedido/pallet en `a59022b` y subidas de fotos en `ee41860`; Actions run `41005625780` con los tres jobs verdes. Permanece abierto para los borrados físicos de fotos/tickets, que necesitan recuperación durable ante fallos del object storage.
 
 #### H-012 — Foreign keys sin índice (Postgres no las indexa solo)
 ```

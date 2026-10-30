@@ -297,6 +297,7 @@ Rama creada desde el cierre documental de asociación pedido/pallet. Se aplicaro
 4. El ticket creado por Telegram ya no puede quedar huérfano si falla la conversión, la foto o la auditoría.
 5. Cuatro tests fuerzan el fallo de `activity_logs` y acreditan ausencia de filas y archivos residuales.
 6. Gates locales: Pint, PHPStan, 132 tests/388 assertions y Composer audit verdes.
+7. Actions run `41005625780`: `ci`, `postgres-concurrency` y `container-security` verdes.
 
 Evidencia funcional: commit `ee41860`.
 
