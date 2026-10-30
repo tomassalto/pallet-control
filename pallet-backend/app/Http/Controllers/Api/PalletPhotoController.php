@@ -3,15 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Helpers\ActivityLogger;
-use App\Helpers\ImageConverter;
 use App\Http\Controllers\Controller;
 use App\Models\Pallet;
 use App\Models\PalletPhoto;
+use App\Services\PhotoPersistenceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class PalletPhotoController extends Controller
 {
+    public function __construct(private readonly PhotoPersistenceService $photoPersistence) {}
+
     public function index(Pallet $pallet)
     {
         $photos = $pallet->photos()->latest()->get();
@@ -30,28 +32,31 @@ class PalletPhotoController extends Controller
 
         // Convertir a WebP (solo se guarda WebP, no el original)
         // Opcional: redimensionar si la imagen es muy grande (máximo 4000px en el lado más largo)
-        $path = ImageConverter::convertToWebP(
+        $photo = $this->photoPersistence->persist(
             $file,
             "pallets/{$pallet->id}",
-            85, // Calidad de compresión (0-100)
-            4000, // Ancho máximo (opcional, null para no redimensionar)
-            4000  // Alto máximo (opcional, null para no redimensionar)
-        );
+            85,
+            4000,
+            4000,
+            function (string $path) use ($data, $file, $pallet): PalletPhoto {
+                $photo = PalletPhoto::create([
+                    'pallet_id' => $pallet->id,
+                    'path' => $path,
+                    'original_name' => $file->getClientOriginalName(),
+                    'note' => $data['note'] ?? null,
+                ]);
 
-        $photo = PalletPhoto::create([
-            'pallet_id' => $pallet->id,
-            'path' => $path,
-            'original_name' => $file->getClientOriginalName(),
-            'note' => $data['note'] ?? null,
-        ]);
+                ActivityLogger::log(
+                    action: 'pallet_photo_uploaded',
+                    entityType: 'pallet_photo',
+                    entityId: $photo->id,
+                    description: "Foto agregada al pallet '{$pallet->code}': {$file->getClientOriginalName()}",
+                    palletId: $pallet->id,
+                    newValues: ['photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()],
+                );
 
-        ActivityLogger::log(
-            action: 'pallet_photo_uploaded',
-            entityType: 'pallet_photo',
-            entityId: $photo->id,
-            description: "Foto agregada al pallet '{$pallet->code}': {$file->getClientOriginalName()}",
-            palletId: $pallet->id,
-            newValues: ['photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()],
+                return $photo;
+            },
         );
 
         return response()->json([

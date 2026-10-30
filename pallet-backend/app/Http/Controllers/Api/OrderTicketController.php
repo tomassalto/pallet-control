@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Helpers\ActivityLogger;
-use App\Helpers\ImageConverter;
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessTicketOcr;
 use App\Models\Order;
 use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
+use App\Services\PhotoPersistenceService;
 use App\Services\TicketOcrService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Storage;
 
 class OrderTicketController extends Controller
 {
+    public function __construct(private readonly PhotoPersistenceService $photoPersistence) {}
+
     // GET /orders/{order}/tickets
     public function index(Order $order)
     {
@@ -66,33 +68,34 @@ class OrderTicketController extends Controller
         $file = $data['photo'];
 
         // Convertir a WebP
-        $path = ImageConverter::convertToWebP(
+        $photo = $this->photoPersistence->persist(
             $file,
             "orders/{$order->id}/tickets/{$ticket->id}",
             95,
             6000,
-            6000
-        );
+            6000,
+            function (string $path) use ($data, $file, $order, $ticket): OrderTicketPhoto {
+                $maxIndex = $ticket->photos()->max('order_index') ?? -1;
 
-        // Obtener el siguiente índice de orden
-        $maxIndex = $ticket->photos()->max('order_index') ?? -1;
-        $nextIndex = $maxIndex + 1;
+                $photo = OrderTicketPhoto::create([
+                    'ticket_id' => $ticket->id,
+                    'path' => $path,
+                    'original_name' => $file->getClientOriginalName(),
+                    'note' => $data['note'] ?? null,
+                    'order_index' => $maxIndex + 1,
+                ]);
 
-        $photo = OrderTicketPhoto::create([
-            'ticket_id' => $ticket->id,
-            'path' => $path,
-            'original_name' => $file->getClientOriginalName(),
-            'note' => $data['note'] ?? null,
-            'order_index' => $nextIndex,
-        ]);
+                ActivityLogger::log(
+                    action: 'order_ticket_photo_uploaded',
+                    entityType: 'order_ticket_photo',
+                    entityId: $photo->id,
+                    description: "Foto agregada al ticket del pedido '{$order->code}': {$file->getClientOriginalName()}",
+                    newValues: ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()],
+                    orderId: $order->id,
+                );
 
-        ActivityLogger::log(
-            action: 'order_ticket_photo_uploaded',
-            entityType: 'order_ticket_photo',
-            entityId: $photo->id,
-            description: "Foto agregada al ticket del pedido '{$order->code}': {$file->getClientOriginalName()}",
-            newValues: ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'original_name' => $file->getClientOriginalName()],
-            orderId: $order->id,
+                return $photo;
+            },
         );
 
         // NO despacha OCR automáticamente — el usuario lo dispara

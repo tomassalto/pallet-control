@@ -40,7 +40,11 @@ class ImageConverter
             $path = trim($dir, '/') . '/' . $filename;
 
             $webpContent = $image->toWebp($quality)->toString();
-            Storage::disk(config('filesystems.default', 'public'))->put($path, $webpContent);
+            $stored = Storage::disk(config('filesystems.default', 'public'))->put($path, $webpContent);
+
+            if (! $stored) {
+                throw new \RuntimeException('No se pudo guardar la imagen convertida.');
+            }
 
             return $path;
         } finally {

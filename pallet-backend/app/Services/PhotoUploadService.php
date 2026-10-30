@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Helpers\ActivityLogger;
-use App\Helpers\ImageConverter;
 use App\Models\Order;
 use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
@@ -16,6 +15,8 @@ use Illuminate\Support\Facades\Storage;
 
 class PhotoUploadService
 {
+    public function __construct(private readonly PhotoPersistenceService $photoPersistence) {}
+
     /**
      * Sube una foto al destino indicado en $params['type'].
      * Devuelve ['ok' => true, 'msg' => '...', 'url' => '...']
@@ -74,24 +75,31 @@ class PhotoUploadService
     {
         $pallet = $this->resolvePallet($data);
 
-        $path = ImageConverter::convertToWebP(
-            $data['photo'], "pallets/{$pallet->id}", 85, 4000, 4000
-        );
+        $path = $this->photoPersistence->persist(
+            $data['photo'],
+            "pallets/{$pallet->id}",
+            85,
+            4000,
+            4000,
+            function (string $path) use ($data, $pallet): string {
+                $photo = PalletPhoto::create([
+                    'pallet_id' => $pallet->id,
+                    'path' => $path,
+                    'original_name' => 'bot-' . now()->format('Ymd_His') . '.jpg',
+                    'note' => $data['note'] ?? 'Subida vía bot',
+                ]);
 
-        $photo = PalletPhoto::create([
-            'pallet_id' => $pallet->id,
-            'path' => $path,
-            'original_name' => 'bot-' . now()->format('Ymd_His') . '.jpg',
-            'note' => $data['note'] ?? 'Subida vía bot',
-        ]);
+                ActivityLogger::log(
+                    action: 'pallet_photo_uploaded',
+                    entityType: 'pallet_photo',
+                    entityId: $photo->id,
+                    description: "Foto agregada al pallet '{$pallet->code}' vía bot",
+                    palletId: $pallet->id,
+                    newValues: ['photo_id' => $photo->id, 'via' => 'bot'],
+                );
 
-        ActivityLogger::log(
-            action: 'pallet_photo_uploaded',
-            entityType: 'pallet_photo',
-            entityId: $photo->id,
-            description: "Foto agregada al pallet '{$pallet->code}' vía bot",
-            palletId: $pallet->id,
-            newValues: ['photo_id' => $photo->id, 'via' => 'bot'],
+                return $path;
+            },
         );
 
         return $this->buildSuccessResponse($path, "Foto guardada en pallet *{$pallet->code}*");
@@ -113,26 +121,33 @@ class PhotoUploadService
             }
         }
 
-        $path = ImageConverter::convertToWebP(
-            $data['photo'], "pallets/{$pallet->id}/bases/{$base->id}", 85, 4000, 4000
-        );
-
-        $photo = PalletBasePhoto::create([
-            'base_id' => $base->id,
-            'path' => $path,
-            'original_name' => 'bot-' . now()->format('Ymd_His') . '.jpg',
-            'note' => $data['note'] ?? 'Subida vía bot',
-        ]);
-
         $baseName = $base->name ?? 'Sin nombre';
 
-        ActivityLogger::log(
-            action: 'base_photo_uploaded',
-            entityType: 'pallet_base_photo',
-            entityId: $photo->id,
-            description: "Foto agregada a base '{$baseName}' del pallet '{$pallet->code}' vía bot",
-            palletId: $pallet->id,
-            newValues: ['photo_id' => $photo->id, 'via' => 'bot'],
+        $path = $this->photoPersistence->persist(
+            $data['photo'],
+            "pallets/{$pallet->id}/bases/{$base->id}",
+            85,
+            4000,
+            4000,
+            function (string $path) use ($base, $baseName, $data, $pallet): string {
+                $photo = PalletBasePhoto::create([
+                    'base_id' => $base->id,
+                    'path' => $path,
+                    'original_name' => 'bot-' . now()->format('Ymd_His') . '.jpg',
+                    'note' => $data['note'] ?? 'Subida vía bot',
+                ]);
+
+                ActivityLogger::log(
+                    action: 'base_photo_uploaded',
+                    entityType: 'pallet_base_photo',
+                    entityId: $photo->id,
+                    description: "Foto agregada a base '{$baseName}' del pallet '{$pallet->code}' vía bot",
+                    palletId: $pallet->id,
+                    newValues: ['photo_id' => $photo->id, 'via' => 'bot'],
+                );
+
+                return $path;
+            },
         );
 
         return $this->buildSuccessResponse($path, "Foto guardada en base *{$baseName}* del pallet *{$pallet->code}*");
@@ -142,31 +157,38 @@ class PhotoUploadService
     {
         $order = $this->resolveOrder($data);
 
-        $ticket = OrderTicket::create([
-            'order_id' => $order->id,
-            'code' => null,
-            'note' => $data['note'] ?? 'Ticket vía bot',
-        ]);
+        $path = $this->photoPersistence->persist(
+            $data['photo'],
+            "orders/{$order->id}/tickets/uploads",
+            95,
+            6000,
+            6000,
+            function (string $path) use ($data, $order): string {
+                $ticket = OrderTicket::create([
+                    'order_id' => $order->id,
+                    'code' => null,
+                    'note' => $data['note'] ?? 'Ticket vía bot',
+                ]);
 
-        $path = ImageConverter::convertToWebP(
-            $data['photo'], "orders/{$order->id}/tickets/{$ticket->id}", 95, 6000, 6000
-        );
+                $photo = OrderTicketPhoto::create([
+                    'ticket_id' => $ticket->id,
+                    'path' => $path,
+                    'original_name' => 'bot-' . now()->format('Ymd_His') . '.jpg',
+                    'note' => $data['note'] ?? null,
+                    'order_index' => 0,
+                ]);
 
-        $photo = OrderTicketPhoto::create([
-            'ticket_id' => $ticket->id,
-            'path' => $path,
-            'original_name' => 'bot-' . now()->format('Ymd_His') . '.jpg',
-            'note' => $data['note'] ?? null,
-            'order_index' => 0,
-        ]);
+                ActivityLogger::log(
+                    action: 'order_ticket_photo_uploaded',
+                    entityType: 'order_ticket_photo',
+                    entityId: $photo->id,
+                    description: "Foto agregada al pedido '{$order->code}' vía bot",
+                    newValues: ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'via' => 'bot'],
+                    orderId: $order->id,
+                );
 
-        ActivityLogger::log(
-            action: 'order_ticket_photo_uploaded',
-            entityType: 'order_ticket_photo',
-            entityId: $photo->id,
-            description: "Foto agregada al pedido '{$order->code}' vía bot",
-            newValues: ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'via' => 'bot'],
-            orderId: $order->id,
+                return $path;
+            },
         );
 
         return $this->buildSuccessResponse($path, "Foto guardada en ticket del pedido *#{$order->code}*");
