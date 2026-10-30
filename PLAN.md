@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-30
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** las subidas web y Telegram compensan el objeto si falla la transacción de registro y auditoría (`H-011`/`H-017`, parcial; `D-017`). `H-006` sigue abierto; `H-029` y `H-038` requieren evidencia real de Render. Siguiente bloque autónomo: borrado recuperable de fotos y tickets sin asumir una transacción distribuida.
+**Trabajo actual:** subidas con compensación (`D-017`) y borrados de fotos/tickets/pallets/bases con intención durable, job post-commit y barrido supervisado (`D-018`); `H-011`/`H-017` resueltos para los flujos auditados. `H-006` sigue abierto; `H-029` y `H-038` requieren evidencia real de Render (Nixpacks no ejecuta worker ni barrido).
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -72,11 +72,11 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | H-008 | Race duplicando EAN en `order_items` | 🟡 medio | Alto | ✅ sí |
 | H-009 | Cero soft deletes en todo el esquema | 🔴 alto | Alto | 🟡 parcial |
 | H-010 | Reducir `qty` sin validar lo ya asignado | 🟡 medio | Medio | ✅ sí |
-| H-011 | Escrituras multi-tabla sin transacción | 🟡 medio | Medio | 🟡 parcial |
+| H-011 | Escrituras multi-tabla sin transacción — ✅ resuelto en flujos auditados (D-015 a D-018) | 🟡 medio | Medio | 🟡 parcial |
 | H-012 | FKs sin índice (Postgres) — ✅ resuelto | 🟢 bajo | Medio | ✅ sí |
 | H-013 | `activity_logs.pallet_id` no es FK real — ✅ resuelto | 🟢 bajo | Bajo | ✅ sí |
 | H-015 | Sin CHECK constraints generales — ✅ resuelto para reglas por fila auditadas | 🟡 medio | Bajo | 🟡 parcial |
-| H-017 | `ActivityLogger::log()` no atómico | 🟢 bajo | Bajo | ✅ sí (efecto colateral de H-011) |
+| H-017 | `ActivityLogger::log()` no atómico — ✅ resuelto en flujos auditados | 🟢 bajo | Bajo | ✅ sí (efecto colateral de H-011) |
 
 ### 🟡 Performance
 

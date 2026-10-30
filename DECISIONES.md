@@ -452,3 +452,37 @@ Aplicar el mismo servicio a los endpoints web y al servicio activo usado por Tel
 La compensación no convierte DB y object storage en una transacción distribuida: una caída durante el cleanup aún puede dejar un objeto huérfano, que queda señalado críticamente para reconciliación. El patrón sirve para altas; los borrados requieren intención durable y reintento, y se resuelven por separado.
 
 **Referencia normativa:** `BE-ARCH`, `BE-TX`, `BE-ERR`, `SEC-FILE`, `SEC-LOG`, `DO-INFRA`, `QA-INVARIANT`, `QA-RESILIENCE`
+
+---
+
+## D-018 — Borrado de archivos mediante intención durable (outbox)
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+Los borrados de fotos de pallet, base y ticket, y de tickets completos, eliminaban primero el objeto y después la fila y el audit log, sin transacción. Un fallo de base dejaba filas apuntando a archivos inexistentes o borrados sin auditoría; un fallo de storage —`delete()` puede devolver `false` o lanzar— dejaba objetos huérfanos sin rastro. Borrar un pallet o una base eliminaba las fotos por cascada sin limpiar sus objetos. DB y object storage no comparten transacción.
+
+La cola de producción usa el driver `database` con un worker supervisado; los tests usan `sync`. Un job despachado entre el commit y el `dispatch` se pierde si el proceso cae, y no existe scheduler activo en el runtime: `schedule:work` no corre y activarlo encendería además `pallet:archive`, cuya política de retención depende de H-009.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Borrar objeto dentro de la transacción | Simple | Llamada remota con transacción abierta; si la DB revierte, el archivo ya no existe |
+| Job after-commit sin registro | Sin tabla nueva | Un crash entre commit y dispatch pierde la intención; sin estado visible |
+| Intención en tabla propia + job after-commit + barrido | Durable, visible, reintentable e idempotente | Tabla y proceso adicionales; limpieza eventual, no inmediata |
+
+**Decisión**
+La base de datos es la fuente autoritativa. Cada borrado bloquea y relee las filas afectadas, elimina la entidad, crea el audit log y registra una intención por objeto en `pending_file_deletions` (disco y ruta, únicos) dentro de la misma transacción. Si cualquiera falla, no queda entidad borrada, auditoría ni intención.
+
+Después del commit se despacha `DeleteStoredFile` con el identificador de la intención. El borrado físico se considera satisfecho si `delete()` confirma o si el objeto ya no existe. Un `false` con objeto presente o una excepción incrementa intentos, registra la clase del error, programa backoff acotado y deja la intención pendiente. Reintentar una intención completada no tiene efecto.
+
+`storage:retry-pending-deletions` procesa intenciones vencidas sin depender de la cola y recupera trabajos perdidos por crash. Corre como programa supervisado propio cada diez minutos, sin activar el scheduler. Tras diez intentos la intención queda agotada: se excluye del barrido automático, se alerta como crítica y sólo se reprocesa con `--include-exhausted` después de diagnosticar el storage.
+
+El mismo mecanismo cubre borrado de pallet y de base, cuyas fotos se eliminaban por cascada sin limpiar objetos. `pallet:archive` y el reset manual de D-011 quedan fuera de este cambio.
+
+**Trade-off aceptado**
+El borrado físico es eventual: durante una caída de R2 el objeto sigue existiendo, inaccesible desde la aplicación porque ninguna fila operativa lo referencia, hasta que un reintento confirme su eliminación. El usuario recibe éxito cuando la base confirmó. Las intenciones completadas se conservan como evidencia; su depuración requiere una política de retención posterior. Nixpacks no ejecuta worker ni barrido, por lo que en ese camino la limpieza queda pendiente hasta resolver H-038.
+
+**Referencia normativa:** `BE-TX`, `BE-ASYNC`, `BE-ERR`, `BE-DATA`, `SEC-FILE`, `SEC-LOG`, `DO-INFRA`, `QA-INVARIANT`, `QA-RESILIENCE`

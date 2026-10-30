@@ -185,7 +185,9 @@ Referencia:  `BE-TX`, `QA-INVARIANT`
 
 Las subidas de fotos web y del servicio activo de Telegram guardan primero el objeto y luego confirman registro y auditoría dentro de una transacción. Si cualquier escritura falla, un servicio común elimina el objeto; `ImageConverter` ahora también falla explícitamente cuando el driver devuelve `false`. En el alta de tickets por bot, ticket, foto y auditoría se crean dentro de la misma transacción, después de almacenar la imagen.
 
-**Estado:** 🟡 resuelto para solicitudes faltantes en `eaadf87`, asociaciones pedido/pallet en `a59022b` y subidas de fotos en `ee41860`; Actions run `41005625780` con los tres jobs verdes. Permanece abierto para los borrados físicos de fotos/tickets, que necesitan recuperación durable ante fallos del object storage.
+Los borrados de fotos de pallet, base y ticket, de tickets completos, de pallets y de bases bloquean y releen sus filas, eliminan la entidad, auditan y registran una intención durable por objeto en `pending_file_deletions` dentro de una transacción (D-018). El borrado físico ocurre después del commit mediante un job y un barrido supervisado con backoff, intentos acotados y alerta crítica al agotarse. Tests acreditan que un fallo de auditoría conserva filas y archivos sin intención, que un fallo de storage conserva la intención para reintento y que reprocesar es idempotente.
+
+**Estado:** ✅ resuelto para los flujos auditados: solicitudes faltantes en `eaadf87`, asociaciones pedido/pallet en `a59022b`, subidas de fotos en `ee41860` y borrados de fotos/tickets en la rama `hardening/photo-deletion-recovery` (commit y CI en `EJECUCION.md`). `pallet:archive` conserva el orden anterior pero no se ejecuta mientras no exista scheduler activo.
 
 #### H-012 — Foreign keys sin índice (Postgres no las indexa solo)
 ```
@@ -242,7 +244,7 @@ Severidad:   ⚪ bajo · Categoría: integridad de datos
 Ubicación:   app/Helpers/ActivityLogger.php
 ```
 **Qué está pasando:** al no correr dentro de la misma transacción que el cambio de negocio (ver H-011), una falla del insert de auditoría después de un commit ya aplicado pierde esa entrada del log silenciosamente.
-**Estado:** 🟡 resuelto para `adjust-item` en R-01, crear/actualizar bases en R-02, revisión de solicitudes en `eaadf87`, asociación pedido/pallet en `a59022b` y subidas web/Telegram en `ee41860`; abierto en los borrados de archivos citados por H-011. Tests fuerzan la falla de `activity_logs` y acreditan rollback del estado asociado y compensación del objeto subido.
+**Estado:** ✅ resuelto para `adjust-item` en R-01, crear/actualizar bases en R-02, revisión de solicitudes en `eaadf87`, asociación pedido/pallet en `a59022b` y subidas web/Telegram en `ee41860` y borrados de fotos/tickets/pallets/bases según D-018. Tests fuerzan la falla de `activity_logs` y acreditan rollback del estado asociado y compensación del objeto subido.
 
 ---
 

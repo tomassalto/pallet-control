@@ -301,9 +301,25 @@ Rama creada desde el cierre documental de asociación pedido/pallet. Se aplicaro
 
 Evidencia funcional: commit `ee41860`.
 
-## Próxima sesión — borrado recuperable de fotos y tickets
+## Última sesión cerrada — borrado recuperable de fotos y tickets
 
-Crear la rama desde este cierre, nunca desde `master`. Repetir la ruta `BE-TX`, `BE-ASYNC`, `SEC-FILE`, `SEC-LOG`, `DO-INFRA`, `QA-INVARIANT` y `QA-RESILIENCE`. Diseñar un mecanismo durable de limpieza/reintento para que la base siga siendo autoritativa y una falla del object storage no pierda la intención de borrado. Cubrir foto de pallet, foto de base, foto de ticket y ticket completo; no presentar el borrado directo como atómico con la base.
+Rama `hardening/photo-deletion-recovery`, creada desde el cierre de compensación de subidas (`1792aaa`). Se aplicaron `BE-TX`, `BE-ASYNC`, `BE-ERR`, `BE-DATA`, `SEC-FILE`, `SEC-LOG`, `DO-INFRA`, `QA-INVARIANT` y `QA-RESILIENCE`. No existía un mecanismo equivalente reutilizable: sólo borrados directos best-effort.
+
+1. D-018 define una intención durable por objeto (`pending_file_deletions`) registrada en la misma transacción que borra la entidad y crea la auditoría.
+2. Foto de pallet, foto de base, foto de ticket, ticket completo, pallet y base bloquean y releen sus filas, borran, auditan y registran intenciones sin llamar al storage.
+3. `DeleteStoredFile` se despacha después del commit; `delete()` en `false` con objeto presente o una excepción incrementan intentos con backoff y dejan la intención pendiente. Un objeto inexistente satisface la limpieza.
+4. `storage:retry-pending-deletions` recupera intenciones vencidas sin depender de la cola, incluidas las perdidas por crash entre commit y dispatch. Supervisor lo ejecuta cada diez minutos como programa propio; no se activó el scheduler para no encender `pallet:archive`.
+5. Tras diez intentos la intención queda agotada, se alerta como crítica y sólo se reprocesa con `--include-exhausted`.
+6. Cola: producción usa `database` con worker supervisado; tests usan `sync`, donde un fallo post-commit del job no convierte en 500 un borrado ya confirmado.
+7. Quince tests cubren rollback por auditoría, intención durable, fallo y recuperación de storage, idempotencia, archivo inexistente, intenciones agotadas, ticket con varias fotos, pallet y base.
+8. Migración probada `up → down → up` sobre SQLite temporal.
+9. Gates locales: Pint, PHPStan, 147 tests/495 assertions más un benchmark condicional omitido, y Composer audit verdes.
+
+Pendiente: `pallet:archive` sigue borrando objetos antes que filas, pero no se ejecuta porque no hay scheduler activo; Nixpacks no corre worker ni barrido (H-038); las intenciones completadas aún no tienen política de retención.
+
+## Próxima sesión
+
+Elegir desde `PLAN.md`: `H-006` (defensa transversal asignado ≤ pedido) o la verificación externa de `H-029`/`H-038` en Render.
 
 ## Sesiones R-02 a R-07
 
