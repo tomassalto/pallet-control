@@ -40,10 +40,4 @@ if [ "$IMPORT_BULTO" = "true" ]; then
     echo ">>> Import completado. Acordate de borrar la variable IMPORT_BULTO en Render."
 fi
 
-if [ "$RESET_ON_STARTUP" = "true" ]; then
-    echo ">>> RESET_ON_STARTUP=true detectado, corriendo app:reset..."
-    php artisan app:reset --confirm
-    echo ">>> Reset completado. Acordate de borrar la variable RESET_ON_STARTUP en Render."
-fi
-
 PORT=${PORT:-8000} exec supervisord -c /etc/supervisord.conf

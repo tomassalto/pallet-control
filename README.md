@@ -258,7 +258,6 @@ npm start
 | `AZURE_VISION_KEY` | Azure Computer Vision API key | — |
 | `REGISTRATION_ENABLED` | `true` to allow new user sign-ups | `true` |
 | `BOT_SECRET` | Shared secret for the WhatsApp bot (`X-Bot-Secret` header) | — |
-| `RESET_ON_STARTUP` | `true` wipes all data on container start (prod reset only) | `false` |
 
 ### WhatsApp Bot
 
@@ -404,12 +403,11 @@ REGISTRATION_ENABLED=false
 
 ### Production data reset
 
-To wipe all data (except products) on a deployed instance:
+The application never resets data automatically during startup. To wipe all data except products, first create and verify a backup, then run from an explicitly authorized maintenance shell:
 
-1. Add `RESET_ON_STARTUP=true` to the Render environment variables
-2. Deploy
-3. Once the deploy completes, remove the variable
-4. Deploy again
+```bash
+php artisan app:reset --confirm
+```
 
 > ⚠️ This permanently deletes all pallets, orders, photos, and users. Cannot be undone.
 

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class ResetForProduction extends Command
@@ -19,10 +20,10 @@ class ResetForProduction extends Command
         'pallet_base_photos',
         'order_ticket_photos',
         'order_tickets',
+        'missing_item_requests',
         'pallet_photos',
         'pallet_bases',
         'order_items',
-        'movements',
         'pending_items',
         'activity_logs',
         'order_pallet',
@@ -32,6 +33,11 @@ class ResetForProduction extends Command
         'personal_access_tokens',
         'sessions',
         'password_reset_tokens',
+        'jobs',
+        'failed_jobs',
+        'job_batches',
+        'cache_locks',
+        'cache',
         'users',
     ];
 
@@ -43,6 +49,17 @@ class ResetForProduction extends Command
             return 1;
         }
 
+        $missingTables = array_values(array_filter(
+            $this->tables,
+            fn (string $table): bool => ! Schema::hasTable($table),
+        ));
+
+        if ($missingTables !== []) {
+            $this->error('Reset cancelado: faltan tablas esperadas: ' . implode(', ', $missingTables));
+
+            return 1;
+        }
+
         $this->warn('');
         $this->warn('  ⚠️  RESET DE PRODUCCIÓN');
         $this->warn('  Se borrarán TODOS los datos operativos.');
@@ -50,36 +67,30 @@ class ResetForProduction extends Command
         $this->warn('  Ejecutando porque --confirm fue pasado explícitamente...');
         $this->warn('');
 
+        // ── Vaciar tablas ─────────────────────────────────────────────────
+        // Las tablas están ordenadas respetando FK constraints (hijos primero),
+        // por eso no necesitamos deshabilitar checks — DELETE respeta el orden.
+        $this->info('Vaciando tablas...');
+
+        DB::transaction(function (): void {
+            foreach ($this->tables as $table) {
+                DB::table($table)->delete();
+                $this->line("  ✓ {$table}");
+            }
+        });
+
         // ── Borrar archivos de storage ────────────────────────────────────
+        // Se ejecuta después del commit para no borrar evidencia si falla la DB.
         $this->info('Borrando archivos de storage...');
         $disk = config('filesystems.default', 'public');
 
-        $dirs = ['pallets', 'orders'];
-        foreach ($dirs as $dir) {
-            try {
-                $files = Storage::disk($disk)->allFiles($dir);
-                if (! empty($files)) {
-                    Storage::disk($disk)->delete($files);
-                    $this->line("  ✓ {$dir}/: " . count($files) . ' archivos eliminados');
-                } else {
-                    $this->line("  - {$dir}/: vacío");
-                }
-            } catch (\Throwable $e) {
-                $this->warn("  ⚠ No se pudo limpiar {$dir}/: " . $e->getMessage());
-            }
-        }
-
-        // ── Truncar tablas ────────────────────────────────────────────────
-        // Las tablas están ordenadas respetando FK constraints (hijos primero),
-        // por eso no necesitamos deshabilitar checks — DELETE respeta el orden.
-        $this->info('Truncando tablas...');
-
-        foreach ($this->tables as $table) {
-            try {
-                DB::table($table)->delete();
-                $this->line("  ✓ {$table}");
-            } catch (\Throwable $e) {
-                $this->warn("  ⚠ {$table}: " . $e->getMessage());
+        foreach (['pallets', 'orders'] as $dir) {
+            $files = Storage::disk($disk)->allFiles($dir);
+            if (! empty($files)) {
+                Storage::disk($disk)->delete($files);
+                $this->line("  ✓ {$dir}/: " . count($files) . ' archivos eliminados');
+            } else {
+                $this->line("  - {$dir}/: vacío");
             }
         }
 
