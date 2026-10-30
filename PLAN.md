@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-29
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** imagen reproducible y operable cerrada; siguiente bloque de repositorio: comandos/configuración de deploy legada (`H-037`, `H-038`).
+**Trabajo actual:** reset automático eliminado y comando destructivo endurecido; `H-038` requiere acreditar el modo real de Render. Siguiente bloque autónomo: baseline/performance (`H-040`).
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -32,7 +32,7 @@ Fase 6 — Presentación          🔲
 
 _(Estos 3 primero, antes que cualquier rebanada. Los dos primeros no son código — son 5 minutos en el dashboard de Render.)_
 
-1. **Verificar en Render que `RESET_ON_STARTUP` esté ausente/`false`** — si quedó en `true`, el próximo deploy borra toda la DB operativa. `H-028`.
+1. **Reset productivo seguro** — ✅ `RESET_ON_STARTUP` ya no tiene efecto; sólo existe comando manual confirmado y probado. `H-028`, `H-037`, `D-011`.
 2. **Verificar en Render que `FILESYSTEM_DISK=r2`** (no `public`/`local`) — si no, las fotos de pallets/tickets se pierden en el próximo deploy. `H-029`.
 3. **Normalizar errores y evitar fugas internas** — ✅ cerrado en `ce48ca3`; contrato `D-008`, handler global y 5xx correlacionables. `H-018`, `H-019`, `H-024`.
 
@@ -63,7 +63,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 
 | ID | Hallazgo | Esfuerzo | Impacto | Automatizable |
 |---|---|---|---|---|
-| H-028 | `RESET_ON_STARTUP` puede borrar toda la DB | 🟢 bajo (verificar) / 🟡 medio (rediseñar el safeguard) | **Altísimo** | ✅ verificación / ❌ rediseño |
+| H-028 | `RESET_ON_STARTUP` puede borrar toda la DB — ✅ resuelto estructuralmente | 🟢 bajo (verificar) / 🟡 medio (rediseñar el safeguard) | **Altísimo** | ✅ verificación / ❌ rediseño |
 | H-029 | Fotos sin persistencia garantizada en redeploy | 🟢 bajo (verificar) / 🟡 medio (warning en boot) | **Altísimo** | 🟡 parcial |
 | H-005 | Race condition en `createBase`/`updateBase` | 🔴 alto | Alto | ❌ no |
 | H-006 | Sin CHECK constraint "asignado ≤ pedido" | 🟡 medio | Alto | 🟡 parcial |
@@ -226,7 +226,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 
 ```
 🔥 URGENTE, no-código:
-□ Verificar RESET_ON_STARTUP en Render                         → H-028
+✅ Eliminar RESET_ON_STARTUP del arranque y probar comando manual → H-028, H-037
 □ Verificar FILESYSTEM_DISK=r2 en Render                        → H-029
 
 Antes de tocar código de negocio (Fase 1 — red de seguridad):

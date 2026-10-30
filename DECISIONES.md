@@ -312,3 +312,23 @@ CI construye la imagen real y verifica que no contenga Composer, tests ni docume
 Los digests aportan reproducibilidad pero no reciben actualizaciones implícitas. Deben renovarse mediante cambio revisado cuando exista parche de seguridad o actualización planificada, ejecutando nuevamente build, audits y gates. Readiness sólo acredita la dependencia crítica inmediata —base de datos— y no convierte R2, OCR o Telegram en requisitos para servir tráfico general.
 
 **Referencia normativa:** `DO-CONTAINER`, `DO-SUPPLY`, `DO-RELEASE`, `SEC-SUPPLY`, `QA-SEC`, `QA-RESILIENCE`
+
+---
+
+## D-011 — Reset productivo exclusivamente manual
+
+**Fecha:** 2026-10-29
+**Estado:** ✅ vigente
+
+**Contexto**
+El entrypoint ejecutaba un borrado irreversible cuando `RESET_ON_STARTUP=true`. Una variable olvidada podía repetir el reset en cada deploy y el comando continuaba aunque una tabla no existiera o un `DELETE` fallara.
+
+**Decisión**
+Eliminar por completo el reset automático del arranque. El único camino admitido es ejecutar `php artisan app:reset --confirm` desde una sesión de mantenimiento explícitamente autorizada y después de verificar un backup.
+
+El comando hace preflight de todas las tablas esperadas antes de modificar datos, incluye tablas operativas vigentes y ya no referencia `movements`. Los `DELETE` se ejecutan dentro de una transacción y sólo después del commit se eliminan archivos de pallets y pedidos. Productos permanecen fuera del reset por definición funcional.
+
+**Trade-off aceptado**
+El reset deja de poder automatizarse con una variable de Render y requiere acceso operativo consciente. Base de datos y object storage no comparten transacción: si falla la limpieza de archivos después del commit, el comando falla y puede dejar objetos huérfanos, pero nunca borra archivos antes de saber que la base confirmó.
+
+**Referencia normativa:** `DO-ENV`, `DO-RELEASE`, `DO-DR`, `SEC-SECRET`, `QA-SEC`, `QA-RESILIENCE`

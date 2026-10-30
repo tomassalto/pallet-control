@@ -362,7 +362,8 @@ Referencia:  `DO-INFRA`, `DO-DR`
 ```
 **Qué está pasando:** si esa env var queda en `true` en Render, el próximo boot ejecuta `php artisan app:reset --confirm` automáticamente — `--confirm` viene hardcodeado en el script, cero paso humano intermedio.
 **Por qué importa acá:** el propio comentario del script ("Acordate de borrar la variable...") indica que ya es un riesgo conocido/casi ocurrido. Borra orders, pallets, bases, items, users, activity_logs — todo excepto `products`.
-**Estado:** 🔲 abierto — **verificar HOY en el dashboard de Render que esté ausente/false**
+**Resolución:** el entrypoint ya no consulta `RESET_ON_STARTUP` ni puede ejecutar `app:reset`. `D-011` limita el borrado al comando manual con `--confirm`, preflight de esquema, transacción DB y tests de preservación de productos. Una variable residual en Render queda sin efecto.
+**Estado:** ✅ resuelto estructuralmente en `f908d39`; Actions run `40982444647` verde.
 
 #### H-029 — Fotos sin garantía de persistencia en redeploy
 ```
@@ -439,7 +440,8 @@ Ubicación:   Dockerfile
 Severidad:   ⚪ bajo · Categoría: calidad
 Ubicación:   app/Console/Commands/ResetForProduction.php (tabla `movements`)
 ```
-**Estado:** 🔲 abierto
+**Resolución:** `movements` fue retirada; se incorporaron las tablas operativas vigentes y el comando cancela antes de borrar si el esquema no coincide con lo esperado. Tests cubren falta de confirmación, reset correcto, preflight fallido y ausencia de trigger por entrypoint.
+**Estado:** ✅ resuelto en `f908d39`; Actions run `40982444647` verde.
 
 #### H-038 — `nixpacks.toml` de vigencia ambigua junto al Dockerfile
 ```

@@ -196,9 +196,26 @@ Rama creada desde el cierre de hardening anterior. Se aplicaron `DO-CONTAINER`, 
 
 Evidencia funcional: commit `0860d46`.
 
-## Próxima sesión — deploy legado y comando destructivo
+## Última sesión cerrada — comando destructivo
 
-Crear la rama desde este cierre, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `DO-ENV`, `DO-CONTAINER`, `DO-RELEASE`, `DO-DR`, `SEC-SECRET`, `QA-SEC` y `QA-RESILIENCE`. Atender `H-037` y decidir `H-038` con evidencia del camino de deploy vigente; no eliminar Nixpacks ni asumir configuración de Render sin acreditarla. `H-028/H-029` continúan como verificaciones externas críticas.
+Rama creada desde el cierre de imagen. Se aplicaron `DO-ENV`, `DO-RELEASE`, `DO-DR`, `SEC-SECRET`, `QA-SEC` y `QA-RESILIENCE`.
+
+1. `D-011` elimina el reset automático productivo.
+2. `docker-entrypoint.sh` no contiene `RESET_ON_STARTUP` ni invoca `app:reset`.
+3. El comando manual exige `--confirm` y cancela antes de borrar si falta una tabla esperada.
+4. Tablas DB se vacían dentro de una transacción; archivos se eliminan sólo después del commit.
+5. `movements` fue retirada y se agregaron tablas operativas vigentes.
+6. Tests prueban confirmación, preservación de productos, limpieza, preflight y entrypoint.
+7. Suite local verde: 98 tests, 292 assertions; Pint y PHPStan verdes.
+8. Actions run `40982444647`: pipeline verde, incluida construcción e inspección de imagen.
+
+Evidencia funcional: commit `f908d39`.
+
+`H-038` continúa abierto: decidir Docker vs. Nixpacks exige acreditar el entorno real de Render. `H-029` también requiere comprobar storage externo. Ninguno se cierra por inferencia desde el repositorio.
+
+## Próxima sesión — baseline y paginación de pendientes
+
+Crear la rama desde este cierre, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `BE-PERF`, `BE-API`, `FE-DATA`, `QA-PERF`, `QA-CONTRACT` y `DO-OBS`. Medir primero `H-040`, caracterizar el contrato consumidor y recién entonces paginar sin afirmar mejoras no observadas.
 
 ## Sesiones R-02 a R-07
 
