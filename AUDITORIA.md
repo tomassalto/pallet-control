@@ -305,7 +305,7 @@ Ubicación:   PalletBaseController.php:63,85,186 — PalletBaseService.php:48
 Referencia:  `BE-ERR`
 ```
 **Resolución final:** ajustar un ítem en un pallet finalizado devuelve `409` (D-025); los servicios transaccionales ya usaban `409` para disponibilidad y pertenencia.
-**Estado:** ✅ resuelto en R-01 a R-03 y en commit `7344135` (CI en `EJECUCION.md`).
+**Estado:** ✅ resuelto en R-01 a R-03 y en commit `7344135`; Actions run `41036574975` con los tres jobs verdes.
 
 #### H-024 — Formato de respuesta de error no estandarizado
 ```
@@ -337,7 +337,7 @@ Severidad:   ⚪ bajo · Categoría: calidad
 Ubicación:   OrderController.php:305 vs PalletController.php:224,254
 ```
 **Resolución:** finalizar pedido, finalizar pallet y reabrir pallet expresan el conflicto de estado con `409` y conservan su cuerpo (D-025).
-**Estado:** ✅ resuelto en commit `7344135` (CI en `EJECUCION.md`).
+**Estado:** ✅ resuelto en commit `7344135`; Actions run `41036574975` con los tres jobs verdes.
 
 #### H-039 — Prácticamente sin tests
 ```

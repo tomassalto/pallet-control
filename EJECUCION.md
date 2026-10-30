@@ -431,7 +431,7 @@ Rama `hardening/api-status-consistency`, creada desde `quality/frontend-critical
 5. El frontend ya mostraba el `message`; un test nuevo lo acredita para finalizar pallet.
 6. Gates locales: Pint, PHPStan, 205 tests/706 assertions, Composer audit, grupo PostgreSQL 16/56, y frontend con lint, 33 tests y build, todos verdes.
 
-Evidencia funcional: commit `7344135`.
+Evidencia funcional: commit `7344135`. Actions run `41036574975` sobre `cb0ff6f`: `ci`, `postgres-concurrency` y `container-security` verdes.
 
 Pendiente: finalizar y reabrir siguen sin lock ni transacción; el resto de H-020; H-029, H-038, branch protection y backups requieren evidencia externa.
 

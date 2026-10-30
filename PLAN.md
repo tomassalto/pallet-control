@@ -93,7 +93,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | H-018 | Sin handler global de excepciones — ✅ resuelto | 🟡 medio | Medio | ❌ no |
 | H-031 | Sin CI de ningún tipo | 🟢 bajo | Alto | ✅ sí |
 | H-020 | 16 controladores validan inline | 🔴 alto (son 16 archivos) | Bajo | 🟡 parcial |
-| H-021 / H-022 / H-023 / H-027 | Códigos HTTP inconsistentes (401/403/409 vs 422/400) | 🟢 bajo c/u | Bajo | 🟡 parcial (CI puede flaggear, no decidir) |
+| H-021 / H-022 / H-023 / H-027 | Códigos HTTP inconsistentes (401/403/409 vs 422/400) — ✅ resueltos (R-07, D-025) | 🟢 bajo c/u | Bajo | 🟡 parcial (CI puede flaggear, no decidir) |
 | H-024 | Formato de error no estandarizado — ✅ resuelto | 🟡 medio (depende de H-018) | Bajo | ❌ no |
 | H-041 | Larastan/PHPStan no instalado | 🟢 bajo | Medio | ✅ sí |
 | H-033 / H-034 / H-035 / H-036 | Docker: Composer, contexto, digests y healthcheck — ✅ resueltos | 🟢 bajo c/u | Bajo | ✅ sí |
@@ -266,7 +266,7 @@ Decisiones que necesitan entrada en DECISIONES.md antes de ejecutarse:
 
 Más adelante (Fase 3+):
 □ Migración de los 16 controladores a Form Request                  → H-020
-□ Códigos HTTP: pasada de consistencia (422→409/403/401 según caso) → H-021,022,023,027
+✅ Códigos HTTP: pasada de consistencia (422→409/403/401 según caso) → H-021,022,023,027 (D-025)
 ✅ PendingItemController::index con paginación y evidencia             → H-040, D-012
 □ Infraestructura futura                                                → `DO-INFRA`, `DO-EDGE`, `DO-RELEASE`
 □ Observabilidad y uptime                                               → `DO-OBS`
