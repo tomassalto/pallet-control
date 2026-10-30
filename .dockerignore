@@ -8,3 +8,10 @@ whatsapp-bot/node_modules
 .git
 **/.env
 .claude
+.github
+benchmarks
+whatsapp-bot
+scraper/node_modules
+**/*.md
+pallet-backend/tests
+pallet-backend/storage/logs/*

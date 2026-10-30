@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 
@@ -8,6 +9,22 @@ Route::get('/up', function () {
         'ok' => true,
         'service' => 'pallet-control',
         'time' => now()->toIso8601String(),
+    ]);
+});
+
+Route::get('/ready', function () {
+    try {
+        DB::selectOne('select 1');
+    } catch (Throwable) {
+        return response()->json([
+            'ok' => false,
+            'service' => 'pallet-control',
+        ], 503);
+    }
+
+    return response()->json([
+        'ok' => true,
+        'service' => 'pallet-control',
     ]);
 });
 
@@ -73,4 +90,4 @@ Route::get('/{any?}', function (string $any = '') {
 
     // Todo lo demás → SPA
     return File::get(public_path('app/index.html'));
-})->where('any', '^(?!api|storage|check-php-config|up).*$');
+})->where('any', '^(?!api|storage|check-php-config|up|ready).*$');

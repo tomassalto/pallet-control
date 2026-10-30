@@ -168,6 +168,12 @@ jobs:
         run: |
           test "$(docker image inspect --format '{{.Config.User}}' pallet-control:ci)" = "www-data"
           test "$(docker run --rm --entrypoint id pallet-control:ci -u)" != "0"
+          test -z "$(docker run --rm --entrypoint sh pallet-control:ci -c 'command -v composer || true')"
+          docker run --rm --entrypoint sh pallet-control:ci -c 'test ! -e /app/pallet-backend/tests && test ! -e /app/pallet-backend/README.md'
+
+      - name: Verify healthcheck contract
+        run: |
+          docker image inspect --format '{{json .Config.Healthcheck.Test}}' pallet-control:ci | grep -F '/ready'
 
       - name: Verify production debug guard
         run: |
