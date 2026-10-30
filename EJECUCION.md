@@ -416,7 +416,7 @@ Rama `quality/frontend-critical-flows`, creada desde `quality/frontend-test-foun
 4. Los tests que fijaban los defectos se actualizaron al comportamiento corregido, y se agregaron casos de corte por tiempo, corte por errores, reinicio del contador y limpieza de cache.
 5. Gates locales: lint, 32 tests frontend en tres corridas, build y audit desde moderado verdes; el backend no cambió.
 
-Evidencia funcional: commits `376b3f9` y `46d4f54`.
+Evidencia funcional: commits `376b3f9` y `46d4f54`. Actions run `41034937602` sobre `5307801`: `ci` (lint, tests y build frontend incluidos), `postgres-concurrency` y `container-security` verdes.
 
 Pendiente: un E2E con navegador real para cámara, escáner y service worker.
 
