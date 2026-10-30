@@ -113,7 +113,7 @@ Referencia:  `BE-VALID`, `BE-TX`, `DOMINIO.md`
 **Por qué importa acá:** un bug futuro, un `tinker`, o el propio `adjustItem` (ver H-006b) puede violar la invariante si sólo existe una comprobación parcial en PHP. `BE-VALID` exige defensas adecuadas a la naturaleza agregada de la regla.
 **Resolución transversal:** D-020 agrega triggers en PostgreSQL y SQLite que bloquean el `order_item` y rechazan cualquier asignación o reducción de cantidad que deje la suma por encima de lo pedido. El inventario encontró dos escritores fuera de D-003: el import de pedidos, que ahora bloquea y responde `409` sin escribir, y la desvinculación de pallet, que ahora es transaccional.
 **Evidencia:** tests SQLite de guarda directa, límite exacto, preflight, import y desvinculación; tests PostgreSQL de carrera real entre dos conexiones, import contra adjust, recorridos cruzados sin deadlock y migración reversible.
-**Estado:** ✅ resuelto en commits `39a45ab` y `24b5eea`; Actions run `41020938251` con los tres jobs verdes.
+**Estado:** ✅ resuelto en commits `39a45ab`, `24b5eea` y `6b4b48b`; Actions run `41024434735` con los tres jobs verdes.
 
 #### H-006b — `adjustItem` no valida contra el total pedido
 ```
