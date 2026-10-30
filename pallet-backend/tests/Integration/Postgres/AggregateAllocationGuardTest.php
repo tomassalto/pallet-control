@@ -245,6 +245,51 @@ class AggregateAllocationGuardTest extends TestCase
         $this->assertLessThanOrEqual($item->qty, $this->assignedTotal($item->id));
     }
 
+    public function test_migrate_vs_adjust_concurrentes_no_producen_deadlock(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $token = $user->createToken('postgres-concurrency')->plainTextToken;
+        $order = Order::factory()->create();
+        $item = OrderItem::factory()->for($order)->create(['qty' => 10]);
+        $pallet = Pallet::factory()->create();
+        $pallet->orders()->attach($order->id);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+        $base->orderItems()->attach($item->id, ['qty' => 7]);
+        $destPallet = Pallet::factory()->create();
+        $destPallet->orders()->attach($order->id);
+        $destBase = PalletBase::factory()->for($destPallet, 'pallet')->create();
+
+        $responses = $this->sendJsonConcurrently([
+            [
+                'port' => 18011,
+                'method' => 'POST',
+                'path' => "/api/v1/pallets/{$pallet->id}/bases/{$base->id}/migrate",
+                'payload' => [
+                    'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+                    'destination_pallet_id' => $destPallet->id,
+                    'destination_base_id' => $destBase->id,
+                ],
+                'token' => $token,
+            ],
+            [
+                'port' => 18012,
+                'method' => 'PATCH',
+                'path' => "/api/v1/pallets/{$pallet->id}/bases/{$base->id}/adjust-item",
+                'payload' => ['order_item_id' => $item->id, 'qty' => 6],
+                'token' => $token,
+            ],
+        ]);
+
+        // Ambos recorridos ordenan pallet → bases → order_items →
+        // asignaciones: ninguno puede terminar en 500 por deadlock.
+        foreach ($responses as $response) {
+            $this->assertNotSame(500, $response['status'], json_encode($responses, JSON_PRETTY_PRINT));
+        }
+
+        $item->refresh();
+        $this->assertLessThanOrEqual($item->qty, $this->assignedTotal($item->id));
+    }
+
     public function test_import_vs_crear_base_concurrentes_no_producen_deadlock(): void
     {
         $user = User::factory()->withRole()->create();

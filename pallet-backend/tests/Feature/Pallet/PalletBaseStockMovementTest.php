@@ -231,7 +231,8 @@ class PalletBaseStockMovementTest extends TestCase
         $queryCount = count(DB::getQueryLog());
         DB::disableQueryLog();
 
-        $this->assertSame(14, $queryCount, "La creación ejecutó {$queryCount} queries.");
+        // 15 = 14 + el FOR SHARE del pallet que exige la orden de locks D-020.
+        $this->assertSame(15, $queryCount, "La creación ejecutó {$queryCount} queries.");
     }
 
     // ───────────────────────────────────────────────────────────
@@ -556,7 +557,9 @@ class PalletBaseStockMovementTest extends TestCase
         $queryCount = count(DB::getQueryLog());
         DB::disableQueryLog();
 
-        $this->assertSame(9, $queryCount, "El ajuste ejecutó {$queryCount} queries.");
+        // 11 = 9 + los FOR SHARE de pallet y base que exige la orden de
+        // locks D-020 (los INSERT con FK toman FOR KEY SHARE).
+        $this->assertSame(11, $queryCount, "El ajuste ejecutó {$queryCount} queries.");
     }
 
     public function test_adjust_item_revierte_stock_si_falla_el_audit_log(): void

@@ -199,6 +199,11 @@ class PalletBaseService
     public function createBase(Pallet $pallet, array $data): array
     {
         return DB::transaction(function () use ($pallet, $data) {
+            // El insert de pallet_bases y los activity logs toman FOR KEY
+            // SHARE en el pallet. Se adquiere FOR SHARE primero (orden
+            // D-020) para no esperarlo reteniendo locks posteriores.
+            Pallet::query()->whereKey($pallet->id)->sharedLock()->first();
+
             $itemsToSync = [];
             $orderItemsMap = collect();
 
@@ -297,6 +302,10 @@ class PalletBaseService
         }
 
         return DB::transaction(function () use ($pallet, $base, $data) {
+            // Los activity logs toman FOR KEY SHARE en el pallet: se
+            // adquiere FOR SHARE antes del lock FOR UPDATE de la base
+            // (orden D-020) para no invertir la espera.
+            Pallet::query()->whereKey($pallet->id)->sharedLock()->first();
             $base = PalletBase::query()->lockForUpdate()->findOrFail($base->id);
             $changeLog = $this->buildBaseChangeLog($base, $data);
             $syncResult = null;

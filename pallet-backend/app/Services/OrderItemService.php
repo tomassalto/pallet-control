@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Helpers\ActivityLogger;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Pallet;
 use App\Models\Product;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,21 @@ class OrderItemService
     public function update(OrderItem $item, array $data): array
     {
         return DB::transaction(function () use ($item, $data) {
+            // El activity log toma FOR KEY SHARE en pallets y orders al
+            // insertar. Se adquieren FOR SHARE en orden D-020 antes de
+            // los locks FOR UPDATE: quien retenga pallet/order FOR UPDATE
+            // y espere el item nunca forma un ciclo con este recorrido.
+            $palletIds = DB::table('order_pallet')
+                ->where('order_id', $item->order_id)
+                ->orderBy('pallet_id')
+                ->pluck('pallet_id');
+            if ($palletIds->isNotEmpty()) {
+                Pallet::query()->whereIn('id', $palletIds)->orderBy('id')->sharedLock()->get();
+            }
+
             $lockedItem = OrderItem::query()->lockForUpdate()->findOrFail($item->id);
+            Order::query()->whereKey($lockedItem->order_id)->sharedLock()->first();
+
             $allocations = DB::table('pallet_base_order_items')
                 ->where('order_item_id', $lockedItem->id)
                 ->orderBy('base_id')
@@ -86,6 +101,17 @@ class OrderItemService
 
         try {
             return DB::transaction(function () use ($order, $data, $ean, $description) {
+                // El activity log toma FOR KEY SHARE en pallets al
+                // insertar: se adquiere FOR SHARE antes del lock del
+                // pedido (orden D-020) para no invertir la espera.
+                $palletIds = DB::table('order_pallet')
+                    ->where('order_id', $order->id)
+                    ->orderBy('pallet_id')
+                    ->pluck('pallet_id');
+                if ($palletIds->isNotEmpty()) {
+                    Pallet::query()->whereIn('id', $palletIds)->orderBy('id')->sharedLock()->get();
+                }
+
                 $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
                 $existingItem = OrderItem::query()
                     ->where('order_id', $lockedOrder->id)

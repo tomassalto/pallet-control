@@ -80,6 +80,14 @@ class PalletBaseController extends Controller
         $data = $request->validated();
 
         $result = DB::transaction(function () use ($data, $pallet, $base) {
+            // Las FKs de pallet_base_order_items y activity_logs toman
+            // FOR KEY SHARE en pallet/bases al insertar. Se adquieren
+            // FOR SHARE en orden D-020 ANTES del lock del order_item:
+            // si detach u otro recorrido retiene pallet/bases FOR UPDATE,
+            // aquí se espera sin poseer el item — nunca hay ciclo.
+            Pallet::query()->whereKey($pallet->id)->sharedLock()->first();
+            PalletBase::query()->whereKey($base->id)->sharedLock()->first();
+
             // El bloqueo del item serializa todos sus ajustes, aunque estén en pallets distintos.
             $orderItem = OrderItem::query()
                 ->lockForUpdate()
@@ -165,6 +173,11 @@ class PalletBaseController extends Controller
         }
 
         return DB::transaction(function () use ($pallet, $base) {
+            // El activity log toma FOR KEY SHARE en el pallet: se
+            // adquiere FOR SHARE antes del lock FOR UPDATE de la base
+            // (orden D-020) para no invertir la espera.
+            Pallet::query()->whereKey($pallet->id)->sharedLock()->first();
+
             $lockedBase = PalletBase::whereKey($base->id)->lockForUpdate()->first();
             if (! $lockedBase || $lockedBase->pallet_id !== $pallet->id) {
                 return response()->json(['message' => 'Base no encontrada'], 404);

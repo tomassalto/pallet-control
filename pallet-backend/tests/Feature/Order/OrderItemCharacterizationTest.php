@@ -181,7 +181,8 @@ class OrderItemCharacterizationTest extends TestCase
         $queryCount = count(DB::getQueryLog());
         DB::disableQueryLog();
 
-        $this->assertSame(7, $queryCount, "El alta ejecutó {$queryCount} queries.");
+        // 8 = 7 + el FOR SHARE del pallet que exige la orden de locks D-020.
+        $this->assertSame(8, $queryCount, "El alta ejecutó {$queryCount} queries.");
     }
 
     public function test_agregar_item_sin_autenticacion_devuelve_401(): void
@@ -349,6 +350,8 @@ class OrderItemCharacterizationTest extends TestCase
         $queryCount = count(DB::getQueryLog());
         DB::disableQueryLog();
 
-        $this->assertSame(6, $queryCount, "La actualización ejecutó {$queryCount} queries.");
+        // 8 = 6 + lookup de pallets del pedido y FOR SHARE de pallet/order
+        // que exige la orden de locks D-020.
+        $this->assertSame(8, $queryCount, "La actualización ejecutó {$queryCount} queries.");
     }
 }
