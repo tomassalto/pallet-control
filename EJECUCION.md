@@ -445,7 +445,7 @@ Rama `hardening/devin-review-fixes`, creada desde `hardening/api-status-consiste
 4. Tests backend: ausente asignado, tres conflictos juntos (incluida la suma entre dos bases), ausente sin asignación eliminado con `removed = 1` en la auditoría, archivo vacío o ininterpretable con `422`, límite exacto y rollback por fallo de auditoría ya existentes. PostgreSQL: un import que omite un ítem compite con una asignación sobre ese ítem; nunca confirman ambos ni hay `5xx`. 10 repeticiones locales estables.
 5. Gates locales: Pint, PHPStan, 209 tests/740 assertions (1 skip PostgreSQL en SQLite), Composer audit y grupo PostgreSQL 17/61 verdes. Frontend: lint, 38 tests en tres corridas, build y audit desde moderado (sólo los cuatro bajos de D-004).
 
-Evidencia funcional: commits `6e888bf` y `03b9c9f`. CI: pendiente.
+Evidencia funcional: commits `6e888bf` y `03b9c9f`. Actions run `41101014456` sobre `c33ab9f`: `ci`, `postgres-concurrency` y `container-security` verdes.
 
 Pendiente: la pantalla de import muestra sólo el `message` del `409`, no el detalle de `conflicts`. La conservación histórica de ítems eliminados sigue en H-009.
 

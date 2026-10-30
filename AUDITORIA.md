@@ -380,7 +380,7 @@ Origen:      auditoría posterior sobre `127b828`
 **Qué estaba pasando:** ante un `401` de una petición con token, el cliente API borraba el token, vaciaba la cache de React Query mediante un callback global registrado en `main.jsx` y navegaba a `/login`, pero `AuthProvider` conservaba `user`. `RequireAuth` podía seguir viendo una sesión válida sin token. La limpieza de logout y la de `401` estaban duplicadas en dos lugares.
 **Resolución:** `AuthProvider` es la única autoridad de cierre de sesión: `endSession` borra el token, cancela y vacía las queries y pone `user` en `null`; lo usan logout, el arranque fallido y el `401` autenticado, registrado por el propio provider en el cliente. El cliente sólo invalida si el token sigue siendo el de la petición, por lo que dos `401` concurrentes ejecutan la invalidación una vez y un `401` tardío no cierra una sesión nueva. La navegación queda a cargo de `RequireAuth`. Un `401` de login sin token sigue mostrando el mensaje del backend. Ver revisión de D-024.
 **Evidencia:** tests integrados con el `AuthProvider` real: ruta protegida visible, `401` posterior, token y usuario eliminados, cache vacía, contenido protegido ausente y pantalla de login; variante con dos `401` concurrentes sin errores ni reintentos; login con contraseña incorrecta conserva la cache y no muestra "Sesión expirada"; tests del cliente para invalidación única y token reemplazado.
-**Estado:** ✅ resuelto en `6e888bf`.
+**Estado:** ✅ resuelto en `6e888bf`; Actions run `41101014456` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 #### H-044 — El import eliminaba ítems ausentes junto con sus asignaciones
 ```
@@ -392,7 +392,7 @@ Origen:      auditoría posterior sobre `127b828`
 **Qué estaba pasando:** D-020 comparaba la nueva cantidad sólo para los EAN presentes en el archivo. Los ítems ausentes se borraban con `whereNotIn('ean', ...)` y la cascada eliminaba sus filas de `pallet_base_order_items`: una base perdía unidades asignadas sin conflicto ni rastro. El borrado tampoco se limitaba a los ítems bloqueados.
 **Resolución:** un ítem bloqueado ausente del archivo con cantidad asignada mayor que cero produce un conflicto `{ean, assigned, requested: 0, reason: "removed"}`; las reducciones llevan `reason: "reduced"`. Todos se informan juntos en el `409` existente y no se escribe nada. Los ítems ausentes sin asignaciones se siguen eliminando, ahora sólo entre los bloqueados por el import. El orden de locks de D-020 no cambió. Un archivo vacío o ininterpretable sigue respondiendo `422` antes del servicio. Ver revisión de D-020.
 **Evidencia:** tests SQLite de ausente asignado, varios conflictos juntos (incluida la suma entre dos bases), ausente sin asignación eliminado con `removed = 1`, límite exacto, archivo vacío/ininterpretable y rollback por fallo de auditoría. PostgreSQL enfrenta un import que omite un ítem con una asignación concurrente sobre ese ítem: nunca confirman ambos, no hay `5xx` y la asignación nunca se pierde en silencio.
-**Estado:** ✅ resuelto en `03b9c9f`. La política general de conservación sigue en H-009.
+**Estado:** ✅ resuelto en `03b9c9f`; Actions run `41101014456` con los tres jobs verdes. La política general de conservación sigue en H-009.
 
 ---
 
