@@ -372,3 +372,23 @@ Antes de agregar `activity_logs.pallet_id → pallets.id`, la migración busca h
 Cada índice aumenta almacenamiento y costo de escritura; se limita el cambio a FK concretas usadas en joins o acciones referenciales. `nullOnDelete` pierde el enlace navegable al pallet eliminado, pero evita borrar el registro de auditoría. La política general de borrado histórico sigue abierta en H-009.
 
 **Referencia normativa:** `BE-DATA`, `DO-RELEASE`, `QA-DATA`, `QA-RESILIENCE`
+
+---
+
+## D-014 — Constraints por fila equivalentes en PostgreSQL y SQLite
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+Cantidades y estados dependían de validación HTTP. Escrituras internas o directas podían crear cantidades nulas o negativas, completar más unidades que las pedidas o introducir estados fuera del contrato.
+
+**Decisión**
+Proteger en base las siete reglas por fila acreditadas en H-015. PostgreSQL recibe constraints `CHECK` nombrados, agregados primero como `NOT VALID` y validados después del preflight. SQLite, que no permite agregar checks a tablas existentes, usa triggers `BEFORE INSERT/UPDATE` con la misma expresión y nombres estables.
+
+La migración admite sólo los dos motores soportados, aborta ante datos incompatibles antes de crear reglas y su `down()` elimina constraints o triggers. La aplicación conserva validación de entrada y devuelve `409` para el conflicto `done_qty > qty` antes de depender del error de persistencia.
+
+**Trade-off aceptado**
+SQLite y PostgreSQL usan mecanismos distintos, pero comparten comportamiento probado. Los triggers SQLite no se presentan como arquitectura productiva. La suma global asignada entre bases queda fuera: H-006 requiere coordinación transaccional o una defensa agregada, no un `CHECK` simple.
+
+**Referencia normativa:** `BE-DATA`, `BE-VALID`, `BE-TX`, `DO-RELEASE`, `QA-DATA`, `QA-INVARIANT`, `QA-RESILIENCE`

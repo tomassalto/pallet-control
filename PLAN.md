@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-30
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** `H-012` y `H-013` cerrados con índices de FK y referencia real de auditoría a pallet. `H-029` y `H-038` requieren evidencia del entorno real de Render. Siguiente bloque autónomo: constraints por fila (`H-015`) sin confundirlos con la invariante agregada `H-006`.
+**Trabajo actual:** `H-015` cerrado con reglas por fila en PostgreSQL y enforcement equivalente en SQLite. `H-006` sigue abierto como invariante agregada; `H-029` y `H-038` requieren evidencia del entorno real de Render. Siguiente bloque autónomo: atomicidad restante de `H-011`/`H-017`.
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -75,7 +75,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | H-011 | Escrituras multi-tabla sin transacción | 🟡 medio | Medio | 🟡 parcial |
 | H-012 | FKs sin índice (Postgres) — ✅ resuelto | 🟢 bajo | Medio | ✅ sí |
 | H-013 | `activity_logs.pallet_id` no es FK real — ✅ resuelto | 🟢 bajo | Bajo | ✅ sí |
-| H-015 | Sin CHECK constraints generales | 🟡 medio | Bajo | 🟡 parcial |
+| H-015 | Sin CHECK constraints generales — ✅ resuelto para reglas por fila auditadas | 🟡 medio | Bajo | 🟡 parcial |
 | H-017 | `ActivityLogger::log()` no atómico | 🟢 bajo | Bajo | ✅ sí (efecto colateral de H-011) |
 
 ### 🟡 Performance

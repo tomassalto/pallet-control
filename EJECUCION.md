@@ -241,9 +241,24 @@ Rama creada desde el cierre documental de H-040. Se aplicaron `BE-DATA`, `BE-VAL
 
 Evidencia funcional: commit `da4a7f4`.
 
-## Próxima sesión — constraints por fila
+## Última sesión cerrada — constraints por fila
 
-Crear la rama desde este cierre, nunca desde `master`. Reaplicar `BE-DATA`, `BE-VALID`, `BE-TX`, `DOMINIO.md`, `DO-RELEASE`, `QA-DATA`, `QA-INVARIANT` y `QA-RESILIENCE`. Caracterizar datos existentes y compatibilidad PostgreSQL/SQLite antes de decidir los `CHECK` de `H-015`. No incluir la suma de asignaciones de H-006: no es una regla por fila.
+Rama creada desde el cierre documental de H-012/H-013. Se aplicaron `BE-DATA`, `BE-VALID`, `BE-TX`, `DOMINIO.md`, `DO-RELEASE`, `QA-DATA`, `QA-INVARIANT` y `QA-RESILIENCE`.
+
+1. D-014 limita H-015 a siete reglas por fila observables; H-006 permanece separado.
+2. PostgreSQL agrega checks nombrados como `NOT VALID` y luego los valida.
+3. SQLite aplica triggers `BEFORE INSERT/UPDATE` con expresiones equivalentes.
+4. El preflight falla antes del cambio si encuentra una fila incompatible.
+5. `down()` y reaplicación están probados en ambos motores mediante el gate PostgreSQL.
+6. Actualizar un ítem devuelve `409` si el estado final dejaría `done_qty > qty`.
+7. Gates locales: Pint, PHPStan, 120 tests/338 assertions y Composer audit verdes.
+8. Actions run `41002593369`: `ci`, `postgres-concurrency` y `container-security` verdes.
+
+Evidencia funcional: commit `1020075`.
+
+## Próxima sesión — atomicidad restante
+
+Crear la rama desde este cierre, nunca desde `master`. Recorrer `ROUTER.md` y aplicar `BE-TX`, `BE-VALID`, `SEC-LOG`, `QA-INVARIANT`, `QA-RESILIENCE` y `DOMINIO.md`. Relevar las escrituras todavía enumeradas en H-011/H-017, empezando por `MissingItemRequestController::update`, y cerrar cada operación sólo con rollback forzado y auditoría atómica.
 
 ## Sesiones R-02 a R-07
 

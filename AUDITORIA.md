@@ -217,7 +217,11 @@ Severidad:   ⚪ bajo · Categoría: integridad de datos
 Ubicación:   todo el esquema
 ```
 **Qué está pasando:** `qty > 0`, `done_qty <= qty`, etc. solo se validan en FormRequests (`min:1`), no en DB — bypasseable por cualquier código que no pase por ahí.
-**Estado:** 🔲 abierto. Se separó de H-012/H-013: debe definir constraints por fila compatibles con PostgreSQL y SQLite sin presentar un `CHECK` simple como solución de la invariante agregada H-006.
+**Resolución:** siete reglas protegen cantidad pedida positiva, cantidad completada entre cero y lo pedido, asignaciones positivas, cantidades faltantes positivas y allowlists de estado para pendientes y solicitudes. PostgreSQL usa `CHECK NOT VALID` seguido de `VALIDATE`; SQLite usa triggers equivalentes porque no permite agregar esos checks sobre tablas existentes. La migración hace preflight antes de modificar el esquema y tiene recuperación probada.
+
+El endpoint de actualización de ítems calcula el estado final bajo lock y devuelve `409` si `done_qty > qty`, incluso cuando la inconsistencia surge al reducir `qty`. H-006 permanece abierto: la suma entre múltiples filas no es un `CHECK` por fila.
+
+**Estado:** ✅ resuelto en commit `1020075`; Actions run `41002593369` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 #### H-016 — Índice duplicado en `activity_logs.order_id`
 ```
