@@ -9,14 +9,17 @@ use App\Models\Order;
 use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
 use App\Services\PhotoPersistenceService;
+use App\Services\StorageCleanupService;
 use App\Services\TicketOcrService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class OrderTicketController extends Controller
 {
-    public function __construct(private readonly PhotoPersistenceService $photoPersistence) {}
+    public function __construct(
+        private readonly PhotoPersistenceService $photoPersistence,
+        private readonly StorageCleanupService $storageCleanup,
+    ) {}
 
     // GET /orders/{order}/tickets
     public function index(Order $order)
@@ -299,26 +302,35 @@ class OrderTicketController extends Controller
             return response()->json(['message' => 'Ticket no encontrado'], 404);
         }
 
-        $ticketCode = $ticket->code ?? 'Sin código';
-        $ticketId = $ticket->id;
+        return DB::transaction(function () use ($order, $ticket) {
+            $lockedTicket = OrderTicket::whereKey($ticket->id)->lockForUpdate()->first();
+            if (! $lockedTicket || $lockedTicket->order_id !== $order->id) {
+                return response()->json(['message' => 'Ticket no encontrado'], 404);
+            }
 
-        // Eliminar todas las fotos del ticket
-        foreach ($ticket->photos as $photo) {
-            Storage::disk(config('filesystems.default', 'public'))->delete($photo->path);
-        }
+            $ticketCode = $lockedTicket->code ?? 'Sin código';
+            $ticketId = $lockedTicket->id;
 
-        $ticket->delete();
+            // Las fotos caen por cascada FK; se registran intenciones de
+            // borrado para todos sus objetos.
+            $photos = $lockedTicket->photos()->lockForUpdate()->get();
+            $paths = $photos->pluck('path')->all();
 
-        ActivityLogger::log(
-            action: 'order_ticket_deleted',
-            entityType: 'order_ticket',
-            entityId: null,
-            description: "Ticket eliminado del pedido '{$order->code}': {$ticketCode}",
-            oldValues: ['ticket_id' => $ticketId, 'code' => $ticketCode],
-            orderId: $order->id,
-        );
+            $lockedTicket->delete();
 
-        return response()->json(['message' => 'Ticket eliminado'], 200);
+            ActivityLogger::log(
+                action: 'order_ticket_deleted',
+                entityType: 'order_ticket',
+                entityId: null,
+                description: "Ticket eliminado del pedido '{$order->code}': {$ticketCode}",
+                oldValues: ['ticket_id' => $ticketId, 'code' => $ticketCode, 'photos_count' => $photos->count()],
+                orderId: $order->id,
+            );
+
+            $this->storageCleanup->scheduleDeletion($paths, 'order_ticket_deleted');
+
+            return response()->json(['message' => 'Ticket eliminado'], 200);
+        });
     }
 
     // POST /orders/{order}/tickets/{ticket}/photos/{photo}/trigger-ocr
@@ -359,26 +371,29 @@ class OrderTicketController extends Controller
             return response()->json(['message' => 'Ticket no encontrado'], 404);
         }
 
-        // Verificar que la foto pertenece al ticket
-        if ($photo->ticket_id !== $ticket->id) {
-            return response()->json(['message' => 'Foto no encontrada'], 404);
-        }
+        return DB::transaction(function () use ($order, $ticket, $photo) {
+            $lockedPhoto = OrderTicketPhoto::whereKey($photo->id)->lockForUpdate()->first();
+            if (! $lockedPhoto || $lockedPhoto->ticket_id !== $ticket->id) {
+                return response()->json(['message' => 'Foto no encontrada'], 404);
+            }
 
-        $photoPath = $photo->path;
-        $photoName = $photo->original_name;
+            $photoName = $lockedPhoto->original_name;
+            $paths = [$lockedPhoto->path];
 
-        Storage::disk(config('filesystems.default', 'public'))->delete($photoPath);
-        $photo->delete();
+            $lockedPhoto->delete();
 
-        ActivityLogger::log(
-            action: 'order_ticket_photo_deleted',
-            entityType: 'order_ticket_photo',
-            entityId: null,
-            description: "Foto eliminada del ticket del pedido '{$order->code}': {$photoName}",
-            oldValues: ['ticket_id' => $ticket->id, 'photo_id' => $photo->id, 'original_name' => $photoName],
-            orderId: $order->id,
-        );
+            ActivityLogger::log(
+                action: 'order_ticket_photo_deleted',
+                entityType: 'order_ticket_photo',
+                entityId: null,
+                description: "Foto eliminada del ticket del pedido '{$order->code}': {$photoName}",
+                oldValues: ['ticket_id' => $ticket->id, 'photo_id' => $lockedPhoto->id, 'original_name' => $photoName],
+                orderId: $order->id,
+            );
 
-        return response()->json(['message' => 'Foto eliminada'], 200);
+            $this->storageCleanup->scheduleDeletion($paths, 'order_ticket_photo_deleted');
+
+            return response()->json(['message' => 'Foto eliminada'], 200);
+        });
     }
 }

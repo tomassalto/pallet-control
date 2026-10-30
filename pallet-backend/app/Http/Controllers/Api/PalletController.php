@@ -11,13 +11,15 @@ use App\Models\Pallet;
 use App\Services\OrderPalletAssociationService;
 use App\Services\OrderService;
 use App\Services\PalletService;
+use App\Services\StorageCleanupService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class PalletController extends Controller
 {
     public function __construct(
-        private readonly OrderPalletAssociationService $orderPalletAssociationService
+        private readonly OrderPalletAssociationService $orderPalletAssociationService,
+        private readonly StorageCleanupService $storageCleanup,
     ) {}
 
     public function index(Request $request)
@@ -263,30 +265,33 @@ class PalletController extends Controller
         $palletCode = $pallet->code;
         $palletId = $pallet->id;
 
-        // Eager-load photos y bases.photos en 2 queries fijas (evita N+1)
-        $pallet->load('photos', 'bases.photos');
-
-        // Eliminar fotos del storage
-        foreach ($pallet->photos as $photo) {
-            Storage::disk(config('filesystems.default', 'public'))->delete($photo->path);
-        }
-
-        // Eliminar fotos de las bases
-        foreach ($pallet->bases as $base) {
-            foreach ($base->photos as $photo) {
-                Storage::disk(config('filesystems.default', 'public'))->delete($photo->path);
+        DB::transaction(function () use ($palletCode, $palletId) {
+            $lockedPallet = Pallet::whereKey($palletId)->lockForUpdate()->first();
+            if (! $lockedPallet) {
+                return;
             }
-        }
 
-        $pallet->delete();
+            // Eager-load photos y bases.photos en 2 queries fijas (evita N+1)
+            $lockedPallet->load(['photos' => fn ($q) => $q->lockForUpdate(), 'bases.photos' => fn ($q) => $q->lockForUpdate()]);
 
-        ActivityLogger::log(
-            action: 'pallet_deleted',
-            entityType: 'pallet',
-            entityId: $palletId,
-            description: "Pallet '{$palletCode}' eliminado",
-            oldValues: ['code' => $palletCode],
-        );
+            $paths = $lockedPallet->photos->pluck('path')
+                ->merge($lockedPallet->bases->flatMap(fn ($base) => $base->photos->pluck('path')))
+                ->all();
+
+            $lockedPallet->delete();
+
+            ActivityLogger::log(
+                action: 'pallet_deleted',
+                entityType: 'pallet',
+                entityId: $palletId,
+                description: "Pallet '{$palletCode}' eliminado",
+                oldValues: ['code' => $palletCode],
+            );
+
+            // Las fotos del pallet y de sus bases caen por cascada; cada
+            // objeto queda con una intención durable de borrado.
+            $this->storageCleanup->scheduleDeletion($paths, 'pallet_deleted');
+        });
 
         TelegramNotifier::send("🗑️ Pallet `{$palletCode}` eliminado");
 

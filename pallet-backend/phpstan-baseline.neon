@@ -145,12 +145,6 @@ parameters:
 			path: app/Http/Controllers/Api/OrderTicketController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$path\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/Api/OrderTicketController.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$qty\.$#'
 			identifier: property.notFound
 			count: 2

@@ -7,12 +7,16 @@ use App\Http\Controllers\Controller;
 use App\Models\Pallet;
 use App\Models\PalletPhoto;
 use App\Services\PhotoPersistenceService;
+use App\Services\StorageCleanupService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class PalletPhotoController extends Controller
 {
-    public function __construct(private readonly PhotoPersistenceService $photoPersistence) {}
+    public function __construct(
+        private readonly PhotoPersistenceService $photoPersistence,
+        private readonly StorageCleanupService $storageCleanup,
+    ) {}
 
     public function index(Pallet $pallet)
     {
@@ -67,27 +71,31 @@ class PalletPhotoController extends Controller
 
     public function destroy(Pallet $pallet, $photoId)
     {
-        $photo = $pallet->photos()->find($photoId);
-        if (! $photo) {
-            return response()->json(['message' => 'Foto no encontrada'], 404);
-        }
+        return DB::transaction(function () use ($pallet, $photoId) {
+            $photo = $pallet->photos()->lockForUpdate()->find($photoId);
+            if (! $photo) {
+                return response()->json(['message' => 'Foto no encontrada'], 404);
+            }
 
-        $photoPath = $photo->path;
-        $photoName = $photo->original_name;
+            $photoName = $photo->original_name;
+            $paths = [$photo->path];
 
-        // Eliminar archivo del storage
-        Storage::disk(config('filesystems.default', 'public'))->delete($photoPath);
-        $photo->delete();
+            $photo->delete();
 
-        ActivityLogger::log(
-            action: 'pallet_photo_deleted',
-            entityType: 'pallet_photo',
-            entityId: null,
-            description: "Foto eliminada del pallet '{$pallet->code}': {$photoName}",
-            palletId: $pallet->id,
-            oldValues: ['photo_id' => $photo->id, 'original_name' => $photoName],
-        );
+            ActivityLogger::log(
+                action: 'pallet_photo_deleted',
+                entityType: 'pallet_photo',
+                entityId: null,
+                description: "Foto eliminada del pallet '{$pallet->code}': {$photoName}",
+                palletId: $pallet->id,
+                oldValues: ['photo_id' => $photo->id, 'original_name' => $photoName],
+            );
 
-        return response()->json(['message' => 'Foto eliminada'], 200);
+            // El borrado físico es eventual: queda una intención durable
+            // que el job DeleteStoredFile y el barrido confirman.
+            $this->storageCleanup->scheduleDeletion($paths, 'pallet_photo_deleted');
+
+            return response()->json(['message' => 'Foto eliminada'], 200);
+        });
     }
 }

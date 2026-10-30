@@ -11,12 +11,14 @@ use App\Models\OrderItem;
 use App\Models\Pallet;
 use App\Models\PalletBase;
 use App\Services\PalletBaseService;
+use App\Services\StorageCleanupService;
 use Illuminate\Support\Facades\DB;
 
 class PalletBaseController extends Controller
 {
     public function __construct(
-        private readonly PalletBaseService $palletBaseService
+        private readonly PalletBaseService $palletBaseService,
+        private readonly StorageCleanupService $storageCleanup,
     ) {}
 
     public function index(Pallet $pallet)
@@ -162,20 +164,33 @@ class PalletBaseController extends Controller
             return response()->json(['message' => 'Base no encontrada'], 404);
         }
 
-        $baseName = $base->name ?? 'Sin nombre';
-        $baseId = $base->id;
+        return DB::transaction(function () use ($pallet, $base) {
+            $lockedBase = PalletBase::whereKey($base->id)->lockForUpdate()->first();
+            if (! $lockedBase || $lockedBase->pallet_id !== $pallet->id) {
+                return response()->json(['message' => 'Base no encontrada'], 404);
+            }
 
-        $base->delete();
+            $baseName = $lockedBase->name ?? 'Sin nombre';
+            $baseId = $lockedBase->id;
 
-        ActivityLogger::log(
-            action: 'base_deleted',
-            entityType: 'pallet_base',
-            entityId: $baseId,
-            description: "Base eliminada: '{$baseName}'",
-            palletId: $pallet->id,
-            oldValues: ['name' => $baseName, 'note' => $base->note],
-        );
+            // Las fotos caen por cascada FK; se registran intenciones de
+            // borrado para todos sus objetos.
+            $paths = $lockedBase->photos()->lockForUpdate()->pluck('path')->all();
 
-        return response()->json(['message' => 'Base eliminada'], 200);
+            $lockedBase->delete();
+
+            ActivityLogger::log(
+                action: 'base_deleted',
+                entityType: 'pallet_base',
+                entityId: $baseId,
+                description: "Base eliminada: '{$baseName}'",
+                palletId: $pallet->id,
+                oldValues: ['name' => $baseName, 'note' => $lockedBase->note],
+            );
+
+            $this->storageCleanup->scheduleDeletion($paths, 'base_deleted');
+
+            return response()->json(['message' => 'Base eliminada'], 200);
+        });
     }
 }
