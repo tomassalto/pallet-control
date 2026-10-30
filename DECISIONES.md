@@ -589,3 +589,31 @@ H-016 se cierra sin migración, porque no existe índice duplicado en ningún mo
 La atribución empieza con esta release. El rollback histórico conserva su riesgo documentado en lugar de reescribir una migración aplicada.
 
 **Referencia normativa:** `BE-DATA`, `DO-RELEASE`, `SEC-LOG`, `QA-DATA`, `QA-RESILIENCE`, `DOMINIO.md`
+
+---
+
+## D-022 — Contrato único de validación para subidas de fotos
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+Las subidas web de fotos de pallet, de base y de ticket validaban inline con reglas distintas. Pallet usaba `image`, que admite jpg, png, gif, bmp y webp. Base y ticket admitían jpeg, png y webp. Base además buscaba el primer archivo de cualquier campo cuando faltaba `photo`. Ese fallback nunca permitía una subida exitosa, porque luego se exigía `photo`, pero producía mensajes y campos de error propios (`error_code`). El frontend envía siempre `photo` y consume `message`.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Form Request por endpoint conservando diferencias | Sin cambio de contrato | Tres fuentes de verdad para el mismo riesgo |
+| Form Request común con allowlist amplia (`image`) | Ningún formato rechazado nuevo | Amplía base y ticket a gif/bmp sin necesidad |
+| Form Request común con jpeg/png/webp y 20 MB | Una allowlist acotada y verificada por contenido | Pallet deja de aceptar gif y bmp |
+
+**Decisión**
+Una clase base de Form Request define una vez el contrato de `photo`: requerido, archivo subido correctamente, contenido jpeg/png/webp detectado por Laravel desde el contenido y máximo 20 MB. `note` es opcional, de hasta 1000 caracteres. Pallet la usa como Form Request, porque su recurso se resuelve por route-model binding. Base y ticket comprueban pertenencia dentro del controlador y hoy responden `404` antes de validar; para conservar ese orden aplican las mismas reglas y mensajes estáticos de la clase después de esa comprobación. Los mensajes están en español y son iguales para los tres recursos.
+
+Los errores siguen el contrato estándar `422` con `message` y `errors.photo`. Desaparece el fallback de base y su `error_code`; antes del cambio, tests de caracterización acreditan que ese fallback nunca producía un alta. La autorización, el contrato de éxito `201`, el procesamiento en `PhotoPersistenceService` y la re-codificación a WebP no cambian. Telegram y el endpoint legado del bot quedan fuera.
+
+**Trade-off aceptado**
+Una foto de pallet en gif o bmp pasa a recibir `422`. El mensaje de error de base cambia de texto aunque conserva status y campo `message`.
+
+**Referencia normativa:** `BE-API`, `BE-VALID`, `BE-ERR`, `SEC-FILE`, `SEC-INPUT`, `QA-CONTRACT`

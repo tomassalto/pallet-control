@@ -375,9 +375,23 @@ Rama `hardening/schema-cleanup`, creada desde `hardening/aggregate-stock-invaria
 
 Evidencia funcional: commits `7cc6b07` y `6461327` (formato de un test PostgreSQL detectado por Pint en la corrida `41026362144`). Actions run `41026830057` sobre `6461327`: `ci`, `postgres-concurrency` y `container-security` verdes.
 
+## Última sesión cerrada — validación de subidas de fotos
+
+Rama `hardening/photo-request-validation`, creada desde `hardening/schema-cleanup` (`0a8d46e`). Se aplicaron `BE-API`, `BE-VALID`, `BE-ERR`, `SEC-FILE`, `SEC-INPUT` y `QA-CONTRACT`.
+
+1. `f3aeb3f` caracteriza el contrato previo de las tres subidas: éxito, 401, archivo ausente, contenido no imagen, extensión falsa, tamaño, nota, gif y el fallback de base.
+2. La caracterización acredita que el fallback de base nunca producía un alta y que base y ticket responden `404` de pertenencia antes de validar.
+3. D-022 define una allowlist jpeg/png/webp verificada por contenido, 20 MB y mensajes en español en `StorePhotoRequest`. Pallet la usa como Form Request; base y ticket aplican las mismas reglas después del `404` para no cambiar el orden.
+4. `e987c13` actualiza los tests afectados como cambios de contrato documentados: gif en pallet pasa a `422`, y base usa el `422` estándar sin `error_code`.
+5. Gates locales: Pint, PHPStan, 199 tests/678 assertions y Composer audit verdes.
+
+Evidencia funcional: commits `f3aeb3f` y `e987c13`.
+
+Pendiente: el resto de H-020 (otros controladores con validación inline) y el endpoint legado del bot, fuera de alcance.
+
 ## Próxima sesión
 
-`hardening/photo-request-validation`: Form Requests para subidas de fotos (H-020 parcial).
+`quality/frontend-test-foundation`: runner de tests frontend según `FE-GATE` y `QA-LEVELS`.
 
 ## Sesiones R-02 a R-07
 
