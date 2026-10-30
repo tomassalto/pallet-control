@@ -420,9 +420,24 @@ Evidencia funcional: commits `376b3f9` y `46d4f54`. Actions run `41034937602` so
 
 Pendiente: un E2E con navegador real para cámara, escáner y service worker.
 
+## Última sesión cerrada — consistencia de status HTTP
+
+Rama `hardening/api-status-consistency`, creada desde `quality/frontend-critical-flows` (`570b7c5`). Se aplicaron `BE-API`, `BE-ERR`, `BE-VALID`, `FE-DATA`, `QA-CONTRACT` y `SEC-LOG`.
+
+1. El inventario de `4xx` confirmó H-021 y H-022 cerrados en R-07, y servicios transaccionales que ya usaban `409`.
+2. D-025 cambia a `409` cinco conflictos de estado: finalizar y reabrir pallet, finalizar pedido, ajustar ítem en un pallet finalizado y solicitud de faltante duplicada. Los cuerpos no cambian.
+3. Los `422` de entrada semánticamente inválida se conservan; un test fija ese límite.
+4. Tests verifican status, mensaje, detalles y ausencia de cambios de estado o auditoría. El test previo de adjust en pallet finalizado se actualizó como cambio de contrato documentado.
+5. El frontend ya mostraba el `message`; un test nuevo lo acredita para finalizar pallet.
+6. Gates locales: Pint, PHPStan, 205 tests/706 assertions, Composer audit, grupo PostgreSQL 16/56, y frontend con lint, 33 tests y build, todos verdes.
+
+Evidencia funcional: commit `7344135`.
+
+Pendiente: finalizar y reabrir siguen sin lock ni transacción; el resto de H-020; H-029, H-038, branch protection y backups requieren evidencia externa.
+
 ## Próxima sesión
 
-`hardening/api-status-consistency`: inventario de status HTTP y corrección por recurso (H-021/H-022/H-023/H-027).
+Sin bloque autónomo asignado. Candidatos: transacción y lock de finalizar/reabrir, resto de H-020, política H-009.
 
 ## Sesiones R-02 a R-07
 

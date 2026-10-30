@@ -669,3 +669,27 @@ Al caracterizar los recorridos críticos del frontend aparecieron tres desvíos 
 Un OCR legítimo que tarde más de cinco minutos se muestra como demorado aunque luego termine. El resultado sigue disponible al reabrir la foto. Limpiar la cache obliga a recargar datos tras volver a iniciar sesión.
 
 **Referencia normativa:** `FE-DATA`, `FE-STATE`, `FE-SESSION`, `BE-ASYNC`, `QA-RESILIENCE`, `QA-CONTRACT`, `QA-LEVELS`
+
+---
+
+## D-025 — Conflictos de estado con `409`
+
+**Fecha:** 2026-10-30
+**Estado:** ✅ vigente
+
+**Contexto**
+El inventario de respuestas `4xx` de los controladores encontró conflictos de estado expresados con otros códigos:
+- finalizar y reabrir un pallet devuelven `400` (H-027);
+- finalizar un pedido devuelve `422` (H-027);
+- ajustar un ítem en un pallet finalizado devuelve `422` (resto de H-023);
+- repetir una solicitud de faltante dentro de la ventana anti-duplicado devuelve `422`.
+
+Los servicios transaccionales ya usan `409`. El frontend no ramifica por esos status: consume `message` y, donde existen, los campos de detalle.
+
+**Decisión**
+Esos cinco casos devuelven `409` y conservan el cuerpo actual (`message` y, en finalizar pallet, los detalles de `canFinalize`). Siguen en `422` las entradas semánticamente inválidas: un ítem de otro pedido en el cuerpo, una cantidad faltante mayor a la pedida, un import que no se puede interpretar o la ausencia de `ean`/`last4`. No hay reemplazo global: cada cambio tiene un test de status y forma, y el frontend se verifica mostrando el `message` del `409`.
+
+**Trade-off aceptado**
+Un consumidor externo que ramifique por `400`/`422` en esos endpoints debe adaptarse; no existe ninguno conocido además de la PWA. Finalizar y reabrir siguen sin lock ni transacción: el código de estado se corrige, pero la carrera entre dos finalizaciones queda para una rebanada transaccional propia.
+
+**Referencia normativa:** `BE-API`, `BE-ERR`, `BE-VALID`, `FE-DATA`, `QA-CONTRACT`, `SEC-LOG`

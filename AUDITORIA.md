@@ -304,7 +304,8 @@ Severidad:   🟡 medio · Categoría: calidad
 Ubicación:   PalletBaseController.php:63,85,186 — PalletBaseService.php:48
 Referencia:  `BE-ERR`
 ```
-**Estado:** 🟡 resuelto para disponibilidad/pertenencia en `adjust-item` (R-01), crear/actualizar bases (R-02) y migración (R-03); resta normalizar los demás endpoints señalados.
+**Resolución final:** ajustar un ítem en un pallet finalizado devuelve `409` (D-025); los servicios transaccionales ya usaban `409` para disponibilidad y pertenencia.
+**Estado:** ✅ resuelto en R-01 a R-03 y en commit `7344135` (CI en `EJECUCION.md`).
 
 #### H-024 — Formato de respuesta de error no estandarizado
 ```
@@ -335,7 +336,8 @@ Ubicación:   TelegramBotController.php:41
 Severidad:   ⚪ bajo · Categoría: calidad
 Ubicación:   OrderController.php:305 vs PalletController.php:224,254
 ```
-**Estado:** 🔲 abierto
+**Resolución:** finalizar pedido, finalizar pallet y reabrir pallet expresan el conflicto de estado con `409` y conservan su cuerpo (D-025).
+**Estado:** ✅ resuelto en commit `7344135` (CI en `EJECUCION.md`).
 
 #### H-039 — Prácticamente sin tests
 ```
