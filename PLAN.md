@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-30
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** subidas con compensación (`D-017`) y borrados de fotos/tickets/pallets/bases con intención durable, job post-commit y barrido supervisado (`D-018`); `H-011`/`H-017` resueltos para los flujos auditados. Colas y limpieza operables con estado, alerta por antigüedad y fallos terminales auditados (`D-019`). Invariante agregada asignado ≤ pedido protegida en base para todo escritor (`H-006`, `D-020`). Atribución de creación de pallets y diagnóstico del índice de auditoría (`H-014`/`H-016`, `D-021`). Contrato único de validación de subidas de fotos (`H-020` parcial, `D-022`). Runner de tests frontend con Vitest/jsdom/Testing Library integrado a CI (`D-023`). Flujos críticos frontend caracterizados; polling OCR acotado, cache privada limpiada al cerrar sesión y 401 de login corregido (`D-024`). Conflictos de estado restantes normalizados a `409` (`H-023`/`H-027`, `D-025`). `H-029` y `H-038` requieren evidencia real de Render (Nixpacks no ejecuta worker ni barrido).
+**Trabajo actual:** subidas con compensación (`D-017`) y borrados de fotos/tickets/pallets/bases con intención durable, job post-commit y barrido supervisado (`D-018`); `H-011`/`H-017` resueltos para los flujos auditados. Colas y limpieza operables con estado, alerta por antigüedad y fallos terminales auditados (`D-019`). Invariante agregada asignado ≤ pedido protegida en base para todo escritor (`H-006`, `D-020`). Atribución de creación de pallets y diagnóstico del índice de auditoría (`H-014`/`H-016`, `D-021`). Contrato único de validación de subidas de fotos (`H-020` parcial, `D-022`). Runner de tests frontend con Vitest/jsdom/Testing Library integrado a CI (`D-023`). Flujos críticos frontend caracterizados; polling OCR acotado, cache privada limpiada al cerrar sesión y 401 de login corregido (`D-024`). Conflictos de estado restantes normalizados a `409` (`H-023`/`H-027`, `D-025`). Auditoría posterior: un `401` autenticado cierra la sesión completa desde `AuthProvider` (`H-043`, revisión de `D-024`) y el import ya no elimina ítems ausentes con asignaciones (`H-044`, revisión de `D-020`). `H-029` y `H-038` requieren evidencia real de Render (Nixpacks no ejecuta worker ni barrido).
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -16,7 +16,7 @@
 ## 📍 ESTADO GENERAL
 
 ```
-Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b)
+Fase 0 — Reconocimiento        ✅ hecho   (AUDITORIA.md — 42 hallazgos, H-001 a H-041 + H-006b; H-042 a H-044 agregados después)
 Fase 1 — Red de seguridad      ✅ hecho (gates activos y caracterización completos)
 Fase Fundacional — Normativa  ✅ cinco autoridades y router por IDs estables
 Fase 2 — Rebanadas verticales  ✅ 7 de 7 cerradas
@@ -58,6 +58,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | H-003 | Desactivar usuario no revoca tokens | 🟡 medio | Medio | ❌ no |
 | H-025 | `APP_DEBUG` sin safeguard en el deploy — ✅ resuelto | 🟢 bajo | Medio | ✅ sí |
 | H-004 | Rutas de verificación de email rotas | 🟢 bajo | Bajo | ✅ sí |
+| H-043 | `401` autenticado dejaba el usuario en memoria — ✅ resuelto (revisión D-024) | 🟢 bajo | Medio | ❌ no |
 
 ### 🔴 Integridad / pérdida de datos
 
@@ -72,6 +73,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | H-008 | Race duplicando EAN en `order_items` | 🟡 medio | Alto | ✅ sí |
 | H-009 | Cero soft deletes en todo el esquema | 🔴 alto | Alto | 🟡 parcial |
 | H-010 | Reducir `qty` sin validar lo ya asignado | 🟡 medio | Medio | ✅ sí |
+| H-044 | Import eliminaba ítems ausentes con asignaciones — ✅ resuelto (revisión D-020) | 🟡 medio | Alto | ❌ no |
 | H-011 | Escrituras multi-tabla sin transacción — ✅ resuelto en flujos auditados (D-015 a D-018) | 🟡 medio | Medio | 🟡 parcial |
 | H-012 | FKs sin índice (Postgres) — ✅ resuelto | 🟢 bajo | Medio | ✅ sí |
 | H-013 | `activity_logs.pallet_id` no es FK real — ✅ resuelto | 🟢 bajo | Bajo | ✅ sí |

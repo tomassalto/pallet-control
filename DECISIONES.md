@@ -560,6 +560,15 @@ Las escrituras de asignaciones ejecutan una suma por fila afectada. El import se
 **Corrección tras CI (misma rama)**
 PostgreSQL toma `FOR KEY SHARE` sobre la fila padre al insertar o actualizar una fila con FK. Un recorrido que primero bloqueaba el `order_item` y después insertaba asignaciones o activity logs esperaba implícitamente `pallets`/`pallet_bases`/`orders`. Eso invertía el orden global frente a quien bloquea esos padres `FOR UPDATE`, y produjo un deadlock intermitente entre desvinculación y adjust-item. La regla se completa así: todo recorrido adquiere `FOR SHARE` sobre los padres que sus FKs referencian antes del primer lock posterior en el orden. Se aplica en adjust-item, crear, actualizar y eliminar base, actualizar ítem y agregar ítem. El costo es una o dos consultas de lock por operación.
 
+**Revisión 2026-10-30 — ítems ausentes del import (H-044)**
+La eliminación de ítems ausentes con sus asignaciones contradecía la invariante "reducir la cantidad pedida no puede dejar asignaciones por encima del nuevo total" de `DOMINIO.md`: borrar un ítem es reducirlo a cero, y la cascada ocultaba la pérdida. Se corrige dentro de esta misma decisión, sin política nueva:
+- Un ítem bloqueado ausente del archivo con cantidad asignada mayor que cero es un conflicto `{ean, assigned, requested: 0, reason: "removed"}`. Las reducciones de EAN presentes llevan `reason: "reduced"`. Todos se devuelven juntos en el `409` existente, con el mismo `message`, y no se escribe ningún ítem, asignación, producto ni activity log. `reason` es un campo aditivo.
+- Los ítems ausentes sin asignaciones se siguen eliminando, como antes. El borrado se limita a los ítems bloqueados por el import: un ítem creado por R-04 después del primer lock ya no se borra a ciegas.
+- El orden de locks no cambia. La comprobación usa las asignaciones ya bloqueadas `FOR UPDATE` dentro de la transacción. El trigger agregado sigue siendo la última defensa.
+- Un archivo vacío o ininterpretable sigue respondiendo `422` antes de abrir la transacción, por lo que nunca vacía el pedido.
+
+El trade-off "el import conserva la eliminación de ítems ausentes con sus asignaciones" queda reemplazado: ahora sólo se eliminan ítems ausentes sin asignaciones. La conservación histórica de ítems eliminados sigue abierta en H-009.
+
 **Referencia normativa:** `BE-TX`, `BE-DATA`, `BE-VALID`, `BE-ERR`, `SEC-LOG`, `DO-RELEASE`, `QA-INVARIANT`, `QA-DATA`, `DOMINIO.md`
 
 ---
@@ -668,7 +677,15 @@ Al caracterizar los recorridos críticos del frontend aparecieron tres desvíos 
 **Trade-off aceptado**
 Un OCR legítimo que tarde más de cinco minutos se muestra como demorado aunque luego termine. El resultado sigue disponible al reabrir la foto. Limpiar la cache obliga a recargar datos tras volver a iniciar sesión.
 
-**Referencia normativa:** `FE-DATA`, `FE-STATE`, `FE-SESSION`, `BE-ASYNC`, `QA-RESILIENCE`, `QA-CONTRACT`, `QA-LEVELS`
+**Revisión 2026-10-30 — cierre de sesión con una única autoridad (H-043)**
+El callback registrado en `main.jsx` limpiaba la cache, pero no podía actualizar el estado de `AuthProvider`: tras un `401`, `user` seguía en memoria sin token. Se reemplaza el segundo punto de la decisión:
+- `AuthProvider` define `endSession`, idempotente: borra el token, cancela y vacía las queries y pone `user` en `null`. Lo usan logout, el arranque con `/auth/me` fallido y el `401` autenticado.
+- El provider registra `endSession` en el cliente API al montarse y lo retira al desmontarse. `main.jsx` ya no registra callbacks.
+- El cliente invalida sólo si el token almacenado sigue siendo el que llevaba la petición. Dos `401` concurrentes ejecutan una sola invalidación, y un `401` tardío de un token anterior no cierra una sesión obtenida después.
+- El cliente ya no navega: `RequireAuth` redirige a `/login` al ver `user = null`, lo que evita navegaciones duplicadas.
+- Un `401` sin token, como el login con contraseña incorrecta, conserva el mensaje del backend y no ejecuta el cierre.
+
+**Referencia normativa:** `FE-DATA`, `FE-STATE`, `FE-SESSION`, `SEC-IDENTITY`, `BE-ASYNC`, `QA-RESILIENCE`, `QA-CONTRACT`, `QA-LEVELS`
 
 ---
 

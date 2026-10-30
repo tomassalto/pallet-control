@@ -435,6 +435,20 @@ Evidencia funcional: commit `7344135`. Actions run `41036574975` sobre `cb0ff6f`
 
 Pendiente: finalizar y reabrir siguen sin lock ni transacción; el resto de H-020; H-029, H-038, branch protection y backups requieren evidencia externa.
 
+## Última sesión cerrada — correcciones de la auditoría posterior
+
+Rama `hardening/devin-review-fixes`, creada desde `hardening/api-status-consistency` (`127b828`). Se aplicaron `FE-SESSION`, `FE-STATE`, `FE-DATA`, `SEC-IDENTITY`, `BE-TX`, `BE-DATA`, `BE-VALID`, `BE-ERR`, `SEC-LOG`, `QA-CONTRACT`, `QA-INVARIANT`, `QA-DATA`, `QA-RESILIENCE` y `DOMINIO.md`. El ID solicitado `FE-ERR` no existe; sus requisitos están cubiertos por `FE-DATA` y `BE-ERR`.
+
+1. H-043: un `401` autenticado borraba el token y la cache, pero `AuthProvider` conservaba `user`. `6e888bf` concentra el cierre en `endSession` del provider, usado por logout, arranque fallido y `401`. El cliente invalida sólo si el token sigue siendo el de la petición y deja la navegación a `RequireAuth`. `setNavigate` y el callback de `main.jsx` desaparecen. Revisión de D-024.
+2. Tests frontend: sesión visible y `401` posterior (token, usuario, cache y contenido protegido eliminados; termina en login), dos `401` concurrentes sin errores ni reintentos, login con contraseña incorrecta sin flujo de expiración, e invalidación única y token reemplazado en el cliente. Los tests que esperaban navegación desde el cliente se actualizaron como cambio de contrato documentado.
+3. H-044: el import eliminaba ítems ausentes del archivo y la cascada borraba sus asignaciones. `03b9c9f` devuelve `409` con `requested: 0` y `reason: "removed"` para los ausentes asignados, junto con las reducciones (`reason: "reduced"`). No escribe nada ante un conflicto y borra sólo ítems bloqueados sin asignaciones. El orden de locks de D-020 no cambió. Revisión de D-020.
+4. Tests backend: ausente asignado, tres conflictos juntos (incluida la suma entre dos bases), ausente sin asignación eliminado con `removed = 1` en la auditoría, archivo vacío o ininterpretable con `422`, límite exacto y rollback por fallo de auditoría ya existentes. PostgreSQL: un import que omite un ítem compite con una asignación sobre ese ítem; nunca confirman ambos ni hay `5xx`. 10 repeticiones locales estables.
+5. Gates locales: Pint, PHPStan, 209 tests/740 assertions (1 skip PostgreSQL en SQLite), Composer audit y grupo PostgreSQL 17/61 verdes. Frontend: lint, 38 tests en tres corridas, build y audit desde moderado (sólo los cuatro bajos de D-004).
+
+Evidencia funcional: commits `6e888bf` y `03b9c9f`. CI: pendiente.
+
+Pendiente: la pantalla de import muestra sólo el `message` del `409`, no el detalle de `conflicts`. La conservación histórica de ítems eliminados sigue en H-009.
+
 ## Próxima sesión
 
 Sin bloque autónomo asignado. Candidatos: transacción y lock de finalizar/reabrir, resto de H-020, política H-009.
