@@ -557,4 +557,7 @@ D-003 protege la invariante en los recorridos R-01 a R-05 mediante el lock del `
 **Trade-off aceptado**
 Las escrituras de asignaciones ejecutan una suma por fila afectada. El import se vuelve todo-o-nada ante conflictos. Un ítem nuevo creado por R-04 durante un import puede quedar fuera del primer lock; ese caso extremo puede terminar en un deadlock detectado por PostgreSQL y en un `5xx` reintentable, nunca en sobreasignación. El import conserva la eliminación de ítems ausentes con sus asignaciones; la política de conservación sigue abierta en H-009.
 
+**Corrección tras CI (misma rama)**
+PostgreSQL toma `FOR KEY SHARE` sobre la fila padre al insertar o actualizar una fila con FK. Un recorrido que primero bloqueaba el `order_item` y después insertaba asignaciones o activity logs esperaba implícitamente `pallets`/`pallet_bases`/`orders`. Eso invertía el orden global frente a quien bloquea esos padres `FOR UPDATE`, y produjo un deadlock intermitente entre desvinculación y adjust-item. La regla se completa así: todo recorrido adquiere `FOR SHARE` sobre los padres que sus FKs referencian antes del primer lock posterior en el orden. Se aplica en adjust-item, crear, actualizar y eliminar base, actualizar ítem y agregar ítem. El costo es una o dos consultas de lock por operación.
+
 **Referencia normativa:** `BE-TX`, `BE-DATA`, `BE-VALID`, `BE-ERR`, `SEC-LOG`, `DO-RELEASE`, `QA-INVARIANT`, `QA-DATA`, `DOMINIO.md`
