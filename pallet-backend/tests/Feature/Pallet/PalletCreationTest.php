@@ -93,17 +93,17 @@ class PalletCreationTest extends TestCase
     }
 
     /**
-     * H-014 (AUDITORIA.md): 'created_by' existe en el modelo/fillable pero
-     * el controlador SIEMPRE lo manda null, sin importar quién esté autenticado.
-     * Este test documenta ese comportamiento actual a propósito.
+     * H-014 (AUDITORIA.md): históricamente 'created_by' quedaba en null.
+     * D-021 lo volvió atribución real: se registra el usuario autenticado.
      */
-    public function test_created_by_queda_siempre_null_aunque_haya_usuario_autenticado(): void
+    public function test_created_by_registra_al_usuario_autenticado(): void
     {
         $user = User::factory()->withRole()->create();
 
         $this->actingAs($user)->postJson('/api/v1/pallets', [])->assertCreated();
 
-        $this->assertDatabaseHas('pallets', ['created_by' => null]);
+        $this->assertDatabaseHas('pallets', ['created_by' => $user->id]);
+        $this->assertDatabaseMissing('pallets', ['created_by' => null]);
     }
 
     public function test_crear_pallet_registra_activity_log(): void
@@ -136,5 +136,38 @@ class PalletCreationTest extends TestCase
 
         $response->assertStatus(422);
         $this->assertDatabaseCount('pallets', 0);
+    }
+
+    // ── Atribución de creación (D-021) ────────────────────────────────────
+
+    public function test_el_pallet_registra_al_usuario_que_lo_creo(): void
+    {
+        $user = User::factory()->withRole()->create();
+
+        $response = $this->actingAs($user)->postJson('/api/v1/pallets', []);
+
+        $response->assertStatus(201);
+        $palletId = $response->json('id');
+        $this->assertSame($user->id, $response->json('created_by'));
+        $this->assertDatabaseHas('pallets', [
+            'id' => $palletId,
+            'created_by' => $user->id,
+        ]);
+        $this->assertSame($user->id, Pallet::findOrFail($palletId)->createdBy->id);
+    }
+
+    public function test_eliminar_al_usuario_anula_created_by_por_la_fk(): void
+    {
+        $user = User::factory()->withRole()->create();
+        $pallet = Pallet::create([
+            'code' => 'PAL-TEST-OWN',
+            'status' => 'open',
+            'created_by' => $user->id,
+        ]);
+
+        $user->delete();
+
+        // nullOnDelete: el pallet conserva su existencia, pierde la referencia.
+        $this->assertNull($pallet->fresh()->created_by);
     }
 }

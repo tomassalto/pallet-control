@@ -617,6 +617,24 @@ class PalletBaseStockMovementTest extends TestCase
         ]);
     }
 
+    public function test_migrate_sin_destino_registra_created_by_en_el_pallet_nuevo(): void
+    {
+        $user = $this->actingUser();
+        [$pallet, , $item, $base] = $this->baseWithStock(10);
+
+        $response = $this->actingAs($user)
+            ->postJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/migrate", [
+                'items' => [['order_item_id' => $item->id, 'qty' => 4]],
+            ]);
+
+        $response->assertOk();
+        $destinationId = $response->json('destination_pallet_id');
+        $this->assertDatabaseHas('pallets', [
+            'id' => $destinationId,
+            'created_by' => $user->id,
+        ]);
+    }
+
     public function test_migrate_en_base_de_otro_pallet_devuelve_404(): void
     {
         $pallet = Pallet::factory()->create();

@@ -8,6 +8,7 @@ use App\Models\OrderItem;
 use App\Models\Pallet;
 use App\Models\PalletBase;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class PalletBaseService
@@ -135,6 +136,7 @@ class PalletBaseService
                 $destinationPallet = Pallet::create([
                     'code' => sprintf('PAL-%s-%04d', $today, $countToday),
                     'status' => 'open',
+                    'created_by' => Auth::id(),
                 ]);
             }
             if (! $destinationBase) {

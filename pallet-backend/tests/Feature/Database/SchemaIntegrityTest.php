@@ -135,6 +135,96 @@ class SchemaIntegrityTest extends TestCase
         ];
     }
 
+    // ── D-021: atribución pallets.created_by e índice único de auditoría ──
+
+    public function test_pallets_created_by_tiene_fk_null_on_delete_e_indice(): void
+    {
+        $foreignKey = collect(Schema::getForeignKeys('pallets'))->first(
+            fn (array $foreign) => $foreign['columns'] === ['created_by']
+        );
+
+        $this->assertNotNull($foreignKey, 'Falta la FK pallets.created_by → users.');
+        $this->assertSame('users', $foreignKey['foreign_table']);
+        $this->assertSame(['id'], $foreignKey['foreign_columns']);
+        $this->assertStringContainsStringIgnoringCase(
+            'set null',
+            (string) $foreignKey['on_delete'],
+        );
+
+        $this->assertTrue(
+            collect(Schema::getIndexes('pallets'))->contains(
+                fn (array $index) => $index['name'] === 'pallets_created_by_index'
+                    && $index['columns'] === ['created_by']
+            ),
+            'Falta el índice pallets_created_by_index.',
+        );
+
+        // Comportamiento: borrar el usuario anula la referencia.
+        $user = User::factory()->create();
+        $palletId = DB::table('pallets')->insertGetId([
+            'code' => 'PAL-FK-CB',
+            'status' => 'open',
+            'created_by' => $user->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('users')->where('id', $user->id)->delete();
+
+        $this->assertNull(DB::table('pallets')->where('id', $palletId)->value('created_by'));
+    }
+
+    public function test_activity_logs_tiene_un_solo_indice_que_empieza_por_order_id(): void
+    {
+        // H-016: la segunda migración usa CREATE INDEX IF NOT EXISTS con el
+        // mismo nombre y no duplica. Este test fija exactamente un índice
+        // cuya primera columna sea order_id en ambos motores.
+        $leading = collect(Schema::getIndexes('activity_logs'))
+            ->filter(fn (array $index) => ($index['columns'][0] ?? null) === 'order_id')
+            ->values();
+
+        $this->assertCount(1, $leading);
+    }
+
+    public function test_created_by_migration_preflight_aborta_con_huerfanos(): void
+    {
+        $migration = require database_path('migrations/2026_10_30_000005_add_created_by_foreign_to_pallets.php');
+
+        $migration->down();
+
+        $palletId = DB::table('pallets')->insertGetId([
+            'code' => 'PAL-ORPHAN',
+            'status' => 'open',
+            'created_by' => 999_999,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            $migration->up();
+            $this->fail('El preflight debía rechazar la referencia huérfana.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString((string) $palletId, $exception->getMessage());
+        }
+
+        // Abortó antes de crear nada.
+        $this->assertFalse(
+            collect(Schema::getIndexes('pallets'))->contains(
+                fn (array $index) => $index['name'] === 'pallets_created_by_index'
+            ),
+        );
+
+        // Corregido el dato, la migración se aplica completa.
+        DB::table('pallets')->where('id', $palletId)->update(['created_by' => null]);
+        $migration->up();
+
+        $this->assertTrue(
+            collect(Schema::getIndexes('pallets'))->contains(
+                fn (array $index) => $index['name'] === 'pallets_created_by_index'
+            ),
+        );
+    }
+
     private function insertPending(OrderItem $item, User $user, int $qty, string $status): void
     {
         DB::table('pending_items')->insert([

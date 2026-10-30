@@ -13,6 +13,7 @@ use App\Services\OrderService;
 use App\Services\PalletService;
 use App\Services\StorageCleanupService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class PalletController extends Controller
@@ -57,7 +58,7 @@ class PalletController extends Controller
             'code' => $code,
             'status' => 'open',
             'note' => $data['note'] ?? null,
-            'created_by' => null,
+            'created_by' => Auth::id(),
         ]);
 
         ActivityLogger::log(
