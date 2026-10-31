@@ -464,7 +464,7 @@ Origen:      pendiente declarado en D-018 y en la sesión de borrado recuperable
 
 **Contención (D-028):** se retiró la programación de `pallet:archive`. El comando pasó a ser un inventario de sólo lectura con el criterio legado, contado por la base mediante subconsultas: sin `--dry-run` falla con código 1 sin modificar nada; con `--dry-run` informa conteos. Ninguna opción ni variable de entorno habilita el borrado. Los tests acreditan que `pallet:archive` no está programado. Una guarda verifica además que los runtimes versionados conocidos (`supervisord.conf`, `docker-entrypoint.sh`, `nixpacks.toml`, `Dockerfile`) no invocan el scheduler ni el comando. No es una garantía sobre crons externos.
 
-**Estado:** 🟡 contenido; la parte destructiva queda bloqueada por `GAP-RETENTION` (ver `PLAN.md`). Relacionado con H-009.
+**Estado:** 🟡 contenido en `9279c5e` y `d3658d1`. Actions run `41185684370`: `postgres-concurrency` y `container-security` verdes; en `ci` pasaron todos los gates backend y falló sólo el audit npm del frontend, ajeno a este cambio (ver `EJECUCION.md`). La parte destructiva queda bloqueada por `GAP-RETENTION` (ver `PLAN.md`). Relacionado con H-009.
 
 ---
 

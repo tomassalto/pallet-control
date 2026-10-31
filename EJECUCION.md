@@ -490,7 +490,9 @@ Rama `hardening/archive-old-data-safety`, creada desde `hardening/storage-cleanu
 4. Tests (7): sin confirmación no modifica, dry-run no modifica y reporta conteos exactos, datos dentro y fuera del corte y logs históricos permanecen, repetición segura, `pallet:archive` ausente del scheduler, guarda sobre los runtimes versionados conocidos (`supervisord.conf`, `docker-entrypoint.sh`, `nixpacks.toml`, `Dockerfile`) sin `schedule:` ni `pallet:archive`, y guarda estática sin escrituras, storage, `pluck()` ni `env()` en el comando. La guarda de runtimes no cubre crons externos ni configuración de plataforma fuera del repositorio. El inventario cuenta en la base mediante subconsultas, sin materializar listas de IDs.
 5. Gates locales con PHP 8.4: Pint, PHPStan sin cambios de baseline, 251 tests/1004 assertions (1 skip) y el archivo nuevo repetido 3 veces. Frontend sin cambios.
 
-Pendiente: `GAP-RETENTION` (decisión de dominio) y la evidencia en CI remoto.
+Evidencia: commits `9279c5e` (contención) y `d3658d1` (conteos en base y guardas acotadas). Actions run `41185684370` sobre `630aca3`: `postgres-concurrency` y `container-security` verdes. En `ci` pasaron frontend build, Pint, PHPStan, tests, Composer audit y el audit npm del backend. Falló sólo `npm audit --audit-level=moderate` del frontend, el mismo paso que en las dos sesiones anteriores; la rama no toca `pallet-frontend/`.
+
+Pendiente: `GAP-RETENTION` (decisión de dominio) y los avisos npm del frontend (`DO-SUPPLY`).
 
 ## Próxima sesión
 
