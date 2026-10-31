@@ -4,20 +4,18 @@ namespace App\Http\Controllers\Api;
 
 use App\Helpers\ActivityLogger;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\IndexPendingItemsRequest;
+use App\Http\Requests\StorePendingItemRequest;
+use App\Http\Requests\UpdatePendingItemRequest;
 use App\Models\OrderItem;
 use App\Models\PendingItem;
-use Illuminate\Http\Request;
 
 class PendingItemController extends Controller
 {
     // GET /pending-items
-    public function index(Request $request)
+    public function index(IndexPendingItemsRequest $request)
     {
-        $filters = $request->validate([
-            'status' => ['nullable', 'in:pending,resolved'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
+        $filters = $request->validated();
         $perPage = (int) ($filters['per_page'] ?? 25);
 
         $paginator = PendingItem::with([
@@ -54,14 +52,9 @@ class PendingItemController extends Controller
     }
 
     // POST /pending-items
-    public function store(Request $request)
+    public function store(StorePendingItemRequest $request)
     {
-        $data = $request->validate([
-            'order_id' => ['required', 'exists:orders,id'],
-            'order_item_id' => ['required', 'exists:order_items,id'],
-            'qty_missing' => ['required', 'integer', 'min:1'],
-            'note' => ['nullable', 'string', 'max:1000'],
-        ]);
+        $data = $request->validated();
 
         // Verificar que el item pertenece al pedido
         $orderItem = OrderItem::findOrFail($data['order_item_id']);
@@ -91,13 +84,9 @@ class PendingItemController extends Controller
     }
 
     // PATCH /pending-items/{pendingItem}
-    public function update(Request $request, PendingItem $pendingItem)
+    public function update(UpdatePendingItemRequest $request, PendingItem $pendingItem)
     {
-        $data = $request->validate([
-            'status' => ['sometimes', 'in:pending,resolved'],
-            'qty_missing' => ['sometimes', 'integer', 'min:1'],
-            'note' => ['sometimes', 'nullable', 'string', 'max:1000'],
-        ]);
+        $data = $request->validated();
 
         $wasResolved = $pendingItem->status === 'resolved';
 
