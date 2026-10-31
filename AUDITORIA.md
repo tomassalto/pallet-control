@@ -280,7 +280,21 @@ Ubicación:   ver lista completa en conversación — AuthController, OrderContr
 Referencia:  `BE-VALID`
 ```
 **Avance:** R-04 introdujo `StoreOrderItemRequest`. Las tres subidas web de fotos comparten ahora un contrato único (D-022): jpeg/png/webp verificados por contenido, 20 MB, mensajes en español y `422` estándar. Se retiró el fallback de base, que según los tests de caracterización nunca producía un alta.
-**Estado:** 🟡 parcial: subidas de fotos en `e987c13` (Actions run `41028487256`); el resto de los controladores sigue validando inline.
+**Avance — pendientes:** `PendingItemController` (index, store y update) usa `IndexPendingItemsRequest`, `StorePendingItemRequest` y `UpdatePendingItemRequest`, con las mismas reglas, en el mismo orden y sin mensajes propios. La autorización sigue en `auth:sanctum`, `user.active` y `has.role` (`authorize()` devuelve `true`). La regla de pertenencia ítem/pedido sigue en el controlador, después de la validación, con su `422` y su cuerpo sin `errors`. 20 tests de caracterización (97 assertions) pasaron sin modificaciones antes y después del refactor: `401` en los cinco endpoints, `403` sin rol aun con cuerpo inválido, `404` de binding antes del `403` y de la validación, `422` con cuerpo exacto y orden de claves de `errors`, pertenencia sin efectos, allowlist de asignación masiva y re-resolución idempotente. No existe ningún `409` en este controlador.
+
+**Inventario restante (2026-10-31):** 13 controladores con `$request->validate()` inline, agrupados por familia:
+- Auth: `AuthController::register`, `login`. Usuarios: `UserController::updateRole`.
+- Pedidos: `OrderController::updateStatus`, `attachPallet`, `canFinalizeBatch`; `OrderImportController::import`.
+- Pallets: `PalletController::store`, `updateStatus`, `attachOrder`.
+- Tickets y OCR: `OrderTicketController::store`. Su `storePhoto`, igual que `PalletBasePhotoController::store`, aplica a propósito las reglas estáticas de un Form Request después de la pertenencia (D-022).
+- Solicitudes faltantes (públicas): `MissingItemRequestController::store`, `update`.
+- Anotaciones: `PhotoAnnotationController::store`. Productos: `ProductController::store`, `ProductImageController::bulkUpdate`, `checkExisting`.
+- Clientes: `CustomerController::store`.
+- Bot legado: `BotController::uploadPhoto` (fuera de alcance).
+
+Filtros de listados leídos sin validar: `OrderController::index`, `PalletController::index`, `MissingItemRequestController::index`, `CustomerController::index`, `ActivityLogController::index` y `Admin\StorageController`.
+
+**Estado:** 🟡 parcial: subidas de fotos en `e987c13` (Actions run `41028487256`); pendientes en `ac4f871`. El resto del inventario sigue validando inline.
 
 #### H-021 — Login inválido devuelve 422 en vez de 401
 ```
@@ -465,6 +479,28 @@ Origen:      pendiente declarado en D-018 y en la sesión de borrado recuperable
 **Contención (D-028):** se retiró la programación de `pallet:archive`. El comando pasó a ser un inventario de sólo lectura con el criterio legado, contado por la base mediante subconsultas: sin `--dry-run` falla con código 1 sin modificar nada; con `--dry-run` informa conteos. Ninguna opción ni variable de entorno habilita el borrado. Los tests acreditan que `pallet:archive` no está programado. Una guarda verifica además que los runtimes versionados conocidos (`supervisord.conf`, `docker-entrypoint.sh`, `nixpacks.toml`, `Dockerfile`) no invocan el scheduler ni el comando. No es una garantía sobre crons externos.
 
 **Estado:** 🟡 contenido en `9279c5e` y `d3658d1`. Actions run `41185684370`: `postgres-concurrency` y `container-security` verdes; en `ci` pasaron todos los gates backend y falló sólo el audit npm del frontend, ajeno a este cambio (ver `EJECUCION.md`). La parte destructiva queda bloqueada por `GAP-RETENTION` (ver `PLAN.md`). Relacionado con H-009.
+
+#### H-049 — Los mensajes de validación se devuelven como claves sin traducir
+```
+Severidad:   🟢 bajo · Categoría: calidad / contrato
+Ubicación:   pallet-backend/.env.example (APP_LOCALE=es, APP_FALLBACK_LOCALE=es); no existe lang/es
+Referencia:  `BE-ERR`, `FE-FORM`, `QA-CONTRACT`
+Origen:      caracterización de H-020 (pendientes)
+```
+**Qué está pasando:** con `APP_LOCALE=es` y sin archivos de traducción, los `422` del validador devuelven `message` y `errors` con la clave cruda: `validation.required`, `validation.min.numeric`, `validation.exists (and 1 more error)`. Los tests y CI usan esa misma configuración (`cp .env.example .env`). Sólo los Form Requests con mensajes propios (D-022) muestran texto en español.
+**Por qué importa:** el frontend puede mostrar la clave al usuario. Corregirlo cambia el texto de todos los `422`, y los tests de caracterización fijan los valores actuales.
+**Estado:** 🔲 abierto. Requiere decidir idioma y texto (publicar `lang/es` o mensajes propios) y revisar qué muestra el frontend.
+
+#### H-050 — Un id no numérico en una regla `exists` produce `500` en PostgreSQL
+```
+Severidad:   🟡 medio · Categoría: calidad / contrato de error
+Ubicación:   StorePendingItemRequest (`order_id`, `order_item_id`); revisar el resto de reglas `exists` sin `integer` previo
+Referencia:  `BE-VALID`, `BE-ERR`, `SEC-INPUT`
+Origen:      caracterización de H-020 (pendientes)
+```
+**Qué está pasando:** `exists:orders,id` sin `integer` previo envía el valor a la consulta. En SQLite, `order_id: "abc"` devuelve `422` (`validation.exists`). En PostgreSQL 17 local, la misma petición devuelve `500` genérico, porque la consulta falla con sintaxis inválida para `bigint`. Se verificó con un test temporal del grupo `postgres` que no quedó en el repositorio.
+**Por qué importa:** entrada inválida produce un `5xx` en producción, en lugar del `422` que exige `BE-ERR`. Agregar `integer` no alcanza, porque sin `bail` la regla `exists` se ejecuta igual. Además, el cuerpo del `422` cambiaría.
+**Estado:** 🔲 abierto. No se corrigió en el refactor, para no cambiar el contrato sin decisión.
 
 ---
 

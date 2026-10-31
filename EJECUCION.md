@@ -494,9 +494,29 @@ Evidencia: commits `9279c5e` (contención) y `d3658d1` (conteos en base y guarda
 
 Pendiente: `GAP-RETENTION` (decisión de dominio) y los avisos npm del frontend (`DO-SUPPLY`).
 
+## Última sesión cerrada — validación de pendientes (H-020)
+
+Rama `hardening/request-validation-next-slice`, creada desde `hardening/archive-old-data-safety` (`28e53ee`). Se aplicaron `BE-API`, `BE-VALID`, `BE-ERR`, `SEC-INPUT`, `SEC-AUTHZ` y `QA-CONTRACT`.
+
+1. Inventario de validación inline restante: 13 controladores agrupados por familia, más listados con filtros sin validar (ver H-020 en `AUDITORIA.md`). Se eligió sólo la familia de pendientes: un controlador, tres validaciones y sin pertenencia previa a la validación.
+2. Caracterización antes del refactor: `PendingItemValidationContractTest` (20 tests, 97 assertions) con `assertExactJson` y orden de claves de `errors`. Valores registrados:
+   - `401` en los cinco endpoints.
+   - `403` de `has.role` para escrituras sin rol, aun con cuerpo inválido.
+   - `404` de binding antes del `403` y de la validación, incluso para un usuario sin rol.
+   - `422` estándar para entrada inválida, y `422` `{"message":"El producto no pertenece a ese pedido"}` sin `errors` ni efectos para la pertenencia, que sólo se evalúa si la validación pasa.
+   - Campos fuera del allowlist ignorados.
+   - Ningún `409`: re-resolver un resuelto responde `200` y conserva `resolved_at`/`resolved_by`.
+3. Refactor: tres Form Requests con `authorize()` en `true` y reglas idénticas. El controlador consume `validated()` y conserva la pertenencia y la lógica de estado. El mismo archivo de tests pasó sin cambios antes y después. La única entrada de baseline PHPStan afectada cambió de tipo (`array` → `array<string, mixed>`), sin crecer.
+4. Hallazgos nuevos, no corregidos para no cambiar el contrato: H-049, mensajes de validación como claves sin traducir; H-050, `exists` sin `integer` produce `500` en PostgreSQL 17 local, frente a `422` en SQLite. El `404` de binding expone el nombre de la clase del modelo en `message`; es comportamiento preexistente de Laravel y no se cambió.
+5. Gates locales con PHP 8.4: Pint, PHPStan sin errores, tests focalizados `--filter Pending` (30 tests, 1 skip de benchmark), suite completa 271 tests/1101 assertions (1 skip) y Composer audit sin avisos. Frontend sin cambios.
+
+Evidencia funcional: commit `ac4f871`.
+
+Pendiente: resto del inventario de H-020 por familia, H-049 y H-050.
+
 ## Próxima sesión
 
-Sin bloque autónomo asignado. Candidatos: `GAP-RETENTION` (requiere decisión de negocio), avisos npm del frontend (`DO-SUPPLY`), H-046 (previa decisión de dominio), resto de H-020 y política H-009.
+Sin bloque autónomo asignado. Candidatos: `GAP-RETENTION` (requiere decisión de negocio), avisos npm del frontend (`DO-SUPPLY`), H-046 (previa decisión de dominio), siguiente familia de H-020 (con H-050 si se decide su contrato), H-049 y política H-009.
 
 ## Sesiones R-02 a R-07
 

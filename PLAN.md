@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-31
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** subidas con compensación (`D-017`) y borrados de fotos/tickets/pallets/bases con intención durable, job post-commit y barrido supervisado (`D-018`); `H-011`/`H-017` resueltos para los flujos auditados. Colas y limpieza operables con estado, alerta por antigüedad y fallos terminales auditados (`D-019`). Invariante agregada asignado ≤ pedido protegida en base para todo escritor (`H-006`, `D-020`). Atribución de creación de pallets y diagnóstico del índice de auditoría (`H-014`/`H-016`, `D-021`). Contrato único de validación de subidas de fotos (`H-020` parcial, `D-022`). Runner de tests frontend con Vitest/jsdom/Testing Library integrado a CI (`D-023`). Flujos críticos frontend caracterizados; polling OCR acotado, cache privada limpiada al cerrar sesión y 401 de login corregido (`D-024`). Conflictos de estado restantes normalizados a `409` (`H-023`/`H-027`, `D-025`). Auditoría posterior: un `401` autenticado cierra la sesión completa desde `AuthProvider` (`H-043`, revisión de `D-024`) y el import ya no elimina ítems ausentes con asignaciones (`H-044`, revisión de `D-020`). Finalizar y reabrir tienen una autoridad transaccional única con locks ordenados, re-evaluación y efectos post-commit (`H-045`, `D-026`); el `PATCH` de estado sin reglas queda abierto (`H-046`). Ciclo de vida completo de las intenciones de borrado: reclamo por lease, intentos sin pérdidas, retención de 30 días y purga manual auditada con dry-run (`H-047`, `D-027`). `pallet:archive` ya no está programado y pasó a ser un inventario de sólo lectura; su borrado queda bloqueado por `GAP-RETENTION` (`H-048`, `D-028`). `H-029` y `H-038` requieren evidencia real de Render (Nixpacks no ejecuta worker ni barrido).
+**Trabajo actual:** subidas con compensación (`D-017`) y borrados de fotos/tickets/pallets/bases con intención durable, job post-commit y barrido supervisado (`D-018`); `H-011`/`H-017` resueltos para los flujos auditados. Colas y limpieza operables con estado, alerta por antigüedad y fallos terminales auditados (`D-019`). Invariante agregada asignado ≤ pedido protegida en base para todo escritor (`H-006`, `D-020`). Atribución de creación de pallets y diagnóstico del índice de auditoría (`H-014`/`H-016`, `D-021`). Contrato único de validación de subidas de fotos (`H-020` parcial, `D-022`). Runner de tests frontend con Vitest/jsdom/Testing Library integrado a CI (`D-023`). Flujos críticos frontend caracterizados; polling OCR acotado, cache privada limpiada al cerrar sesión y 401 de login corregido (`D-024`). Conflictos de estado restantes normalizados a `409` (`H-023`/`H-027`, `D-025`). Auditoría posterior: un `401` autenticado cierra la sesión completa desde `AuthProvider` (`H-043`, revisión de `D-024`) y el import ya no elimina ítems ausentes con asignaciones (`H-044`, revisión de `D-020`). Finalizar y reabrir tienen una autoridad transaccional única con locks ordenados, re-evaluación y efectos post-commit (`H-045`, `D-026`); el `PATCH` de estado sin reglas queda abierto (`H-046`). Ciclo de vida completo de las intenciones de borrado: reclamo por lease, intentos sin pérdidas, retención de 30 días y purga manual auditada con dry-run (`H-047`, `D-027`). `pallet:archive` ya no está programado y pasó a ser un inventario de sólo lectura; su borrado queda bloqueado por `GAP-RETENTION` (`H-048`, `D-028`). Validación de pendientes migrada a Form Requests sin cambio de contrato (`H-020` parcial); la caracterización reveló `H-049` y `H-050`. `H-029` y `H-038` requieren evidencia real de Render (Nixpacks no ejecuta worker ni barrido).
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -98,7 +98,9 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | H-039 | Prácticamente sin tests | 🔴 alto | Alto | 🟡 parcial (scaffolding sí, tests de negocio no) |
 | H-018 | Sin handler global de excepciones — ✅ resuelto | 🟡 medio | Medio | ❌ no |
 | H-031 | Sin CI de ningún tipo | 🟢 bajo | Alto | ✅ sí |
-| H-020 | 16 controladores validan inline | 🔴 alto (son 16 archivos) | Bajo | 🟡 parcial |
+| H-020 | Controladores validan inline — 🟡 parcial: fotos (D-022) y pendientes migrados; quedan 13 con inventario en `AUDITORIA.md` | 🔴 alto (por familias) | Bajo | 🟡 parcial |
+| H-049 | Mensajes de validación devueltos como claves sin traducir (`validation.required`) | 🟢 bajo | Bajo | ❌ no (requiere decisión de texto) |
+| H-050 | Id no numérico en regla `exists` produce `500` en PostgreSQL | 🟢 bajo | Medio | 🟡 parcial |
 | H-021 / H-022 / H-023 / H-027 | Códigos HTTP inconsistentes (401/403/409 vs 422/400) — ✅ resueltos (R-07, D-025) | 🟢 bajo c/u | Bajo | 🟡 parcial (CI puede flaggear, no decidir) |
 | H-024 | Formato de error no estandarizado — ✅ resuelto | 🟡 medio (depende de H-018) | Bajo | ❌ no |
 | H-041 | Larastan/PHPStan no instalado | 🟢 bajo | Medio | ✅ sí |
@@ -271,7 +273,7 @@ Decisiones que necesitan entrada en DECISIONES.md antes de ejecutarse:
 ✅ Code público de pedido: token opaco + límites por IP/recurso      → D-006, H-001, `SEC-ABUSE`
 
 Más adelante (Fase 3+):
-□ Migración de los 16 controladores a Form Request                  → H-020
+🟡 Migración de controladores a Form Request (fotos y pendientes hechos) → H-020
 ✅ Códigos HTTP: pasada de consistencia (422→409/403/401 según caso) → H-021,022,023,027 (D-025)
 ✅ PendingItemController::index con paginación y evidencia             → H-040, D-012
 □ Infraestructura futura                                                → `DO-INFRA`, `DO-EDGE`, `DO-RELEASE`
