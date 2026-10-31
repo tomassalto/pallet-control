@@ -394,6 +394,29 @@ Origen:      auditoría posterior sobre `127b828`
 **Evidencia:** tests SQLite de ausente asignado, varios conflictos juntos (incluida la suma entre dos bases), ausente sin asignación eliminado con `removed = 1`, límite exacto, archivo vacío/ininterpretable y rollback por fallo de auditoría. PostgreSQL enfrenta un import que omite un ítem con una asignación concurrente sobre ese ítem: nunca confirman ambos, no hay `5xx` y la asignación nunca se pierde en silencio.
 **Estado:** ✅ resuelto en `03b9c9f`; Actions run `41101014456` con los tres jobs verdes. La política general de conservación sigue en H-009.
 
+#### H-045 — Finalizar y reabrir sin transacción ni lock
+```
+Severidad:   🟠 alto · Categoría: integridad de datos
+Ubicación:   pallet-backend/app/Http/Controllers/Api/PalletController.php (finalize, reopen), OrderController.php (finalize)
+Referencia:  `BE-TX`, `BE-VALID`, `BE-ASYNC`, `SEC-LOG`, `QA-INVARIANT`, `DOMINIO.md`
+Origen:      riesgo residual de D-025
+```
+**Qué estaba pasando:** los requisitos se verificaban sobre el modelo de la ruta y el estado se escribía después sin lock ni transacción. Bases, fotos, asignaciones, cantidades o asociaciones podían cambiar entre lectura y escritura. Dos finalizaciones o una finalización y una reapertura podían decidir con datos obsoletos. Un fallo de auditoría dejaba el estado aplicado. Repetir finalizar respondía éxito con un log nuevo. adjust-item comprobaba `done` fuera de su transacción, y eliminar una foto de base bloqueaba la foto antes que el pallet.
+**Resolución:** `FinalizationService` bloquea entidad y dependencias en el orden extendido de D-020, re-evalúa estado y requisitos dentro de la transacción, confirma estado y auditoría juntos y deja Telegram después del commit. Las repeticiones responden `409` sin log. adjust-item re-evalúa el estado bajo lock y el borrado de foto de base bloquea primero sus padres. Ver D-026.
+**Evidencia:** 20 tests SQLite cubren éxito, `paused`, requisitos faltantes, repetición, reapertura, asignaciones en pallets no asociados, rollback por fallo de auditoría en las tres transiciones, Telegram con la transacción ya confirmada y 10 queries constantes con 2 y 20 bases o ítems. En PostgreSQL, una compuerta de lock fuerza la superposición real con tres iteraciones por escenario: finalizar pallet contra adjust-item y contra eliminar foto, finalizar pedido contra cambio de cantidad, dos finalizaciones de pallet, dos de pedido, y finalizar contra reabrir. Sin `5xx` ni deadlock, un único log exitoso y orden de logs coherente con el estado final. Cinco repeticiones locales estables.
+**Estado:** ✅ resuelto en `74586a3`.
+
+#### H-046 — `PATCH` de pallet y pedido escribe `status` sin reglas
+```
+Severidad:   🟡 medio · Categoría: integridad de datos
+Ubicación:   pallet-backend/app/Http/Controllers/Api/PalletController.php::updateStatus, OrderController.php::updateStatus
+Referencia:  `BE-VALID`, `BE-TX`, `SEC-LOG`, `DOMINIO.md`
+Origen:      inventario de escritores de estado de D-026
+```
+**Qué está pasando:** `PATCH /pallets/{pallet}` y `PATCH /orders/{order}` aceptan `status` en `open`, `paused` o `done` y lo escriben sin requisitos, lock ni auditoría. Pueden finalizar o reabrir sin pasar por D-026.
+**Por qué importa:** existe un segundo camino de transición que omite la autoridad transaccional y no deja evidencia.
+**Estado:** 🔲 abierto. Requiere decidir si `paused` es una transición soportada y qué consumidores usan el endpoint antes de restringirlo.
+
 ---
 
 ### 🔴 INFRAESTRUCTURA / PÉRDIDA DE DATOS
@@ -519,12 +542,12 @@ Con 120 registros sobre SQLite local, el escenario reproducible pasó de 120 a 2
 | Categoría | 🔴 | 🟠 | 🟡 | ⚪ | Total |
 |---|---|---|---|---|---|
 | Seguridad | 1 | 3 | 4 | 0 | 8 |
-| Integridad de datos | 7 | 4 | 2 | 2 | 15 |
+| Integridad de datos | 7 | 5 | 3 | 2 | 17 |
 | Performance | 0 | 0 | 1 | 0 | 1 |
 | Calidad | 0 | 3 | 10 | 7 | 20 |
-| **Total** | **8** | **10** | **17** | **9** | **44** |
+| **Total** | **8** | **11** | **18** | **9** | **46** |
 
-*(H-043 y H-044 provienen de la auditoría posterior sobre `127b828`.)*
+*(H-043 y H-044 provienen de la auditoría posterior sobre `127b828`; H-045 y H-046, de la rebanada de finalización.)*
 
 *(algunos hallazgos tocan más de una categoría; se contaron en la categoría dominante — p. ej. H-019 es fuga de información pero se cuenta como seguridad, H-030/H-032 son de Docker/git pero también seguridad)*
 

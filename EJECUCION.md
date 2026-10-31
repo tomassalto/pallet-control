@@ -449,9 +449,24 @@ Evidencia funcional: commits `6e888bf` y `03b9c9f`. Actions run `41101014456` so
 
 Pendiente: la pantalla de import muestra sólo el `message` del `409`, no el detalle de `conflicts`. La conservación histórica de ítems eliminados sigue en H-009.
 
+## Última sesión cerrada — atomicidad de finalización
+
+Rama `hardening/finalization-atomicity`, creada desde `hardening/devin-review-fixes` (`0cf0516`, informada por el usuario). Se aplicaron `BE-ARCH`, `BE-TX`, `BE-VALID`, `BE-ERR`, `BE-ASYNC`, `SEC-LOG`, `QA-INVARIANT`, `QA-RESILIENCE` y `DOMINIO.md`.
+
+1. Inventario de escritores de estado: los tres endpoints de transición, más `PATCH /pallets/{pallet}` y `PATCH /orders/{order}`, que escriben `status` sin reglas (H-046, registrado y no tratado).
+2. Inventario de escritores de requisitos y sus locks: para el pallet, bases, fotos de base y asignaciones; para el pedido, ítems, cantidades, asociaciones y asignaciones. Dos desvíos: adjust-item comprobaba `done` fuera de su transacción y el borrado de foto de base bloqueaba la foto antes que el pallet.
+3. D-026: `FinalizationService` bloquea en el orden D-020 extendido con fotos de base, re-evalúa con los evaluadores puros de `can-finalize`, confirma estado y auditoría juntos y deja Telegram después del commit. Repetir una transición responde `409` sin log. La auditoría registra el estado anterior real.
+4. Carreras analizadas: adjust-item, crear/actualizar/eliminar base, migrar, asociar/desasociar, agregar/actualizar ítem, import y subir/eliminar foto de base. Todas se serializan con la transición por el pallet, los ítems o las asignaciones, sin ciclos de locks.
+5. Tests SQLite (20): éxito, `paused`, requisitos, repetición, reapertura, rollback por auditoría ×3, Telegram post-commit ×3 y 10 queries constantes. PostgreSQL (6 escenarios × 3 iteraciones, con compuerta de lock que fuerza superposición real): finalizar pallet contra adjust-item y contra borrar foto, finalizar pedido contra cambio de cantidad, dobles finalizaciones y finalizar contra reabrir.
+6. Gates locales: Pint, PHPStan (baseline sólo reduce conteos), 229 tests/840 assertions (1 skip), Composer audit y grupo PostgreSQL 23 tests/163 assertions; el archivo nuevo repetido 5 veces sin fallos. Frontend sin cambios.
+
+Evidencia funcional: commit `74586a3`.
+
+Pendiente: H-046. Los recorridos que siguen permitidos sobre una entidad finalizada, como bases y fotos en un pallet `done` o cantidades en un pedido `done`, requieren una decisión de dominio sobre el ciclo de transiciones. El resto de H-020 y H-009 sigue abierto.
+
 ## Próxima sesión
 
-Sin bloque autónomo asignado. Candidatos: transacción y lock de finalizar/reabrir, resto de H-020, política H-009.
+Sin bloque autónomo asignado. Candidatos: H-046 (previa decisión de dominio), resto de H-020, política H-009.
 
 ## Sesiones R-02 a R-07
 

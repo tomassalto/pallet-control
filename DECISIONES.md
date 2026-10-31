@@ -710,3 +710,46 @@ Esos cinco casos devuelven `409` y conservan el cuerpo actual (`message` y, en f
 Un consumidor externo que ramifique por `400`/`422` en esos endpoints debe adaptarse; no existe ninguno conocido además de la PWA. Finalizar y reabrir siguen sin lock ni transacción: el código de estado se corrige, pero la carrera entre dos finalizaciones queda para una rebanada transaccional propia.
 
 **Referencia normativa:** `BE-API`, `BE-ERR`, `BE-VALID`, `FE-DATA`, `QA-CONTRACT`, `SEC-LOG`
+
+**Revisión 2026-10-31:** el riesgo residual "finalizar y reabrir siguen sin lock ni transacción" queda resuelto por D-026.
+
+---
+
+## D-026 — Autoridad transaccional de finalización y reapertura
+
+**Fecha:** 2026-10-31
+**Estado:** ✅ vigente
+
+**Contexto**
+Finalizar pallet, reabrir pallet y finalizar pedido verificaban requisitos sobre el modelo resuelto por la ruta y después escribían estado y auditoría sin transacción ni lock (H-045). Una base, foto, asignación, cantidad o asociación podía cambiar entre la verificación y la escritura; dos requests podían finalizar o reabrir sobre información obsoleta; un fallo de auditoría dejaba el estado aplicado; Telegram se enviaba aunque la auditoría luego fallara. Repetir finalizar sobre un pedido o pallet ya finalizado volvía a responder éxito y duplicaba evidencia.
+
+El inventario de escritores relevantes:
+- Estado: los tres endpoints, más `PATCH /pallets/{pallet}` y `PATCH /orders/{order}`, que escriben `status` sin reglas (H-046, fuera de alcance).
+- Requisitos del pallet (bases, fotos de base, asignaciones de sus bases): crear, actualizar y eliminar base, adjust-item, migrar, desvincular pedido, eliminar pallet, subir y eliminar foto de base.
+- Requisitos del pedido (ítems, cantidades, pallets asociados, asignaciones): agregar ítem (R-04), actualizar ítem (R-05), import, asociar/desasociar, y los escritores de asignaciones citados arriba, incluida la cascada al eliminar una base.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Sólo transacción alrededor del código actual | Atomicidad de estado y auditoría | Sigue decidiendo con datos leídos sin lock |
+| Lock de la entidad y re-evaluación sin locks de dependencias | Serializa transiciones repetidas | Un escritor que no toma el lock de la entidad, como la cascada de base o el borrado de foto, sigue invalidando la decisión |
+| Versión optimista | Sin esperas | Requiere columna, reintentos y cambio de contrato en todos los escritores |
+| Lock de la entidad y de sus dependencias en orden D-020, con re-evaluación dentro | Reutiliza la estrategia vigente y la acredita en PostgreSQL | Serializa la transición con los escritores de esos recursos |
+
+**Decisión**
+- `FinalizationService` es la única autoridad para las tres transiciones. Los controladores traducen HTTP y notifican.
+- **Orden global de locks:** D-020 se extiende con las fotos de base como hijas de `bases`: `pallets → bases → fotos de base → order_items → orders → asignaciones`.
+- **Finalizar pallet:** pallet `FOR UPDATE` → bases `FOR SHARE` por id → fotos de base `FOR SHARE` por id → asignaciones de esas bases `FOR SHARE` por (`order_item_id`, `base_id`). Los conteos se calculan en PHP porque PostgreSQL no permite `FOR SHARE` con agregados.
+- **Reabrir pallet:** pallet `FOR UPDATE`; no depende de otros recursos.
+- **Finalizar pedido:** ítems del pedido `FOR SHARE` por id → pedido `FOR UPDATE` → asignaciones de esos ítems `FOR SHARE`. Pallets asociados y bases válidas se leen sin lock: asociar y desasociar bloquean el pedido, y la cascada de una base compite por las asignaciones. La consulta con lock no usa joins para no bloquear filas fuera de orden. Si el conjunto de ítems cambió entre el primer lock y el del pedido, la transición responde `409` ("El pedido cambió mientras se finalizaba. Volvé a intentarlo."), porque evaluar un ítem sin lock o bloquearlo tarde invertiría el orden.
+- **Re-evaluación:** estado y requisitos se evalúan dentro de la transacción, con los mismos evaluadores puros que usan los endpoints `can-finalize`. Las reglas y los mensajes no cambian.
+- **Transiciones repetidas:** finalizar algo ya finalizado responde `409` ("El pallet ya está finalizado." / "El pedido ya está finalizado."); reabrir un pallet no finalizado conserva su `409`. Ninguno escribe auditoría. Finalizar desde `paused` sigue permitido, y la auditoría registra el estado real anterior en lugar del `open` fijo del pedido.
+- **Atomicidad:** estado y activity log confirman o revierten juntos.
+- **Efectos post-commit:** Telegram se envía después de que la transacción confirmó y las relaciones de la respuesta se cargan fuera del lock. Es best-effort, como en D-016: su fallo no revierte la transición.
+- **Escritores ajustados:** adjust-item re-evalúa `status` sobre el pallet ya bloqueado `FOR SHARE`, no sobre el modelo de la ruta. Eliminar una foto de base toma `FOR SHARE` sobre pallet y base antes del lock de la foto, según la regla de padres de D-020. Así evita competir con la finalización por la foto y dejarla obsoleta, y evita el deadlock con el `FOR KEY SHARE` del activity log.
+
+**Trade-off aceptado**
+Finalizar espera a los escritores en curso del mismo pallet o de los mismos ítems, y viceversa. Un alta concurrente de ítem puede rechazar una finalización que se puede reintentar. Las reglas existentes no cambian: crear, actualizar o eliminar bases y subir o eliminar fotos siguen permitidos sobre un pallet finalizado, y actualizar ítems o asignar en otras bases sobre un pedido finalizado, por lo que un cambio posterior al commit puede dejar una entidad finalizada que ya no cumpliría los requisitos. Cerrar esos recorridos es una decisión de dominio pendiente (`DOMINIO.md`, ciclo de transiciones). `PATCH /pallets/{pallet}` y `PATCH /orders/{order}` todavía pueden escribir `done` sin reglas (H-046).
+
+**Referencia normativa:** `BE-ARCH`, `BE-TX`, `BE-VALID`, `BE-ERR`, `BE-ASYNC`, `SEC-LOG`, `QA-INVARIANT`, `QA-RESILIENCE`, `DOMINIO.md`
