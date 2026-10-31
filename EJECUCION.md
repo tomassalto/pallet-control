@@ -460,9 +460,9 @@ Rama `hardening/finalization-atomicity`, creada desde `hardening/devin-review-fi
 5. Tests SQLite (20): éxito, `paused`, requisitos, repetición, reapertura, rollback por auditoría ×3, Telegram post-commit ×3 y 10 queries constantes. PostgreSQL (6 escenarios × 3 iteraciones, con compuerta de lock que fuerza superposición real): finalizar pallet contra adjust-item y contra borrar foto, finalizar pedido contra cambio de cantidad, dobles finalizaciones y finalizar contra reabrir.
 6. Gates locales: Pint, PHPStan (baseline sólo reduce conteos), 229 tests/840 assertions (1 skip), Composer audit y grupo PostgreSQL 23 tests/163 assertions; el archivo nuevo repetido 5 veces sin fallos. Frontend sin cambios.
 
-Evidencia funcional: commit `74586a3`.
+Evidencia funcional: commit `74586a3`. Actions run `41173522786` sobre `01f01b7`: `postgres-concurrency` y `container-security` verdes. En `ci` pasaron Pint, PHPStan, tests, Composer audit y el audit npm del backend; falló sólo `npm audit --audit-level=moderate` del frontend. Ese audit encontró avisos moderados nuevos de `glob` (GHSA-3g3m-2fjr-6pw4) y `minimatch` (GHSA-g3hv-75wg-m249), transitivos de eslint y workbox-build. La rama no tocó el frontend, ni su lockfile. Remediarlos es un cambio de dependencias (`DO-SUPPLY`) para otra sesión, y no se bajó el umbral de D-004.
 
-Pendiente: H-046. Los recorridos que siguen permitidos sobre una entidad finalizada, como bases y fotos en un pallet `done` o cantidades en un pedido `done`, requieren una decisión de dominio sobre el ciclo de transiciones. El resto de H-020 y H-009 sigue abierto.
+Pendiente: los avisos npm del frontend que bloquean el job `ci`. H-046. Los recorridos que siguen permitidos sobre una entidad finalizada, como bases y fotos en un pallet `done` o cantidades en un pedido `done`, requieren una decisión de dominio sobre el ciclo de transiciones. El resto de H-020 y H-009 sigue abierto.
 
 ## Próxima sesión
 
