@@ -5,9 +5,12 @@ namespace App\Services;
 use App\Helpers\ActivityLogger;
 use App\Jobs\DeleteStoredFile;
 use App\Models\PendingFileDeletion;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
 use LogicException;
 use RuntimeException;
 use Throwable;
@@ -15,6 +18,15 @@ use Throwable;
 class StorageCleanupService
 {
     public const MAX_ATTEMPTS = 10;
+
+    // Mayor que el timeout de DeleteStoredFile (60s) y menor que el
+    // intervalo del barrido (600s): si el worker muere con el lease
+    // tomado, el siguiente barrido ya puede reclamar la intención.
+    public const LEASE_SECONDS = 300;
+
+    // Mínimo de retención de completadas: garantiza que la métrica
+    // completed_last_24h nunca se ve afectada por una purga.
+    public const MIN_RETENTION_DAYS = 2;
 
     /**
      * Registra una intención durable de borrado por cada objeto.
@@ -67,20 +79,62 @@ class StorageCleanupService
      * sin mensaje ni excepción encadenada— para que la cola reintente sin
      * filtrar mensajes internos a failed_jobs.
      */
-    public function process(int $intentId): bool
+    public function process(int $intentId, bool $includeExhausted = false, bool $onlyDue = false): bool
     {
         $intent = PendingFileDeletion::find($intentId);
+        // Pudo ser purgada tras completarse: el trabajo ya no existe.
         if (! $intent || $intent->completed_at !== null) {
             return true;
         }
 
-        $disk = Storage::disk($intent->disk);
+        // Reclamo con un solo UPDATE condicional: quien afecta la fila
+        // es el dueño del lease; los demás se retiran sin tocar storage.
+        $token = (string) Str::uuid();
+        $now = now();
+        $claimed = PendingFileDeletion::query()
+            ->where('id', $intentId)
+            ->whereNull('completed_at')
+            ->where(fn ($q) => $q->whereNull('claimed_until')->orWhere('claimed_until', '<=', $now))
+            ->when(! $includeExhausted, fn ($q) => $q->where('attempts', '<', self::MAX_ATTEMPTS))
+            ->when($onlyDue, fn ($q) => $q->where('available_at', '<=', $now))
+            ->update([
+                'claim_token' => $token,
+                'claimed_until' => $now->copy()->addSeconds(self::LEASE_SECONDS),
+                'updated_at' => $now,
+            ]);
+
+        if ($claimed !== 1) {
+            // Otro worker tiene un lease activo o la intención no es
+            // elegible (agotada sin flag, aún en backoff): no es error.
+            return false;
+        }
+
+        if ($intent->claimed_until !== null) {
+            Log::warning('Intención de borrado reclamada tras lease vencido', [
+                'intent_id' => $intent->id,
+                'claimed_until' => Carbon::parse($intent->claimed_until)->toIso8601String(),
+            ]);
+        }
+
         $error = null;
 
         try {
+            // Un disco desconocido también cuenta como fallo del intento.
+            $disk = Storage::disk($intent->disk);
             $deleted = $disk->delete($intent->path);
             if ($deleted || ! $disk->exists($intent->path)) {
-                $intent->forceFill(['completed_at' => now()])->save();
+                // La completitud es un hecho, no depende del token: si un
+                // worker perdió su lease y aun así borró, su UPDATE final
+                // es no-op para el nuevo dueño.
+                PendingFileDeletion::query()
+                    ->where('id', $intentId)
+                    ->whereNull('completed_at')
+                    ->update([
+                        'completed_at' => now(),
+                        'claim_token' => null,
+                        'claimed_until' => null,
+                        'updated_at' => now(),
+                    ]);
 
                 return true;
             }
@@ -90,21 +144,23 @@ class StorageCleanupService
             $error = $e::class;
         }
 
-        $this->registrarFallo($intent, $error);
+        $this->registrarFallo($intentId, $token, $error);
 
-        throw new RuntimeException("Fallo al borrar objeto de storage ({$error}) para la intención {$intent->id}");
+        throw new RuntimeException("Fallo al borrar objeto de storage ({$error}) para la intención {$intentId}");
     }
 
     /**
      * Barrido de intenciones vencidas. Un fallo individual no detiene el lote.
      *
-     * @return array{processed: int, completed: int, failed: int, exhausted_remaining: int}
+     * @return array{processed: int, completed: int, failed: int, skipped: int, exhausted_remaining: int}
      */
     public function retryPending(int $limit, bool $includeExhausted): array
     {
         $intents = PendingFileDeletion::query()
             ->whereNull('completed_at')
             ->where('available_at', '<=', now())
+            // Un lease activo significa que otro worker la está procesando.
+            ->where(fn ($q) => $q->whereNull('claimed_until')->orWhere('claimed_until', '<=', now()))
             ->when(! $includeExhausted, fn ($q) => $q->where('attempts', '<', self::MAX_ATTEMPTS))
             ->orderBy('id')
             ->limit($limit)
@@ -129,14 +185,18 @@ class StorageCleanupService
             'processed' => 0,
             'completed' => 0,
             'failed' => 0,
+            'skipped' => 0,
             'exhausted_remaining' => 0,
         ];
 
         foreach ($intents as $intent) {
             $counts['processed']++;
             try {
-                if ($this->process($intent->id)) {
+                if ($this->process($intent->id, $includeExhausted, onlyDue: true)) {
                     $counts['completed']++;
+                } else {
+                    // Otro worker se adelantó con el reclamo.
+                    $counts['skipped']++;
                 }
             } catch (Throwable) {
                 $counts['failed']++;
@@ -175,6 +235,63 @@ class StorageCleanupService
     }
 
     /**
+     * Purga intenciones completadas más viejas que la retención. Pendientes,
+     * reintentando, procesando y agotadas tienen completed_at nulo, así que
+     * por construcción nunca entran a la purga.
+     *
+     * @return array{retention_days: int, cutoff: string, eligible: int, deleted: int}
+     */
+    public function pruneCompleted(int $retentionDays, bool $dryRun): array
+    {
+        if ($retentionDays < self::MIN_RETENTION_DAYS) {
+            throw new InvalidArgumentException(
+                'La retención mínima es de ' . self::MIN_RETENTION_DAYS . ' días.'
+            );
+        }
+
+        $cutoff = now()->subDays($retentionDays);
+        $eligible = PendingFileDeletion::query()
+            ->whereNotNull('completed_at')
+            ->where('completed_at', '<', $cutoff)
+            ->count();
+
+        $deleted = 0;
+        if (! $dryRun) {
+            $deleted = DB::transaction(function () use ($cutoff, $retentionDays): int {
+                // La condición se reevalúa dentro de la transacción: lo que
+                // se complete entre el conteo y el DELETE también se purga.
+                $deleted = PendingFileDeletion::query()
+                    ->whereNotNull('completed_at')
+                    ->where('completed_at', '<', $cutoff)
+                    ->delete();
+
+                // Auditoría sin paths ni discos: la purga siempre queda
+                // registrada, incluso con cero filas borradas.
+                ActivityLogger::log(
+                    action: 'file_deletions_pruned',
+                    entityType: 'pending_file_deletion',
+                    entityId: null,
+                    description: "Purga de intenciones completadas anteriores a {$cutoff->toIso8601String()}: {$deleted}",
+                    newValues: [
+                        'deleted' => $deleted,
+                        'cutoff' => $cutoff->toIso8601String(),
+                        'retention_days' => $retentionDays,
+                    ],
+                );
+
+                return $deleted;
+            });
+        }
+
+        return [
+            'retention_days' => $retentionDays,
+            'cutoff' => $cutoff->toIso8601String(),
+            'eligible' => $eligible,
+            'deleted' => $deleted,
+        ];
+    }
+
+    /**
      * Estado operativo de la limpieza de storage para storage:cleanup-status.
      *
      * @return array{
@@ -183,6 +300,11 @@ class StorageCleanupService
      *     exhausted: int,
      *     completed_last_24h: int,
      *     failed_jobs: int,
+     *     processing: int,
+     *     expired_leases: int,
+     *     completed_retained: int,
+     *     purgeable: int,
+     *     retention_days: int,
      *     alert: bool,
      * }
      */
@@ -211,28 +333,69 @@ class StorageCleanupService
             ->where('payload', 'like', '%DeleteStoredFile%')
             ->count();
 
+        $processing = PendingFileDeletion::query()
+            ->whereNull('completed_at')
+            ->where('claimed_until', '>', now())
+            ->count();
+
+        $expiredLeases = PendingFileDeletion::query()
+            ->whereNull('completed_at')
+            ->whereNotNull('claimed_until')
+            ->where('claimed_until', '<=', now())
+            ->count();
+
+        $completedRetained = PendingFileDeletion::query()
+            ->whereNotNull('completed_at')
+            ->count();
+
+        $retentionDays = (int) config('queue.storage_cleanup_retention_days', 30);
+        $purgeable = PendingFileDeletion::query()
+            ->whereNotNull('completed_at')
+            ->where('completed_at', '<', now()->subDays($retentionDays))
+            ->count();
+
         return [
             'pending' => $pending,
             'oldest_pending_minutes' => $oldestPendingMinutes,
             'exhausted' => $exhausted,
             'completed_last_24h' => $completedLast24h,
             'failed_jobs' => $failedJobs,
+            'processing' => $processing,
+            'expired_leases' => $expiredLeases,
+            'completed_retained' => $completedRetained,
+            'purgeable' => $purgeable,
+            'retention_days' => $retentionDays,
             'alert' => $exhausted > 0
                 || ($oldestPendingMinutes !== null && $oldestPendingMinutes > $alertAfterMinutes),
         ];
     }
 
-    private function registrarFallo(PendingFileDeletion $intent, string $error): void
+    private function registrarFallo(int $intentId, string $token, string $error): void
     {
-        $intent->attempts++;
-        $intent->last_error = $error;
-        $intent->available_at = now()->addMinutes(min(2 ** $intent->attempts, 60));
+        $intent = DB::transaction(function () use ($intentId, $token, $error): ?PendingFileDeletion {
+            $intent = PendingFileDeletion::query()->lockForUpdate()->find($intentId);
+            if (! $intent || $intent->completed_at !== null) {
+                return null;
+            }
 
-        if ($intent->attempts === self::MAX_ATTEMPTS) {
+            // Un intento real ocurrió y siempre cuenta, aunque nuestro
+            // lease haya vencido y otro worker sea ahora el dueño.
+            $intent->attempts++;
+            $intent->last_error = $error;
+
+            if ($intent->claim_token === $token) {
+                // Sigue siendo nuestro lease: reprogramamos y lo liberamos.
+                $intent->available_at = now()->addMinutes(min(2 ** $intent->attempts, 60));
+                $intent->claim_token = null;
+                $intent->claimed_until = null;
+            }
+            // Si el token difiere, otro worker la posee: su reclamo y su
+            // available_at quedan intactos.
+
             // Transición a agotada (sólo la primera vez que alcanza el
             // máximo): el cambio de estado y su auditoría confirman juntos
             // o no queda ninguno.
-            DB::transaction(function () use ($intent): void {
+            if ($intent->attempts === self::MAX_ATTEMPTS) {
                 $intent->save();
 
                 ActivityLogger::log(
@@ -247,9 +410,15 @@ class StorageCleanupService
                         'last_error' => $intent->last_error,
                     ],
                 );
-            });
-        } else {
-            $intent->save();
+            } else {
+                $intent->save();
+            }
+
+            return $intent;
+        });
+
+        if (! $intent) {
+            return;
         }
 
         $context = [

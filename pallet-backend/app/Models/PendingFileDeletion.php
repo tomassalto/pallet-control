@@ -14,6 +14,8 @@ class PendingFileDeletion extends Model
         'last_error',
         'available_at',
         'completed_at',
+        'claim_token',
+        'claimed_until',
     ];
 
     protected function casts(): array
@@ -22,6 +24,7 @@ class PendingFileDeletion extends Model
             'attempts' => 'integer',
             'available_at' => 'datetime',
             'completed_at' => 'datetime',
+            'claimed_until' => 'datetime',
         ];
     }
 }

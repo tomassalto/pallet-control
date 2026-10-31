@@ -141,4 +141,17 @@ return [
 
     'storage_cleanup_alert_minutes' => (int) env('STORAGE_CLEANUP_ALERT_MINUTES', 60),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Retención de intenciones de borrado completadas
+    |--------------------------------------------------------------------------
+    |
+    | Días que una intención completada se conserva como evidencia antes de
+    | que storage:prune-deletions pueda purgarla (mínimo 2: nunca puede
+    | afectar la métrica completed_last_24h).
+    |
+    */
+
+    'storage_cleanup_retention_days' => (int) env('STORAGE_CLEANUP_RETENTION_DAYS', 30),
+
 ];

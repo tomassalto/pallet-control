@@ -25,10 +25,11 @@ class RetryPendingDeletions extends Command
             $counts = $cleanup->retryPending($limit, $includeExhausted);
 
             $this->line(sprintf(
-                'procesadas=%d completadas=%d fallidas=%d agotadas_pendientes=%d',
+                'procesadas=%d completadas=%d fallidas=%d omitidas=%d agotadas_pendientes=%d',
                 $counts['processed'],
                 $counts['completed'],
                 $counts['failed'],
+                $counts['skipped'],
                 $counts['exhausted_remaining'],
             ));
 
