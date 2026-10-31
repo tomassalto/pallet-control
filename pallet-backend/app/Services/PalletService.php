@@ -21,8 +21,19 @@ class PalletService
     {
         $basesCount = $pallet->bases->count();
         $totalPhotos = $pallet->bases->sum(fn ($base) => $base->photos->count());
-        $allBasesHaveProducts = $pallet->bases->every(fn ($base) => $base->orderItems->count() >= 1);
         $basesWithProducts = $pallet->bases->filter(fn ($base) => $base->orderItems->count() >= 1)->count();
+
+        return self::evaluateFinalization($basesCount, $totalPhotos, $basesWithProducts);
+    }
+
+    /**
+     * Evaluador puro de las reglas de finalización de un pallet.
+     *
+     * @return array{can: bool, reason: string|null, details: array}
+     */
+    public static function evaluateFinalization(int $basesCount, int $totalPhotos, int $basesWithProducts): array
+    {
+        $allBasesHaveProducts = $basesWithProducts === $basesCount;
 
         $can = $basesCount >= 2 && $totalPhotos >= 2 && $allBasesHaveProducts;
 

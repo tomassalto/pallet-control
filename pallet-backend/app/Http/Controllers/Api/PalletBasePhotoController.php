@@ -84,6 +84,12 @@ class PalletBasePhotoController extends Controller
         }
 
         return DB::transaction(function () use ($base, $pallet, $photoId) {
+            // El activity log toma FOR KEY SHARE en el pallet al insertar:
+            // se adquieren FOR SHARE sobre los padres en orden D-020 antes
+            // del lock FOR UPDATE de la foto para no invertir la espera.
+            Pallet::query()->whereKey($pallet->id)->sharedLock()->first();
+            PalletBase::query()->whereKey($base->id)->sharedLock()->first();
+
             $photo = $base->photos()->lockForUpdate()->find($photoId);
             if (! $photo) {
                 return response()->json(['message' => 'Foto no encontrada'], 404);

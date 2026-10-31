@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Order;
 use App\Models\Pallet;
+use App\Services\FinalizationService;
 use App\Services\OrderPalletAssociationService;
 use App\Services\OrderService;
 use App\Services\PalletService;
@@ -21,6 +22,7 @@ class PalletController extends Controller
     public function __construct(
         private readonly OrderPalletAssociationService $orderPalletAssociationService,
         private readonly StorageCleanupService $storageCleanup,
+        private readonly FinalizationService $finalizationService,
     ) {}
 
     public function index(Request $request)
@@ -198,30 +200,13 @@ class PalletController extends Controller
     // Finalizar pallet (cambiar status a 'done')
     public function finalize(Pallet $pallet)
     {
-        $pallet->load(['bases.photos', 'bases.orderItems']);
-
-        $check = PalletService::canFinalize($pallet);
-
-        if (! $check['can']) {
-            return response()->json([
-                'message' => $check['reason'],
-                ...$check['details'],
-            ], 409);
+        $result = $this->finalizationService->finalizePallet($pallet);
+        if (isset($result['error'])) {
+            return response()->json($result['error'], $result['status']);
         }
 
-        $oldStatus = $pallet->status;
-        $pallet->update(['status' => 'done']);
-
-        ActivityLogger::log(
-            action: 'pallet_finalized',
-            entityType: 'pallet',
-            entityId: $pallet->id,
-            description: "Pallet '{$pallet->code}' finalizado",
-            palletId: $pallet->id,
-            oldValues: ['status' => $oldStatus],
-            newValues: ['status' => 'done'],
-        );
-
+        // La transacción ya confirmó: notificar y cargar relaciones afuera.
+        $pallet = $result['pallet'];
         TelegramNotifier::send("🎉 Pallet `{$pallet->code}` *cerrado* ✓");
 
         return response()->json([
@@ -233,25 +218,12 @@ class PalletController extends Controller
     // Reabrir pallet (cambiar status de 'done' a 'open')
     public function reopen(Pallet $pallet)
     {
-        if ($pallet->status !== 'done') {
-            return response()->json([
-                'message' => 'Solo se pueden reabrir pallets que estén finalizados',
-            ], 409);
+        $result = $this->finalizationService->reopenPallet($pallet);
+        if (isset($result['error'])) {
+            return response()->json($result['error'], $result['status']);
         }
 
-        $oldStatus = $pallet->status;
-        $pallet->update(['status' => 'open']);
-
-        ActivityLogger::log(
-            action: 'pallet_reopened',
-            entityType: 'pallet',
-            entityId: $pallet->id,
-            description: "Pallet '{$pallet->code}' reabierto",
-            palletId: $pallet->id,
-            oldValues: ['status' => $oldStatus],
-            newValues: ['status' => 'open'],
-        );
-
+        $pallet = $result['pallet'];
         TelegramNotifier::send("🔄 Pallet `{$pallet->code}` *reabierto*");
 
         return response()->json([

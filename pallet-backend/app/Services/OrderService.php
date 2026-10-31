@@ -21,14 +21,6 @@ class OrderService
      */
     public static function canFinalize(Order $order): array
     {
-        if ($order->items->isEmpty()) {
-            return ['can' => false, 'reason' => 'El pedido no tiene productos'];
-        }
-
-        if ($order->pallets->isEmpty()) {
-            return ['can' => false, 'reason' => 'El pedido debe tener al menos 1 pallet asociado para finalizar'];
-        }
-
         // Sumar unidades asignadas por ítem a través de todas las bases de todos los pallets
         $assignedQtys = [];
         foreach ($order->pallets as $pallet) {
@@ -41,8 +33,28 @@ class OrderService
             }
         }
 
-        $allDistributed = $order->items->every(
-            fn ($item) => ($assignedQtys[$item->id] ?? 0) >= $item->qty
+        return self::evaluateFinalization($order->items, $order->pallets->isNotEmpty(), $assignedQtys);
+    }
+
+    /**
+     * Evaluador puro de las reglas de finalización de un pedido.
+     *
+     * @param Collection $items Ítems del pedido (con id y qty)
+     * @param array<int, int|float> $assignedByItem Unidades asignadas por order_item_id
+     * @return array{can: bool, reason: string|null}
+     */
+    public static function evaluateFinalization(Collection $items, bool $hasPallets, array $assignedByItem): array
+    {
+        if ($items->isEmpty()) {
+            return ['can' => false, 'reason' => 'El pedido no tiene productos'];
+        }
+
+        if (! $hasPallets) {
+            return ['can' => false, 'reason' => 'El pedido debe tener al menos 1 pallet asociado para finalizar'];
+        }
+
+        $allDistributed = $items->every(
+            fn ($item) => ($assignedByItem[$item->id] ?? 0) >= $item->qty
         );
 
         if (! $allDistributed) {

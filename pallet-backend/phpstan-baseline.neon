@@ -477,13 +477,13 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Services/OrderService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$qty\.$#'
 			identifier: property.notFound
-			count: 3
+			count: 2
 			path: app/Services/OrderService.php
 
 		-
@@ -543,7 +543,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$orderItems\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Services/PalletService.php
 
 		-

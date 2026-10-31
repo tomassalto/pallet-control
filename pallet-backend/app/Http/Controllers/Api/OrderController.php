@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Pallet;
 use App\Models\PendingItem;
+use App\Services\FinalizationService;
 use App\Services\OrderPalletAssociationService;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
@@ -21,7 +22,8 @@ use Illuminate\Support\Facades\Schema;
 class OrderController extends Controller
 {
     public function __construct(
-        private readonly OrderPalletAssociationService $orderPalletAssociationService
+        private readonly OrderPalletAssociationService $orderPalletAssociationService,
+        private readonly FinalizationService $finalizationService
     ) {}
 
     public function index(Request $request)
@@ -296,26 +298,13 @@ class OrderController extends Controller
     // POST /orders/{order}/finalize
     public function finalize(Order $order)
     {
-        $order->load(['items', 'pallets.bases.orderItems']);
-
-        ['can' => $can, 'reason' => $reason] = OrderService::canFinalize($order);
-
-        if (! $can) {
-            return response()->json(['message' => $reason], 409);
+        $result = $this->finalizationService->finalizeOrder($order);
+        if (isset($result['error'])) {
+            return response()->json($result['error'], $result['status']);
         }
 
-        $order->update(['status' => 'done']);
-
-        ActivityLogger::log(
-            action: 'order_finalized',
-            entityType: 'order',
-            entityId: $order->id,
-            description: "Pedido '{$order->code}' finalizado",
-            oldValues: ['status' => 'open'],
-            newValues: ['status' => 'done'],
-            orderId: $order->id,
-        );
-
+        // La transacción ya confirmó: notificar y cargar relaciones afuera.
+        $order = $result['order'];
         TelegramNotifier::send("✅ Pedido `#{$order->code}` *finalizado*");
 
         return response()->json([

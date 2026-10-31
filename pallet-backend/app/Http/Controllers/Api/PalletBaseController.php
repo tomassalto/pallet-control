@@ -73,10 +73,6 @@ class PalletBaseController extends Controller
             return response()->json(['message' => 'Base no encontrada en este pallet'], 404);
         }
 
-        if ($pallet->status === 'done') {
-            return response()->json(['message' => 'El pallet está finalizado. Reabrilo antes de modificar sus bases.'], 409);
-        }
-
         $data = $request->validated();
 
         $result = DB::transaction(function () use ($data, $pallet, $base) {
@@ -85,7 +81,23 @@ class PalletBaseController extends Controller
             // FOR SHARE en orden D-020 ANTES del lock del order_item:
             // si detach u otro recorrido retiene pallet/bases FOR UPDATE,
             // aquí se espera sin poseer el item — nunca hay ciclo.
-            Pallet::query()->whereKey($pallet->id)->sharedLock()->first();
+            $lockedPallet = Pallet::query()->whereKey($pallet->id)->sharedLock()->first();
+            if (! $lockedPallet) {
+                return [
+                    'error' => ['message' => 'Base no encontrada en este pallet'],
+                    'status' => 404,
+                ];
+            }
+
+            // El estado se re-evalúa bajo lock: un finalize que confirme
+            // mientras se espera el FOR SHARE no puede dejar entrar el ajuste.
+            if ($lockedPallet->status === 'done') {
+                return [
+                    'error' => ['message' => 'El pallet está finalizado. Reabrilo antes de modificar sus bases.'],
+                    'status' => 409,
+                ];
+            }
+
             PalletBase::query()->whereKey($base->id)->sharedLock()->first();
 
             // El bloqueo del item serializa todos sus ajustes, aunque estén en pallets distintos.
