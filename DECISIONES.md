@@ -487,6 +487,8 @@ El borrado físico es eventual: durante una caída de R2 el objeto sigue existie
 
 **Referencia normativa:** `BE-TX`, `BE-ASYNC`, `BE-ERR`, `BE-DATA`, `SEC-FILE`, `SEC-LOG`, `DO-INFRA`, `QA-INVARIANT`, `QA-RESILIENCE`
 
+**Revisión 2026-10-31:** la política de retención de completadas y el procesamiento concurrente de una misma intención quedan definidos por D-027.
+
 ---
 
 ## D-019 — Operabilidad de colas y limpieza de archivos
@@ -525,6 +527,8 @@ D-018 dejó intenciones durables de borrado, un job y un barrido supervisado, pe
 La alerta existe como comando y log crítico; conectarla a un monitor externo depende de la plataforma y queda pendiente con H-029/H-038. Un worker caído no vuelve no-ready la aplicación. El OCR conserva el reintento ya vigente y su costo potencial en el proveedor.
 
 **Referencia normativa:** `BE-ASYNC`, `BE-ERR`, `DO-CONTAINER`, `DO-RELEASE`, `DO-OBS`, `DO-DR`, `SEC-LOG`, `QA-RESILIENCE`
+
+**Revisión 2026-10-31:** D-027 agrega a `storage:cleanup-status` las métricas de leases y retención sin cambiar el criterio de alerta. Suma al procedimiento la recuperación de leases vencidos y la purga manual de completadas. "Duplicados en cola se resuelven por idempotencia" pasa a ser también exclusión: un reclamo por lease impide que job y barrido llamen al storage a la vez.
 
 ---
 
@@ -753,3 +757,46 @@ El inventario de escritores relevantes:
 Finalizar espera a los escritores en curso del mismo pallet o de los mismos ítems, y viceversa. Un alta concurrente de ítem puede rechazar una finalización que se puede reintentar. Las reglas existentes no cambian: crear, actualizar o eliminar bases y subir o eliminar fotos siguen permitidos sobre un pallet finalizado, y actualizar ítems o asignar en otras bases sobre un pedido finalizado, por lo que un cambio posterior al commit puede dejar una entidad finalizada que ya no cumpliría los requisitos. Cerrar esos recorridos es una decisión de dominio pendiente (`DOMINIO.md`, ciclo de transiciones). `PATCH /pallets/{pallet}` y `PATCH /orders/{order}` todavía pueden escribir `done` sin reglas (H-046).
 
 **Referencia normativa:** `BE-ARCH`, `BE-TX`, `BE-VALID`, `BE-ERR`, `BE-ASYNC`, `SEC-LOG`, `QA-INVARIANT`, `QA-RESILIENCE`, `DOMINIO.md`
+
+---
+
+## D-027 — Ciclo de vida completo de las intenciones de borrado
+
+**Fecha:** 2026-10-31
+**Estado:** ✅ vigente
+
+**Contexto**
+D-018 conserva las intenciones completadas como evidencia y difiere su depuración a una política posterior. Sin esa política la tabla crece sin límite (H-047). `DO-DR` exige definir retención por dato y señala la retención infinita como antipatrón; `SEC-LOG` exige retención definida para la evidencia. Además, el job post-commit y el barrido podían procesar la misma intención al mismo tiempo y llamar dos veces al storage. Ante dos fallos simultáneos, cada uno guardaba `attempts` desde su copia en memoria y uno de los incrementos se perdía. Con eso el agotamiento y su auditoría podían retrasarse.
+
+No hubo GAP teórico: `BE-TX` (sin llamadas de red dentro del lock, reintentos sólo idempotentes), `BE-ASYNC` (idempotencia y estado fallido), `DO-DR`/`SEC-LOG` (retención definida) y `QA-DATA`/`QA-RESILIENCE` (reloj controlado, proceso interrumpido) cubren el problema. El plazo concreto y el mecanismo de reclamo son decisiones de proyecto.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| `SELECT … FOR UPDATE` durante la llamada al storage | Exclusión simple | Mantiene una transacción abierta durante una llamada remota (`BE-TX`); un R2 lento retiene la fila |
+| Lock de cache o `ShouldBeUnique` | Sin columnas nuevas | Depende del cache store, no cubre el barrido y no sobrevive a un worker muerto |
+| Reclamo con lease en la fila + incremento bajo lock corto | Sin transacción durante el storage, recuperable al vencer, verificable con reloj controlado | Dos columnas; un worker colgado más allá del lease puede solaparse y se apoya en la idempotencia |
+| Purga automática dentro del barrido supervisado | Crecimiento acotado sin intervención | Borra evidencia sin decisión operativa; el usuario eligió comando explícito |
+| Comando manual de purga con dry-run y auditoría | Explícito, revisable y auditado | El crecimiento sólo se acota si alguien lo ejecuta |
+
+**Decisión**
+- **Estados derivados, sin columna de estado.** Pendiente (`completed_at` nulo, `attempts = 0`); reintentando (`0 < attempts < 10`); procesando (`claimed_until` futuro); agotada (`attempts ≥ 10`, sin completar); completada y retenida (`completed_at` presente); purgada (fila eliminada, contada en un activity log `file_deletions_pruned`).
+- **Reclamo.** Antes de llamar al storage, un único `UPDATE` condicional fija `claim_token` (UUID) y `claimed_until = ahora + 300 s`, sólo si la intención no está completada y no tiene un lease vigente. El job excluye agotadas. El barrido exige además `available_at` vencido y sólo incluye agotadas con `--include-exhausted`. Si no afecta exactamente una fila, el proceso devuelve "omitida" sin tocar el storage. Ni el job ni el barrido lo tratan como error.
+- **Lease de 300 s.** Es mayor que el timeout de `DeleteStoredFile` (60 s) y menor que el intervalo del barrido (600 s), así que el barrido siguiente ya puede retomar la intención de un worker muerto. Un test protege ambas relaciones leyendo `supervisord.conf`. Retomar un lease vencido emite un warning.
+- **Sin transacción durante el storage.** El reclamo y la confirmación son sentencias sueltas; la llamada a `delete()`/`exists()` ocurre sin transacción abierta.
+- **Completar.** Un `UPDATE … WHERE completed_at IS NULL` marca la completitud y libera el lease sin exigir el token: el objeto ausente es un hecho. Si un worker pierde el lease y aun así borra, su confirmación tardía no tiene efecto. `attempts` y `last_error` se conservan como evidencia.
+- **Fallar.** En una transacción corta, la fila se bloquea, `attempts` se incrementa siempre (el intento ocurrió) y `last_error` guarda sólo la clase del error. Sólo si el token sigue siendo el propio se reprograma el backoff y se libera el lease; si no, el reclamo del dueño vigente queda intacto. La transición a agotada y su auditoría siguen confirmando juntas (D-019).
+- **Retención.** Las completadas se conservan 30 días (`STORAGE_CLEANUP_RETENTION_DAYS`), con un mínimo de 2. El mínimo garantiza que una purga nunca afecte la métrica de completadas en 24 horas. Treinta días cubren una revisión mensual de incidentes y la reconciliación de objetos después de restaurar la base a un punto anterior: las completadas posteriores a ese punto indican qué objetos ya no existen aunque sus filas reaparezcan. La auditoría de negocio de cada borrado vive en `activity_logs`, que se conserva (D-013); la intención es evidencia operativa.
+- **Purga.** `storage:prune-deletions [--days=N] [--dry-run]` es manual y no está conectada a supervisor, scheduler ni entrypoint. Elimina sólo filas con `completed_at` anterior al corte, y la misma condición se reevalúa en el `DELETE`. Pendientes, reintentando, procesando y agotadas tienen `completed_at` nulo y nunca entran. Cada corrida real, incluso sin filas, deja en la misma transacción un `file_deletions_pruned` con cantidad, corte y retención, sin discos ni rutas. El dry-run informa los elegibles sin escribir nada. Una retención menor al mínimo falla sin borrar.
+- **Estado.** `storage:cleanup-status` agrega procesando, leases vencidos, completadas retenidas, purgables y retención configurada. Pendientes, agotadas, completadas en 24 horas, jobs fallidos y el criterio de alerta de D-019 no cambian.
+
+**Recuperación operativa**
+1. Worker o barrido muertos con lease tomado: no hace falta acción. Al vencer el lease, el barrido siguiente reclama la intención. Si el objeto ya se había borrado, la intención se completa sin sumar intentos.
+2. `Leases vencidos > 0` de forma persistente indica que el barrido no corre: verificar el programa `file-cleanup` (D-019).
+3. Purga periódica, mensual o cuando `Purgables` crezca: `php artisan storage:prune-deletions --dry-run`, revisar el conteo y luego ejecutar `php artisan storage:prune-deletions`.
+
+**Trade-off aceptado**
+Un worker que siga vivo más allá del lease, por ejemplo con una llamada al storage colgada sin timeout del cliente, puede solaparse con el siguiente dueño. En ese caso la exclusión se degrada a idempotencia: borrar un objeto inexistente satisface la intención, la completitud no se duplica y los intentos de ambos se cuentan. La purga depende de un operador o de un cron externo de la plataforma (H-029/H-038); sin él, el crecimiento sigue acotado sólo por el volumen de borrados. El reclamo agrega una escritura por intento.
+
+**Referencia normativa:** `BE-TX`, `BE-ASYNC`, `BE-DATA`, `DO-OBS`, `DO-DR`, `SEC-LOG`, `QA-RESILIENCE`, `QA-DATA`

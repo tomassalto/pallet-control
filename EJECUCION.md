@@ -464,9 +464,25 @@ Evidencia funcional: commit `74586a3`. Actions run `41173522786` sobre `01f01b7`
 
 Pendiente: los avisos npm del frontend que bloquean el job `ci`. H-046. Los recorridos que siguen permitidos sobre una entidad finalizada, como bases y fotos en un pallet `done` o cantidades en un pedido `done`, requieren una decisión de dominio sobre el ciclo de transiciones. El resto de H-020 y H-009 sigue abierto.
 
+## Última sesión cerrada — ciclo de vida de la limpieza de storage
+
+Rama `hardening/storage-cleanup-lifecycle`, creada desde `hardening/finalization-atomicity` (`1dd07d0`). Se aplicaron `BE-ASYNC`, `BE-TX`, `BE-DATA`, `DO-OBS`, `DO-DR`, `SEC-LOG`, `QA-RESILIENCE` y `QA-DATA`. No hubo GAP: `DO-DR` y `SEC-LOG` exigen retención definida, y `BE-TX` prohíbe llamadas de red dentro del lock. El plazo y el mecanismo son decisión de proyecto (D-027), porque D-018 y D-019 dejaban la retención pendiente.
+
+1. H-047: completadas retenidas para siempre, job y barrido procesando la misma intención, e incrementos de `attempts` perdidos en fallos concurrentes.
+2. D-027: reclamo por lease de 300 s con un `UPDATE` condicional, sin transacción durante el storage. La completitud es idempotente sin exigir el token. El fallo incrementa bajo lock corto y sólo el dueño vigente reprograma.
+3. Migración nueva `claim_token`/`claimed_until`, probada `up → down → up` en SQLite temporal y en PostgreSQL 17 local.
+4. Retención de 30 días (mínimo 2), configurable con `STORAGE_CLEANUP_RETENTION_DAYS`. `storage:prune-deletions` es manual, con dry-run y auditoría `file_deletions_pruned` sin rutas, por decisión del usuario; no se conectó a supervisor. Pendientes, reintentando, en proceso y agotadas nunca se purgan.
+5. `storage:cleanup-status` suma procesando, leases vencidos, retenidas, purgables y retención; el criterio de alerta de D-019 no cambió. El barrido informa `omitidas`.
+6. Tests: 15 SQLite con reloj controlado y 2 PostgreSQL con dos barridos reales bajo compuerta, tres iteraciones cada uno. El test de fallo concurrente deja 1 intento con el código anterior y 2 con el nuevo. Los tests previos de limpieza pasan sin cambios.
+7. Gates locales: Pint, PHPStan sin crecer la baseline, 244 tests/932 assertions (1 skip PostgreSQL en SQLite), Composer audit, archivo nuevo repetido 5 veces y grupo PostgreSQL 25 tests/223 assertions (archivo nuevo 3 veces más). Frontend sin cambios.
+
+Evidencia funcional: commit `249b3d1`.
+
+Pendiente: la purga depende de un operador o cron externo (H-029/H-038). Los avisos npm moderados del frontend siguen bloqueando el último paso del job `ci`, como en la sesión anterior; por decisión del usuario no se tratan en este bloque.
+
 ## Próxima sesión
 
-Sin bloque autónomo asignado. Candidatos: H-046 (previa decisión de dominio), resto de H-020, política H-009.
+Sin bloque autónomo asignado. Candidatos: avisos npm del frontend (`DO-SUPPLY`), H-046 (previa decisión de dominio), resto de H-020, política H-009.
 
 ## Sesiones R-02 a R-07
 

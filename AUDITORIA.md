@@ -417,6 +417,27 @@ Origen:      inventario de escritores de estado de D-026
 **Por qué importa:** existe un segundo camino de transición que omite la autoridad transaccional y no deja evidencia.
 **Estado:** 🔲 abierto. Requiere decidir si `paused` es una transición soportada y qué consumidores usan el endpoint antes de restringirlo.
 
+#### H-047 — Intenciones de borrado sin retención ni exclusión entre procesos
+```
+Severidad:   🟡 medio · Categoría: integridad de datos / operación
+Ubicación:   pallet-backend/app/Services/StorageCleanupService.php, app/Jobs/DeleteStoredFile.php, comandos storage:*
+Referencia:  `BE-TX`, `BE-ASYNC`, `BE-DATA`, `DO-OBS`, `DO-DR`, `SEC-LOG`, `QA-RESILIENCE`, `QA-DATA`
+Origen:      trade-off pendiente de D-018
+```
+**Qué estaba pasando:** las intenciones completadas quedaban indefinidamente en `pending_file_deletions`. El job y el barrido podían procesar la misma intención a la vez y llamar dos veces al storage. Cada fallo guardaba `attempts` desde su copia en memoria, así que dos fallos simultáneos registraban un solo intento y retrasaban el agotamiento y su auditoría.
+**Resolución:** un reclamo con lease de 300 s mediante `UPDATE` condicional, sin transacción durante la llamada al storage. La completitud se confirma de forma idempotente, y el incremento de intentos ocurre bajo lock corto y siempre cuenta. Las completadas se retienen 30 días (mínimo 2). `storage:prune-deletions` purga sólo las completadas anteriores al corte, con dry-run y auditoría `file_deletions_pruned` sin rutas. `storage:cleanup-status` informa leases y retención. Ver D-027.
+**Evidencia:** 15 tests SQLite con reloj controlado cubren:
+- reclamo exclusivo con una sola llamada efectiva, y job ante lease ajeno;
+- fallo concurrente con lease vencido que conserva ambos intentos (con el código anterior quedaba 1);
+- lease vencido recuperado con aviso, y crash entre delete y persistencia;
+- archivo inexistente y agotadas excluidas del job;
+- purga de completadas viejas que conserva recientes, pendientes, reintentando, agotadas y en proceso;
+- dry-run sin escrituras, auditoría sin rutas incluso con cero filas, y retención mínima;
+- métricas antes y después de purgar, la guarda lease/timeout/intervalo, el saneamiento de errores y un job tardío sobre una intención purgada.
+
+En PostgreSQL, dos barridos reales compiten bajo compuerta `FOR UPDATE`, con intención nueva o con lease vencido de un worker muerto, tres iteraciones cada uno: exactamente uno completa y el otro omite.
+**Estado:** ✅ resuelto en `249b3d1`.
+
 ---
 
 ### 🔴 INFRAESTRUCTURA / PÉRDIDA DE DATOS
