@@ -800,3 +800,37 @@ No hubo GAP teórico: `BE-TX` (sin llamadas de red dentro del lock, reintentos s
 Un worker que siga vivo más allá del lease, por ejemplo con una llamada al storage colgada sin timeout del cliente, puede solaparse con el siguiente dueño. En ese caso la exclusión se degrada a idempotencia: borrar un objeto inexistente satisface la intención, la completitud no se duplica y los intentos de ambos se cuentan. La purga depende de un operador o de un cron externo de la plataforma (H-029/H-038); sin él, el crecimiento sigue acotado sólo por el volumen de borrados. El reclamo agrega una escritura por intento.
 
 **Referencia normativa:** `BE-TX`, `BE-ASYNC`, `BE-DATA`, `DO-OBS`, `DO-DR`, `SEC-LOG`, `QA-RESILIENCE`, `QA-DATA`
+
+---
+
+## D-028 — Contención de `pallet:archive` hasta definir la retención
+
+**Fecha:** 2026-10-31
+**Estado:** ✅ vigente
+
+**Contexto**
+`pallet:archive` borra objetos de fotos de ticket antes que sus filas, sin transacción, intención durable, auditoría ni confirmación. Además vacía `ocr_log` y purga todo `activity_logs` de más de seis meses (H-048). Estaba programado mensualmente en `routes/console.php`. No corría sólo porque ningún runtime ejecuta el scheduler, y D-018 ya había evitado activarlo por este motivo.
+
+La teoría alcanza para diseñar un borrado seguro. `BE-TX` y `BE-ASYNC` piden base primero y efecto externo después del commit; D-018 y D-027 aportan el mecanismo durable. Lo que falta es la política de negocio: qué datos pueden descartarse, después de qué hecho, por cuánto tiempo se conservan, si "archivar" significa mover o borrar, qué pasa con los backups, y quién autoriza. `DOMINIO.md` la lista como pregunta abierta, H-009 sigue abierto y D-013/D-027 conservan el audit log. `ROADMAP.md` expresa un deseo, no una decisión.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Rediseñar el borrado con los plazos actuales (3/6 meses) | Cumple los requisitos técnicos | Convierte plazos sin dueño en política; borra evidencia y audit log en contra de D-013/D-027; el corte por `updated_at` es incorrecto |
+| Eliminar el comando | Sin superficie destructiva | Pierde el inventario que necesita la decisión de retención |
+| Quitar la programación y dejar un inventario de sólo lectura | Sin efecto automático ni manual; dimensiona la decisión pendiente | Los datos siguen creciendo hasta resolver la política |
+
+**Decisión**
+- Se elimina la programación de `pallet:archive` y no queda ninguna tarea programada. Activar el scheduler en el futuro no ejecuta nada destructivo.
+- El comando pasa a ser un inventario de sólo lectura con el criterio legado, para dimensionar `GAP-RETENTION`: `ocr_log` elegibles, pedidos, fotos, objetos, tickets que quedarían vacíos y audit logs anteriores al corte. Aclara en la salida que `updated_at` no es una fecha de finalización.
+- Con `--dry-run` informa y termina con éxito. Sin esa opción informa, falla con código 1 y deja un warning técnico con conteos, sin rutas. En ningún caso escribe en la base, llama al storage ni despacha jobs. No existe opción, configuración ni variable de entorno que habilite el borrado.
+- La parte destructiva queda bloqueada por `GAP-RETENTION`. Cuando la política exista, el rediseño debe cumplir como mínimo: confirmación explícita; dry-run con conteos; preflight; corte basado en un hecho de negocio estable; lotes acotados con transacción por lote; filas, auditoría e intención en la misma transacción y objetos sólo mediante D-018/D-027; reanudación segura tras un lote parcial; ejecución repetida idempotente; audit log conservado según la política; y nunca programarse como efecto colateral.
+
+**Por qué**
+Un borrado irreversible de evidencia no puede derivar plazos de un comentario de código. Lo único que este bloque puede decidir sin política es que nada se borre por accidente.
+
+**Trade-off aceptado**
+Las fotos de ticket, `ocr_log` y `activity_logs` siguen creciendo sin límite hasta resolver `GAP-RETENTION`, en tensión con el antipatrón de retención infinita de `DO-DR`. El inventario permite medir ese crecimiento. Un operador que ejecutaba el comando a mano ahora recibe un error explícito en vez de un borrado.
+
+**Referencia normativa:** `BE-TX`, `BE-DATA`, `BE-ASYNC`, `SEC-FILE`, `SEC-LOG`, `SEC-DATA`, `DO-DR`, `DO-RELEASE`, `QA-RESILIENCE`

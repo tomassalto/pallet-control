@@ -43,7 +43,7 @@ Cambiar estados o transiciones requiere una decisión de dominio y tests de tran
 ## Preguntas abiertas
 
 - Ciclo completo y transiciones permitidas de pedidos y pallets.
-- Política de eliminación y conservación histórica.
+- Política de eliminación y conservación histórica (`GAP-RETENTION`, H-009, H-048).
 - Propiedad de datos en un futuro modelo multiempresa (`GAP-TENANCY`).
 - Resolución de operaciones simultáneas u offline (`GAP-OFFLINE`).
 

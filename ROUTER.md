@@ -92,6 +92,7 @@ Este archivo selecciona contexto; no contiene teoría. La propiedad, precedencia
 | Fotos, OCR y anotaciones | `SEC-FILE` → `BE-ASYNC` → `FE-RESPONSIVE` → `DO-INFRA` → `QA-RESILIENCE` |
 | Componente legado/inactivo | confirmar exclusión de build/deploy/runtime; aplicar `DO-SUPPLY` si se reactiva |
 | Offline/escritorio/mobile/multiempresa | detenerse: `GAP-OFFLINE`, `GAP-DESKTOP`, `GAP-MOBILE` o `GAP-TENANCY` |
+| Retención, archivado o purga de datos de negocio | detenerse: `GAP-RETENTION`; sólo inventario de sólo lectura (D-028) |
 
 ## Ejemplos de recorrido
 

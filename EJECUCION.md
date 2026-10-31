@@ -1,6 +1,6 @@
 # Ejecución de la modernización
 
-**Última actualización:** 2026-10-30
+**Última actualización:** 2026-10-31
 **Entrada obligatoria:** `ROUTER.md`
 
 Una sesión aborda una tarea acotada en una rama/worktree propio. Antes de planear se combinan todas las rutas del router. Al cerrar se ejecutan gates y se actualizan evidencia, decisiones y plan.
@@ -480,9 +480,21 @@ Evidencia funcional: commit `249b3d1`. Actions run `41183803393` sobre `eb784ce`
 
 Pendiente: la purga depende de un operador o cron externo (H-029/H-038). Los avisos npm moderados del frontend siguen bloqueando el último paso del job `ci`, como en la sesión anterior; por decisión del usuario no se tratan en este bloque.
 
+## Última sesión cerrada — seguridad de `pallet:archive`
+
+Rama `hardening/archive-old-data-safety`, creada desde `hardening/storage-cleanup-lifecycle` (`85b57e0`). Se aplicaron `BE-TX`, `BE-DATA`, `BE-ASYNC`, `SEC-FILE`, `SEC-LOG`, `SEC-DATA`, `DO-DR`, `DO-RELEASE`, `QA-RESILIENCE` y `DOMINIO.md`.
+
+1. Auditoría (H-048): el comando estaba programado mensualmente en `routes/console.php`, sin runtime que ejecute el scheduler. Borraba objetos antes que filas, vaciaba `ocr_log`, purgaba todo `activity_logs` de más de seis meses y cortaba por `orders.updated_at`. "Archive" significaba borrado físico.
+2. No existe una política de retención del negocio. Se abrió `GAP-RETENTION` en `PLAN.md`, con ruta en `ROUTER.md`, y se detuvo la parte destructiva. Los tests de fallo de DB, fallo de storage con intención y lote parcial quedan como criterios del rediseño (D-028), no se implementaron.
+3. D-028: se retiró la programación (no queda ninguna tarea programada). El comando pasó a ser un inventario de sólo lectura: `--dry-run` informa los conteos y sin la opción falla con código 1 sin modificar nada. Ninguna opción ni variable de entorno habilita el borrado.
+4. Tests (7): sin confirmación no modifica, dry-run no modifica y reporta conteos exactos, datos dentro y fuera del corte y logs históricos permanecen, repetición segura, cero tareas programadas, runtime sin `schedule:` ni `pallet:archive`, y guarda estática sin escrituras, storage ni `env()` en el comando.
+5. Gates locales con PHP 8.4: Pint, PHPStan sin cambios de baseline, 251 tests/1004 assertions (1 skip) y el archivo nuevo repetido 3 veces. Frontend sin cambios.
+
+Pendiente: `GAP-RETENTION` (decisión de dominio) y la evidencia en CI remoto.
+
 ## Próxima sesión
 
-Sin bloque autónomo asignado. Candidatos: avisos npm del frontend (`DO-SUPPLY`), H-046 (previa decisión de dominio), resto de H-020, política H-009.
+Sin bloque autónomo asignado. Candidatos: `GAP-RETENTION` (requiere decisión de negocio), avisos npm del frontend (`DO-SUPPLY`), H-046 (previa decisión de dominio), resto de H-020 y política H-009.
 
 ## Sesiones R-02 a R-07
 

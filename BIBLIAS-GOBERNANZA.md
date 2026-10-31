@@ -106,6 +106,7 @@ Gaps futuros identificados, todavía sin teoría aprobada:
 - `GAP-MOBILE`: aplicaciones móviles y ciclo de publicación.
 - `GAP-TENANCY`: aislamiento SaaS multiempresa.
 - `GAP-DEVICE`: identidad y revocación de dispositivos.
+- `GAP-RETENTION`: retención, archivado y eliminación de datos históricos de negocio.
 
 ## 9. Validación documental
 

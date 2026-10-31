@@ -7,7 +7,7 @@
 **Última actualización:** 2026-10-31
 **Rama integradora:** `modernizacion/base`
 **Entrada obligatoria:** `ROUTER.md`
-**Trabajo actual:** subidas con compensación (`D-017`) y borrados de fotos/tickets/pallets/bases con intención durable, job post-commit y barrido supervisado (`D-018`); `H-011`/`H-017` resueltos para los flujos auditados. Colas y limpieza operables con estado, alerta por antigüedad y fallos terminales auditados (`D-019`). Invariante agregada asignado ≤ pedido protegida en base para todo escritor (`H-006`, `D-020`). Atribución de creación de pallets y diagnóstico del índice de auditoría (`H-014`/`H-016`, `D-021`). Contrato único de validación de subidas de fotos (`H-020` parcial, `D-022`). Runner de tests frontend con Vitest/jsdom/Testing Library integrado a CI (`D-023`). Flujos críticos frontend caracterizados; polling OCR acotado, cache privada limpiada al cerrar sesión y 401 de login corregido (`D-024`). Conflictos de estado restantes normalizados a `409` (`H-023`/`H-027`, `D-025`). Auditoría posterior: un `401` autenticado cierra la sesión completa desde `AuthProvider` (`H-043`, revisión de `D-024`) y el import ya no elimina ítems ausentes con asignaciones (`H-044`, revisión de `D-020`). Finalizar y reabrir tienen una autoridad transaccional única con locks ordenados, re-evaluación y efectos post-commit (`H-045`, `D-026`); el `PATCH` de estado sin reglas queda abierto (`H-046`). Ciclo de vida completo de las intenciones de borrado: reclamo por lease, intentos sin pérdidas, retención de 30 días y purga manual auditada con dry-run (`H-047`, `D-027`). `H-029` y `H-038` requieren evidencia real de Render (Nixpacks no ejecuta worker ni barrido).
+**Trabajo actual:** subidas con compensación (`D-017`) y borrados de fotos/tickets/pallets/bases con intención durable, job post-commit y barrido supervisado (`D-018`); `H-011`/`H-017` resueltos para los flujos auditados. Colas y limpieza operables con estado, alerta por antigüedad y fallos terminales auditados (`D-019`). Invariante agregada asignado ≤ pedido protegida en base para todo escritor (`H-006`, `D-020`). Atribución de creación de pallets y diagnóstico del índice de auditoría (`H-014`/`H-016`, `D-021`). Contrato único de validación de subidas de fotos (`H-020` parcial, `D-022`). Runner de tests frontend con Vitest/jsdom/Testing Library integrado a CI (`D-023`). Flujos críticos frontend caracterizados; polling OCR acotado, cache privada limpiada al cerrar sesión y 401 de login corregido (`D-024`). Conflictos de estado restantes normalizados a `409` (`H-023`/`H-027`, `D-025`). Auditoría posterior: un `401` autenticado cierra la sesión completa desde `AuthProvider` (`H-043`, revisión de `D-024`) y el import ya no elimina ítems ausentes con asignaciones (`H-044`, revisión de `D-020`). Finalizar y reabrir tienen una autoridad transaccional única con locks ordenados, re-evaluación y efectos post-commit (`H-045`, `D-026`); el `PATCH` de estado sin reglas queda abierto (`H-046`). Ciclo de vida completo de las intenciones de borrado: reclamo por lease, intentos sin pérdidas, retención de 30 días y purga manual auditada con dry-run (`H-047`, `D-027`). `pallet:archive` ya no está programado y pasó a ser un inventario de sólo lectura; su borrado queda bloqueado por `GAP-RETENTION` (`H-048`, `D-028`). `H-029` y `H-038` requieren evidencia real de Render (Nixpacks no ejecuta worker ni barrido).
 
 **Fase Fundacional:** ✅ cerrada — cinco biblias normativas, gobierno, router estable, dominio y producto. Auditoría: `AUDITORIA-BIBLIAS.md`.
 
@@ -77,6 +77,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | H-045 | Finalizar/reabrir sin transacción ni lock — ✅ resuelto (D-026) | 🟡 medio | Alto | ❌ no |
 | H-046 | `PATCH` de pallet/pedido escribe `status` sin reglas | 🟡 medio | Medio | ❌ no (requiere decisión de dominio) |
 | H-047 | Intenciones de borrado sin retención ni exclusión entre procesos — ✅ resuelto (D-027) | 🟡 medio | Medio | ❌ no |
+| H-048 | `pallet:archive` borraba storage antes que la base y purgaba audit logs — 🟡 contenido (D-028); borrado bloqueado por `GAP-RETENTION` | 🟡 medio | Alto | ❌ no (requiere política de negocio) |
 | H-011 | Escrituras multi-tabla sin transacción — ✅ resuelto en flujos auditados (D-015 a D-018) | 🟡 medio | Medio | 🟡 parcial |
 | H-012 | FKs sin índice (Postgres) — ✅ resuelto | 🟢 bajo | Medio | ✅ sí |
 | H-013 | `activity_logs.pallet_id` no es FK real — ✅ resuelto | 🟢 bajo | Bajo | ✅ sí |
@@ -288,6 +289,21 @@ No habilitan implementación hasta completar `BIBLIAS-GOBERNANZA.md §8`:
 - `GAP-MOBILE` — clientes móviles y publicación.
 - `GAP-TENANCY` — aislamiento SaaS multiempresa.
 - `GAP-DEVICE` — identidad y revocación de dispositivos.
+
+### GAP-RETENTION — Retención, archivado y eliminación de datos históricos
+
+**Abierto:** 2026-10-31 · **Origen:** H-048, H-009, `DOMINIO.md` (preguntas abiertas) · **Bloquea:** cualquier borrado, anonimización o archivado de datos de negocio, incluido el modo destructivo de `pallet:archive` (D-028).
+
+**Pregunta:** ¿qué datos históricos se pueden descartar o mover, después de qué hecho de negocio y con qué retención?
+- Fotos de ticket (objeto y fila), `ocr_data` y `ocr_log`, tickets vacíos, pedidos finalizados.
+- `activity_logs`: ¿se conservan siempre o por clase de evento?
+- ¿"Archivar" significa mover a almacenamiento frío o exportar, o significa borrar?
+- Hecho que inicia el plazo: hoy no existe una fecha de finalización, y `updated_at` no sirve. ¿Cómo afecta una reapertura?
+- Obligaciones legales o comerciales sobre la evidencia documental, tratamiento de las copias de backup y quién autoriza una corrida.
+
+**Riesgo:** borrar evidencia irrecuperable o el audit log, o hacerlo en base a un corte incorrecto. Si no se decide nada, el crecimiento queda sin límite (`DO-DR`).
+**Impacto:** sin la respuesta, el modo destructivo no se implementa. El inventario de sólo lectura sirve para dimensionar la decisión.
+**Salida esperada:** una decisión de dominio en `DOMINIO.md` con su D-XXX. Una vez aprobada, el rediseño debe cumplir los requisitos mínimos listados en D-028.
 
 ---
 

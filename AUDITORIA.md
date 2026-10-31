@@ -189,7 +189,7 @@ Las subidas de fotos web y del servicio activo de Telegram guardan primero el ob
 
 Los borrados de fotos de pallet, base y ticket, de tickets completos, de pallets y de bases bloquean y releen sus filas, eliminan la entidad, auditan y registran una intención durable por objeto en `pending_file_deletions` dentro de una transacción (D-018). El borrado físico ocurre después del commit mediante un job y un barrido supervisado con backoff, intentos acotados y alerta crítica al agotarse. Tests acreditan que un fallo de auditoría conserva filas y archivos sin intención, que un fallo de storage conserva la intención para reintento y que reprocesar es idempotente.
 
-**Estado:** ✅ resuelto para los flujos auditados: solicitudes faltantes en `eaadf87`, asociaciones pedido/pallet en `a59022b`, subidas de fotos en `ee41860` y borrados de fotos/tickets en `60a0c6c`; Actions run `41013814687` con los tres jobs verdes. `pallet:archive` conserva el orden anterior pero no se ejecuta mientras no exista scheduler activo.
+**Estado:** ✅ resuelto para los flujos auditados: solicitudes faltantes en `eaadf87`, asociaciones pedido/pallet en `a59022b`, subidas de fotos en `ee41860` y borrados de fotos/tickets en `60a0c6c`; Actions run `41013814687` con los tres jobs verdes. `pallet:archive` quedó fuera de este cambio; su orden inseguro se trata en H-048 y el comando ya no borra nada.
 
 #### H-012 — Foreign keys sin índice (Postgres no las indexa solo)
 ```
@@ -438,6 +438,34 @@ Origen:      trade-off pendiente de D-018
 En PostgreSQL, dos barridos reales compiten bajo compuerta `FOR UPDATE`, con intención nueva o con lease vencido de un worker muerto, tres iteraciones cada uno: exactamente uno completa y el otro omite.
 **Estado:** ✅ resuelto en `249b3d1`; Actions run `41183803393` con `postgres-concurrency` y `container-security` verdes. En `ci` pasaron todos los gates backend; falla sólo el audit npm del frontend, ajeno a este cambio (ver `EJECUCION.md`).
 
+#### H-048 — `pallet:archive` borra evidencia sin orden seguro ni política de retención
+```
+Severidad:   🟠 alto · Categoría: integridad de datos / pérdida de evidencia
+Ubicación:   pallet-backend/app/Console/Commands/ArchiveOldData.php, routes/console.php
+Referencia:  `BE-TX`, `BE-DATA`, `BE-ASYNC`, `SEC-FILE`, `SEC-LOG`, `SEC-DATA`, `DO-DR`, `DO-RELEASE`, `QA-RESILIENCE`, `DOMINIO.md`
+Origen:      pendiente declarado en D-018 y en la sesión de borrado recuperable
+```
+**Registro y ejecución:** el comando se autodescubre en `app/Console/Commands` y estaba **programado** en `routes/console.php` (`monthlyOn(1, '03:00')`, `runInBackground`, salida a `storage/logs/archive.log`). Ningún runtime invoca hoy `schedule:run` ni `schedule:work`: `supervisord.conf` corre `web`, `worker` y `file-cleanup`; `docker-entrypoint.sh` y `nixpacks.toml` no lo llaman, y no hay cron en la imagen. El riesgo era latente: activar el scheduler para cualquier otra tarea lo encendía. Ningún endpoint ni test lo invocaba.
+
+**Qué eliminaba, sin confirmación y en este orden:**
+1. `order_ticket_photos.ocr_log := null` para fotos de pedidos `done` con `orders.updated_at` de más de 3 meses. `UPDATE` masivo, sin auditoría.
+2. Objetos de storage de todas las fotos de ticket de pedidos `done` con `updated_at` de más de 6 meses, uno por uno, capturando y descartando el error. Recién después, `DELETE` de esas filas, aunque el objeto no se hubiera borrado.
+3. `DELETE` de **todo** `activity_logs` con `created_at` de más de 6 meses, sin filtro por acción.
+
+**Grafo afectado:** ninguna tabla referencia `order_ticket_photos` (las anotaciones dependen de `pallet_base_photos`), así que no había cascadas más allá de la propia fila. `order_tickets` quedaba vivo y vacío. `activity_logs` no es referenciado por nadie, pero contiene la auditoría de negocio y operativa: auth, privilegios, finalizaciones, borrados, `file_deletion_exhausted` y `file_deletions_pruned`. `pending_file_deletions` no se usaba.
+
+**Por qué importa:**
+- Storage antes que la base, sin transacción ni intención durable: un fallo de DB deja filas apuntando a objetos inexistentes, y un fallo de storage borra la fila igual y deja objetos huérfanos sin rastro. Es exactamente el patrón que D-018 eliminó en los demás borrados.
+- Sin auditoría de la corrida ni confirmación, sin preflight, sin lotes, sin recuperación.
+- El corte usa `orders.updated_at`, que no es una fecha de finalización: cualquier escritura lo mueve y un pedido reabierto y refinalizado (D-026) reinicia el reloj. No existe columna de finalización.
+- Purgar `activity_logs` contradice D-013 y D-027 (el audit log se conserva) y la invariante de `DOMINIO.md` de que toda acción significativa sea auditable. También borraría la única evidencia de los propios borrados.
+- "Archive" en el código significa borrado físico; no conserva nada en otro lugar. Las fotos de ticket son evidencia documental (`DOMINIO.md`) y no existe una regla de negocio que autorice descartarlas, ni definición de qué pasa con las copias de backup (`SEC-DATA`, `DO-DR`).
+- `ROADMAP.md` lo describe como deseo, sin decisión: no es una política de retención aprobada.
+
+**Contención (D-028):** se retiró la programación, sin dejar ninguna tarea programada. El comando pasó a ser un inventario de sólo lectura con el criterio legado: sin `--dry-run` falla con código 1 sin modificar nada; con `--dry-run` informa conteos. Ninguna opción ni variable de entorno habilita el borrado. Tests de guarda acreditan que no hay tareas programadas y que ningún runtime invoca el scheduler ni el comando.
+
+**Estado:** 🟡 contenido; la parte destructiva queda bloqueada por `GAP-RETENTION` (ver `PLAN.md`). Relacionado con H-009.
+
 ---
 
 ### 🔴 INFRAESTRUCTURA / PÉRDIDA DE DATOS
@@ -563,12 +591,12 @@ Con 120 registros sobre SQLite local, el escenario reproducible pasó de 120 a 2
 | Categoría | 🔴 | 🟠 | 🟡 | ⚪ | Total |
 |---|---|---|---|---|---|
 | Seguridad | 1 | 3 | 4 | 0 | 8 |
-| Integridad de datos | 7 | 5 | 3 | 2 | 17 |
+| Integridad de datos | 7 | 6 | 3 | 2 | 18 |
 | Performance | 0 | 0 | 1 | 0 | 1 |
 | Calidad | 0 | 3 | 10 | 7 | 20 |
-| **Total** | **8** | **11** | **18** | **9** | **46** |
+| **Total** | **8** | **12** | **18** | **9** | **47** |
 
-*(H-043 y H-044 provienen de la auditoría posterior sobre `127b828`; H-045 y H-046, de la rebanada de finalización.)*
+*(H-043 y H-044 provienen de la auditoría posterior sobre `127b828`; H-045 y H-046, de la rebanada de finalización; H-048, de la auditoría de `pallet:archive`.)*
 
 *(algunos hallazgos tocan más de una categoría; se contaron en la categoría dominante — p. ej. H-019 es fuga de información pero se cuenta como seguridad, H-030/H-032 son de Docker/git pero también seguridad)*
 
