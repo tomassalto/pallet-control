@@ -445,7 +445,7 @@ Ubicación:   pallet-backend/app/Console/Commands/ArchiveOldData.php, routes/con
 Referencia:  `BE-TX`, `BE-DATA`, `BE-ASYNC`, `SEC-FILE`, `SEC-LOG`, `SEC-DATA`, `DO-DR`, `DO-RELEASE`, `QA-RESILIENCE`, `DOMINIO.md`
 Origen:      pendiente declarado en D-018 y en la sesión de borrado recuperable
 ```
-**Registro y ejecución:** el comando se autodescubre en `app/Console/Commands` y estaba **programado** en `routes/console.php` (`monthlyOn(1, '03:00')`, `runInBackground`, salida a `storage/logs/archive.log`). Ningún runtime invoca hoy `schedule:run` ni `schedule:work`: `supervisord.conf` corre `web`, `worker` y `file-cleanup`; `docker-entrypoint.sh` y `nixpacks.toml` no lo llaman, y no hay cron en la imagen. El riesgo era latente: activar el scheduler para cualquier otra tarea lo encendía. Ningún endpoint ni test lo invocaba.
+**Registro y ejecución:** el comando se autodescubre en `app/Console/Commands` y estaba **programado** en `routes/console.php` (`monthlyOn(1, '03:00')`, `runInBackground`, salida a `storage/logs/archive.log`). Ninguno de los runtimes versionados invoca `schedule:run` ni `schedule:work`: `supervisord.conf` corre `web`, `worker` y `file-cleanup`; `docker-entrypoint.sh` y `nixpacks.toml` no lo llaman, y el `Dockerfile` no instala cron. Un cron externo o configuración de la plataforma (Render) fuera del repositorio no es verificable desde el código. El riesgo era latente: activar el scheduler para cualquier otra tarea lo encendía. Ningún endpoint ni test lo invocaba.
 
 **Qué eliminaba, sin confirmación y en este orden:**
 1. `order_ticket_photos.ocr_log := null` para fotos de pedidos `done` con `orders.updated_at` de más de 3 meses. `UPDATE` masivo, sin auditoría.
@@ -462,7 +462,7 @@ Origen:      pendiente declarado en D-018 y en la sesión de borrado recuperable
 - "Archive" en el código significa borrado físico; no conserva nada en otro lugar. Las fotos de ticket son evidencia documental (`DOMINIO.md`) y no existe una regla de negocio que autorice descartarlas, ni definición de qué pasa con las copias de backup (`SEC-DATA`, `DO-DR`).
 - `ROADMAP.md` lo describe como deseo, sin decisión: no es una política de retención aprobada.
 
-**Contención (D-028):** se retiró la programación, sin dejar ninguna tarea programada. El comando pasó a ser un inventario de sólo lectura con el criterio legado: sin `--dry-run` falla con código 1 sin modificar nada; con `--dry-run` informa conteos. Ninguna opción ni variable de entorno habilita el borrado. Tests de guarda acreditan que no hay tareas programadas y que ningún runtime invoca el scheduler ni el comando.
+**Contención (D-028):** se retiró la programación de `pallet:archive`. El comando pasó a ser un inventario de sólo lectura con el criterio legado, contado por la base mediante subconsultas: sin `--dry-run` falla con código 1 sin modificar nada; con `--dry-run` informa conteos. Ninguna opción ni variable de entorno habilita el borrado. Los tests acreditan que `pallet:archive` no está programado. Una guarda verifica además que los runtimes versionados conocidos (`supervisord.conf`, `docker-entrypoint.sh`, `nixpacks.toml`, `Dockerfile`) no invocan el scheduler ni el comando. No es una garantía sobre crons externos.
 
 **Estado:** 🟡 contenido; la parte destructiva queda bloqueada por `GAP-RETENTION` (ver `PLAN.md`). Relacionado con H-009.
 

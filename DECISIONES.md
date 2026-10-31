@@ -809,7 +809,7 @@ Un worker que siga vivo más allá del lease, por ejemplo con una llamada al sto
 **Estado:** ✅ vigente
 
 **Contexto**
-`pallet:archive` borra objetos de fotos de ticket antes que sus filas, sin transacción, intención durable, auditoría ni confirmación. Además vacía `ocr_log` y purga todo `activity_logs` de más de seis meses (H-048). Estaba programado mensualmente en `routes/console.php`. No corría sólo porque ningún runtime ejecuta el scheduler, y D-018 ya había evitado activarlo por este motivo.
+`pallet:archive` borraba objetos de fotos de ticket antes que sus filas, sin transacción, intención durable, auditoría ni confirmación. Además vaciaba `ocr_log` y purgaba todo `activity_logs` de más de seis meses (H-048). Estaba programado mensualmente en `routes/console.php`. No corría sólo porque ninguno de los runtimes versionados ejecuta el scheduler, y D-018 ya había evitado activarlo por este motivo.
 
 La teoría alcanza para diseñar un borrado seguro. `BE-TX` y `BE-ASYNC` piden base primero y efecto externo después del commit; D-018 y D-027 aportan el mecanismo durable. Lo que falta es la política de negocio: qué datos pueden descartarse, después de qué hecho, por cuánto tiempo se conservan, si "archivar" significa mover o borrar, qué pasa con los backups, y quién autoriza. `DOMINIO.md` la lista como pregunta abierta, H-009 sigue abierto y D-013/D-027 conservan el audit log. `ROADMAP.md` expresa un deseo, no una decisión.
 
@@ -822,7 +822,7 @@ La teoría alcanza para diseñar un borrado seguro. `BE-TX` y `BE-ASYNC` piden b
 | Quitar la programación y dejar un inventario de sólo lectura | Sin efecto automático ni manual; dimensiona la decisión pendiente | Los datos siguen creciendo hasta resolver la política |
 
 **Decisión**
-- Se elimina la programación de `pallet:archive` y no queda ninguna tarea programada. Activar el scheduler en el futuro no ejecuta nada destructivo.
+- Se elimina la programación de `pallet:archive`. Activar el scheduler en el futuro no lo ejecuta, y aunque se lo invocara, el comando no modifica nada. Un test acredita que no está programado, sin restringir otras tareas futuras.
 - El comando pasa a ser un inventario de sólo lectura con el criterio legado, para dimensionar `GAP-RETENTION`: `ocr_log` elegibles, pedidos, fotos, objetos, tickets que quedarían vacíos y audit logs anteriores al corte. Aclara en la salida que `updated_at` no es una fecha de finalización.
 - Con `--dry-run` informa y termina con éxito. Sin esa opción informa, falla con código 1 y deja un warning técnico con conteos, sin rutas. En ningún caso escribe en la base, llama al storage ni despacha jobs. No existe opción, configuración ni variable de entorno que habilite el borrado.
 - La parte destructiva queda bloqueada por `GAP-RETENTION`. Cuando la política exista, el rediseño debe cumplir como mínimo: confirmación explícita; dry-run con conteos; preflight; corte basado en un hecho de negocio estable; lotes acotados con transacción por lote; filas, auditoría e intención en la misma transacción y objetos sólo mediante D-018/D-027; reanudación segura tras un lote parcial; ejecución repetida idempotente; audit log conservado según la política; y nunca programarse como efecto colateral.

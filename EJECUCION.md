@@ -318,7 +318,7 @@ Rama `hardening/photo-deletion-recovery`, creada desde el cierre de compensació
 
 Evidencia funcional: commit `60a0c6c`.
 
-Pendiente: `pallet:archive` sigue borrando objetos antes que filas, pero no se ejecuta porque no hay scheduler activo; Nixpacks no corre worker ni barrido (H-038); las intenciones completadas aún no tienen política de retención.
+Pendiente al cierre de esa sesión (histórico): `pallet:archive` borraba objetos antes que filas y no se ejecutaba sólo porque no había scheduler activo; desde D-028 el comando es un inventario de sólo lectura sin programación (H-048). Nixpacks no corre worker ni barrido (H-038); las intenciones completadas aún no tienen política de retención.
 
 ## Última sesión cerrada — operabilidad de colas y limpieza
 
@@ -486,8 +486,8 @@ Rama `hardening/archive-old-data-safety`, creada desde `hardening/storage-cleanu
 
 1. Auditoría (H-048): el comando estaba programado mensualmente en `routes/console.php`, sin runtime que ejecute el scheduler. Borraba objetos antes que filas, vaciaba `ocr_log`, purgaba todo `activity_logs` de más de seis meses y cortaba por `orders.updated_at`. "Archive" significaba borrado físico.
 2. No existe una política de retención del negocio. Se abrió `GAP-RETENTION` en `PLAN.md`, con ruta en `ROUTER.md`, y se detuvo la parte destructiva. Los tests de fallo de DB, fallo de storage con intención y lote parcial quedan como criterios del rediseño (D-028), no se implementaron.
-3. D-028: se retiró la programación (no queda ninguna tarea programada). El comando pasó a ser un inventario de sólo lectura: `--dry-run` informa los conteos y sin la opción falla con código 1 sin modificar nada. Ninguna opción ni variable de entorno habilita el borrado.
-4. Tests (7): sin confirmación no modifica, dry-run no modifica y reporta conteos exactos, datos dentro y fuera del corte y logs históricos permanecen, repetición segura, cero tareas programadas, runtime sin `schedule:` ni `pallet:archive`, y guarda estática sin escrituras, storage ni `env()` en el comando.
+3. D-028: se retiró la programación de `pallet:archive`. El comando pasó a ser un inventario de sólo lectura: `--dry-run` informa los conteos y sin la opción falla con código 1 sin modificar nada. Ninguna opción ni variable de entorno habilita el borrado.
+4. Tests (7): sin confirmación no modifica, dry-run no modifica y reporta conteos exactos, datos dentro y fuera del corte y logs históricos permanecen, repetición segura, `pallet:archive` ausente del scheduler, guarda sobre los runtimes versionados conocidos (`supervisord.conf`, `docker-entrypoint.sh`, `nixpacks.toml`, `Dockerfile`) sin `schedule:` ni `pallet:archive`, y guarda estática sin escrituras, storage, `pluck()` ni `env()` en el comando. La guarda de runtimes no cubre crons externos ni configuración de plataforma fuera del repositorio. El inventario cuenta en la base mediante subconsultas, sin materializar listas de IDs.
 5. Gates locales con PHP 8.4: Pint, PHPStan sin cambios de baseline, 251 tests/1004 assertions (1 skip) y el archivo nuevo repetido 3 veces. Frontend sin cambios.
 
 Pendiente: `GAP-RETENTION` (decisión de dominio) y la evidencia en CI remoto.
