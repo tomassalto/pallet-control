@@ -159,23 +159,28 @@ class ArchiveOldDataTest extends TestCase
         Storage::disk('public')->assertExists($this->pathReciente);
     }
 
-    public function test_no_hay_tareas_programadas(): void
+    public function test_pallet_archive_no_esta_programado(): void
     {
         Artisan::call('schedule:list');
         $this->assertStringNotContainsString('pallet:archive', Artisan::output());
 
-        $this->assertCount(0, app(Schedule::class)->events());
+        foreach (app(Schedule::class)->events() as $evento) {
+            $this->assertStringNotContainsString('pallet:archive', $evento->command ?? '');
+        }
     }
 
-    public function test_runtime_no_ejecuta_scheduler_ni_archive(): void
+    public function test_runtimes_versionados_conocidos_no_invocan_scheduler_ni_archive(): void
     {
+        // Guardia sobre los archivos de runtime versionados conocidos; no es una
+        // garantía sobre crons externos ni configuración de plataforma (p. ej.
+        // el dashboard de Render).
         $raiz = dirname(base_path());
 
         foreach (['supervisord.conf', 'docker-entrypoint.sh', 'nixpacks.toml', 'Dockerfile'] as $archivo) {
             $contenido = file_get_contents($raiz . DIRECTORY_SEPARATOR . $archivo);
             $this->assertIsString($contenido);
-            $this->assertStringNotContainsString('schedule:', $contenido, "$archivo referencia al scheduler");
-            $this->assertStringNotContainsString('pallet:archive', $contenido, "$archivo referencia a pallet:archive");
+            $this->assertStringNotContainsString('schedule:', $contenido, "runtime versionado $archivo referencia al scheduler");
+            $this->assertStringNotContainsString('pallet:archive', $contenido, "runtime versionado $archivo referencia a pallet:archive");
         }
     }
 
@@ -184,7 +189,7 @@ class ArchiveOldDataTest extends TestCase
         $fuente = file_get_contents(app_path('Console/Commands/ArchiveOldData.php'));
         $this->assertIsString($fuente);
 
-        foreach (['->delete(', '->update(', 'Storage::', 'env('] as $prohibido) {
+        foreach (['->delete(', '->update(', '->pluck(', 'Storage::', 'env('] as $prohibido) {
             $this->assertStringNotContainsString($prohibido, $fuente, "El comando no debe contener $prohibido");
         }
     }

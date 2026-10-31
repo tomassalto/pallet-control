@@ -27,13 +27,10 @@ class ArchiveOldData extends Command
         $this->line('Corte fotos/logs (6 meses): ' . $corteFotosYLogs->toDateString());
         $this->line('');
 
-        $ordenesIds = Order::where('status', 'done')
-            ->where('updated_at', '<', $corteFotosYLogs)
-            ->pluck('id');
-
-        $ticketIds = OrderTicket::whereIn('order_id', $ordenesIds)->pluck('id');
-
-        $fotosQuery = OrderTicketPhoto::whereIn('ticket_id', $ticketIds);
+        $filtroOrdenVieja = function ($q) use ($corteFotosYLogs) {
+            $q->where('status', 'done')
+                ->where('updated_at', '<', $corteFotosYLogs);
+        };
 
         $conteos = [
             'ocr_logs' => OrderTicketPhoto::whereNotNull('ocr_log')
@@ -42,10 +39,18 @@ class ArchiveOldData extends Command
                         ->where('updated_at', '<', $corteOcr);
                 })
                 ->count(),
-            'ordenes' => $ordenesIds->count(),
-            'fotos' => (clone $fotosQuery)->count(),
-            'archivos' => (clone $fotosQuery)->whereNotNull('path')->where('path', '!=', '')->count(),
-            'tickets_vaciados' => OrderTicket::whereIn('id', $ticketIds)->whereHas('photos')->count(),
+            'ordenes' => Order::where('status', 'done')
+                ->where('updated_at', '<', $corteFotosYLogs)
+                ->count(),
+            'fotos' => OrderTicketPhoto::whereHas('ticket.order', $filtroOrdenVieja)
+                ->count(),
+            'archivos' => OrderTicketPhoto::whereHas('ticket.order', $filtroOrdenVieja)
+                ->whereNotNull('path')
+                ->where('path', '!=', '')
+                ->count(),
+            'tickets_vaciados' => OrderTicket::whereHas('order', $filtroOrdenVieja)
+                ->whereHas('photos')
+                ->count(),
             'activity_logs' => ActivityLog::where('created_at', '<', $corteFotosYLogs)->count(),
         ];
 
