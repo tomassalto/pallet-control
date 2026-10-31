@@ -476,7 +476,7 @@ Rama `hardening/storage-cleanup-lifecycle`, creada desde `hardening/finalization
 6. Tests: 15 SQLite con reloj controlado y 2 PostgreSQL con dos barridos reales bajo compuerta, tres iteraciones cada uno. El test de fallo concurrente deja 1 intento con el código anterior y 2 con el nuevo. Los tests previos de limpieza pasan sin cambios.
 7. Gates locales: Pint, PHPStan sin crecer la baseline, 244 tests/932 assertions (1 skip PostgreSQL en SQLite), Composer audit, archivo nuevo repetido 5 veces y grupo PostgreSQL 25 tests/223 assertions (archivo nuevo 3 veces más). Frontend sin cambios.
 
-Evidencia funcional: commit `249b3d1`.
+Evidencia funcional: commit `249b3d1`. Actions run `41183803393` sobre `eb784ce`: `postgres-concurrency` (incluye las carreras nuevas) y `container-security` verdes. En `ci` pasaron frontend lint/tests/build, Pint, PHPStan, tests, Composer audit y el audit npm del backend. Falló sólo `npm audit --audit-level=moderate` del frontend, por los mismos avisos transitivos de la sesión anterior; la rama no toca el frontend ni su lockfile.
 
 Pendiente: la purga depende de un operador o cron externo (H-029/H-038). Los avisos npm moderados del frontend siguen bloqueando el último paso del job `ci`, como en la sesión anterior; por decisión del usuario no se tratan en este bloque.
 

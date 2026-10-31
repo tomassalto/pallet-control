@@ -436,7 +436,7 @@ Origen:      trade-off pendiente de D-018
 - métricas antes y después de purgar, la guarda lease/timeout/intervalo, el saneamiento de errores y un job tardío sobre una intención purgada.
 
 En PostgreSQL, dos barridos reales compiten bajo compuerta `FOR UPDATE`, con intención nueva o con lease vencido de un worker muerto, tres iteraciones cada uno: exactamente uno completa y el otro omite.
-**Estado:** ✅ resuelto en `249b3d1`.
+**Estado:** ✅ resuelto en `249b3d1`; Actions run `41183803393` con `postgres-concurrency` y `container-security` verdes. En `ci` pasaron todos los gates backend; falla sólo el audit npm del frontend, ajeno a este cambio (ver `EJECUCION.md`).
 
 ---
 
