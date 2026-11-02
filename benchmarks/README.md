@@ -1,5 +1,11 @@
 # Benchmarks — baseline de performance
 
+> **Baseline ya ejecutado:** `results/2026-11-02-backend-baseline.md`
+> (PHPUnit, dataset fijo, 30 iteraciones por endpoint — ver
+> `run-backend-baseline.ps1`). El script k6 de este README sigue vigente
+> como la vía para medir **concurrencia real** contra un servidor
+> levantado; la corrida PHPUnit mide el baseline reproducible en test.
+
 > Solo medición. Nada acá optimiza código. Correr esto y guardar el resultado
 > ANTES de tocar cualquier query es lo que después permite escribir
 > "reduje de Xms a Yms (p95)" con evidencia reproducible (`BE-PERF`, `QA-PERF`).

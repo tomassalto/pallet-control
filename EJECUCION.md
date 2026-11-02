@@ -514,9 +514,23 @@ Evidencia funcional: commit `ac4f871`. Actions run `41186832405` sobre `3e6dc31`
 
 Pendiente: resto del inventario de H-020 por familia, H-049 y H-050.
 
+## Última sesión cerrada — baseline backend de endpoints calientes
+
+Rama `performance/backend-baseline`, creada desde `hardening/request-validation-next-slice`. Se aplicaron `BE-PERF`, `QA-PERF` y `DO-OBS`. Bloque de sólo medición: ningún cambio funcional.
+
+1. Se creó `tests/Feature/Performance/HotEndpointsBenchmarkTest.php` con dataset fijo reproducible (20 pedidos × 12 ítems × 3 pallets × 3 bases × fotos/asignaciones/tickets) y medición por endpoint: queries (`DB::listen`), payload, p50/p95/p99 en 30 iteraciones y memoria.
+2. Cubre los cinco candidatos de `benchmarks/README.md`: `/orders`, `/orders/{id}`, `/public/orders/{token}`, `/pallets/{id}` y la rama de sólo lectura del webhook de Telegram (`/vermas`). El rate limit público se limpia entre iteraciones sin desactivarlo.
+3. Resultado guardado en `benchmarks/results/2026-11-02-backend-baseline.md` con hardware, versiones, metodología, limitaciones y budgets. PHP 8.4.27 NTS / Laravel 12.70.2 / SQLite `:memory:`.
+4. Hallazgo: no hay N+1 medible hoy en los cinco caminos (0 violaciones de `preventLazyLoading`, conteos de queries constantes). El riesgo sigue siendo contractual.
+5. `/public/orders/{token}` mide 11 queries aquí vs. 6 del baseline R-06; la diferencia es de dataset y quedó registrada como observación, no como regresión.
+6. Budgets locales definidos (queries ≤ observado+1, p95 < 2000 ms) como guardas de regresión, no como SLO productivo. No se extrapolan a producción.
+7. Siguiente hot path recomendado: `GET /api/v1/orders` (mayor p50/p95 y payload; 5 subqueries correlacionadas por fila).
+8. Script reproducible: `benchmarks/run-backend-baseline.ps1`. k6 no está instalado en la máquina; sigue siendo la vía para concurrencia real.
+9. Gates locales: Pint y PHPStan verdes sobre el archivo nuevo; benchmark verde con `RUN_PERFORMANCE_BENCHMARKS=1` (skipeado por defecto, no afecta la suite).
+
 ## Próxima sesión
 
-Sin bloque autónomo asignado. Candidatos: `GAP-RETENTION` (requiere decisión de negocio), avisos npm del frontend (`DO-SUPPLY`), H-046 (previa decisión de dominio), siguiente familia de H-020 (con H-050 si se decide su contrato), H-049 y política H-009.
+Sin bloque autónomo asignado. Candidatos: perfilado de `GET /api/v1/orders` (hot path del baseline 2026-11-02), `GAP-RETENTION` (requiere decisión de negocio), avisos npm del frontend (`DO-SUPPLY`), H-046 (previa decisión de dominio), siguiente familia de H-020 (con H-050 si se decide su contrato), H-049 y política H-009.
 
 ## Sesiones R-02 a R-07
 
