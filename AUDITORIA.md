@@ -294,7 +294,7 @@ Referencia:  `BE-VALID`
 
 Filtros de listados leídos sin validar: `OrderController::index`, `PalletController::index`, `MissingItemRequestController::index`, `CustomerController::index`, `ActivityLogController::index` y `Admin\StorageController`.
 
-**Estado:** 🟡 parcial: subidas de fotos en `e987c13` (Actions run `41028487256`); pendientes en `ac4f871`. El resto del inventario sigue validando inline.
+**Estado:** 🟡 parcial: subidas de fotos en `e987c13` (Actions run `41028487256`); pendientes en `ac4f871` (Actions run `41186832405`). El resto del inventario sigue validando inline.
 
 #### H-021 — Login inválido devuelve 422 en vez de 401
 ```

@@ -510,7 +510,7 @@ Rama `hardening/request-validation-next-slice`, creada desde `hardening/archive-
 4. Hallazgos nuevos, no corregidos para no cambiar el contrato: H-049, mensajes de validación como claves sin traducir; H-050, `exists` sin `integer` produce `500` en PostgreSQL 17 local, frente a `422` en SQLite. El `404` de binding expone el nombre de la clase del modelo en `message`; es comportamiento preexistente de Laravel y no se cambió.
 5. Gates locales con PHP 8.4: Pint, PHPStan sin errores, tests focalizados `--filter Pending` (30 tests, 1 skip de benchmark), suite completa 271 tests/1101 assertions (1 skip) y Composer audit sin avisos. Frontend sin cambios.
 
-Evidencia funcional: commit `ac4f871`.
+Evidencia funcional: commit `ac4f871`. Actions run `41186832405` sobre `3e6dc31`: `postgres-concurrency` y `container-security` verdes. En `ci` pasaron Pint, PHPStan, tests, Composer audit y el audit npm del backend; falló sólo `npm audit --audit-level=moderate` del frontend, por los mismos avisos transitivos de las sesiones anteriores. La rama no toca el frontend ni su lockfile.
 
 Pendiente: resto del inventario de H-020 por familia, H-049 y H-050.
 
