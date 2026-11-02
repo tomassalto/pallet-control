@@ -528,9 +528,23 @@ Rama `performance/backend-baseline`, creada desde `hardening/request-validation-
 8. Script reproducible: `benchmarks/run-backend-baseline.ps1`. k6 no está instalado en la máquina; sigue siendo la vía para concurrencia real.
 9. Gates locales: Pint y PHPStan verdes sobre el archivo nuevo; benchmark verde con `RUN_PERFORMANCE_BENCHMARKS=1` (skipeado por defecto, no afecta la suite).
 
+## Última sesión cerrada — ids no numéricos en pendientes (H-050)
+
+Rama `hardening/pending-id-validation`, creada desde `origin/performance/backend-baseline` (`20e5d19`, verificado como ancestro). Se aplicaron `BE-VALID`, `BE-ERR`, `BE-API`, `BE-GATE`, `SEC-INPUT`, `SEC-LOG`, `SEC-GATE`, `QA-CONTRACT`, `QA-DATA`, `QA-RISK` y `QA-GATE`. Alcance: sólo la familia de pendientes; H-049 quedó sin tocar.
+
+1. Inventario previo: en `StorePendingItemRequest`, `order_id` y `order_item_id` combinaban `required` + `exists` sin chequeo de tipo. `UpdatePendingItemRequest` e `IndexPendingItemsRequest` no tienen reglas `exists`. El inventario completo de reglas `exists` sin `bail` en otras familias quedó registrado en `AUDITORIA.md` (H-050), junto con el route binding de `/pending-items/{pendingItem}`, que produce el mismo `500` en PostgreSQL con id no numérico.
+2. Causa: sin `bail`, el validador ejecuta `exists` aunque `integer` falle, y PostgreSQL 17 responde `SQLSTATE[22P02]` al comparar `bigint` con un string no numérico; el handler global lo traduce a `500` genérico. SQLite acepta la comparación y devuelve `422`.
+3. Corrección: `['bail', 'required', 'integer', 'exists:...']` en ambos ids. Cambio de contrato acotado: para ids no numéricos el `422` pasa de `validation.exists` a `validation.integer`; todo lo demás se conserva (401/403/404, pertenencia, allowlist, enters inexistentes → `validation.exists`, strings numéricos → 201, orden determinista de claves de `errors` igual al orden de declaración de reglas, sin efectos ante validación fallida).
+4. Tests: `PendingItemValidationContractTest` pasó de 20 a 24 tests (114 assertions) con `assertExactJson`, conteos de `pending_items`/`activity_logs` en cero y caso de strings numéricos que crean el pendiente. `PendingItemIdValidationTest` nuevo en el gate `postgres` (2 tests, 13 assertions): falla con `500` sobre las reglas anteriores y devuelve `422` con la corrección — acreditado localmente contra PostgreSQL 17.11 real (binarios EDB, SHA-256 verificado), antes y después del cambio.
+5. Gates locales con PHP 8.4.27: Pint verde, PHPStan sin errores ni baseline nuevo, tests focalizados `--filter PendingItemValidationContractTest` verdes, suite completa 275 tests/1118 assertions (2 skips preexistentes), grupo `postgres` completo 27 tests/239 assertions verde y `composer audit` sin avisos. Frontend sin cambios (build local sólo para correr `ExampleTest`, como en CI).
+
+Evidencia: commit `cd185f4`. Actions run `41526955046`: `postgres-concurrency` y `container-security` verdes. En `ci` pasaron frontend build, Pint, PHPStan, tests, Composer audit y el audit npm del backend; falló sólo `npm audit --audit-level=moderate` del frontend, el mismo aviso transitivo conocido de las sesiones anteriores. La rama no toca `pallet-frontend/`.
+
+Pendiente: el resto del inventario de H-050 (otras familias con `exists` sin `bail` y el route binding no numérico), resto de H-020 por familia y H-049.
+
 ## Próxima sesión
 
-Sin bloque autónomo asignado. Candidatos: perfilado de `GET /api/v1/orders` (hot path del baseline 2026-11-02), `GAP-RETENTION` (requiere decisión de negocio), avisos npm del frontend (`DO-SUPPLY`), H-046 (previa decisión de dominio), siguiente familia de H-020 (con H-050 si se decide su contrato), H-049 y política H-009.
+Sin bloque autónomo asignado. Candidatos: perfilado de `GET /api/v1/orders` (hot path del baseline 2026-11-02), `GAP-RETENTION` (requiere decisión de negocio), avisos npm del frontend (`DO-SUPPLY`), H-046 (previa decisión de dominio), siguiente familia de H-020 (con el inventario restante de H-050), H-049 y política H-009.
 
 ## Sesiones R-02 a R-07
 
