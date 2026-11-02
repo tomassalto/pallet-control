@@ -231,6 +231,103 @@ class PendingItemValidationContractTest extends TestCase
         $this->assertSame(['order_id', 'order_item_id'], array_keys($response->json('errors')));
     }
 
+    // ── e2. IDs no numéricos en store (H-050) ───────────────────────────────
+    // En PostgreSQL un string no numérico en la consulta de `exists` fallaba
+    // con error de sintaxis bigint y devolvía 500. `bail` + `integer` lo
+    // rechazan como 422 antes de tocar la base, igual que en SQLite.
+
+    #[Test]
+    public function store_order_id_no_numerico_devuelve_422_sin_efectos(): void
+    {
+        Sanctum::actingAs($this->usuarioConRol());
+        $order = Order::factory()->create();
+        $orderItem = OrderItem::factory()->for($order)->create();
+
+        $response = $this->postJson('/api/v1/pending-items', [
+            'order_id' => 'abc',
+            'order_item_id' => $orderItem->id,
+            'qty_missing' => 1,
+        ])
+            ->assertUnprocessable()
+            ->assertExactJson([
+                'message' => 'validation.integer',
+                'errors' => [
+                    'order_id' => ['validation.integer'],
+                ],
+            ]);
+        $this->assertSame(['order_id'], array_keys($response->json('errors')));
+
+        $this->assertDatabaseCount('pending_items', 0);
+        $this->assertDatabaseCount('activity_logs', 0);
+    }
+
+    #[Test]
+    public function store_order_item_id_no_numerico_devuelve_422_sin_efectos(): void
+    {
+        Sanctum::actingAs($this->usuarioConRol());
+        $order = Order::factory()->create();
+
+        $response = $this->postJson('/api/v1/pending-items', [
+            'order_id' => $order->id,
+            'order_item_id' => 'abc',
+            'qty_missing' => 1,
+        ])
+            ->assertUnprocessable()
+            ->assertExactJson([
+                'message' => 'validation.integer',
+                'errors' => [
+                    'order_item_id' => ['validation.integer'],
+                ],
+            ]);
+        $this->assertSame(['order_item_id'], array_keys($response->json('errors')));
+
+        $this->assertDatabaseCount('pending_items', 0);
+        $this->assertDatabaseCount('activity_logs', 0);
+    }
+
+    #[Test]
+    public function store_ambos_ids_no_numericos_devuelven_422_con_orden_determinista(): void
+    {
+        Sanctum::actingAs($this->usuarioConRol());
+
+        $response = $this->postJson('/api/v1/pending-items', [
+            'order_id' => 'abc',
+            'order_item_id' => 'xyz',
+            'qty_missing' => 1,
+        ])
+            ->assertUnprocessable()
+            ->assertExactJson([
+                'message' => 'validation.integer (and 1 more error)',
+                'errors' => [
+                    'order_id' => ['validation.integer'],
+                    'order_item_id' => ['validation.integer'],
+                ],
+            ]);
+        $this->assertSame(['order_id', 'order_item_id'], array_keys($response->json('errors')));
+
+        $this->assertDatabaseCount('pending_items', 0);
+        $this->assertDatabaseCount('activity_logs', 0);
+    }
+
+    #[Test]
+    public function store_ids_numericos_en_string_crean_el_pendiente(): void
+    {
+        Sanctum::actingAs($this->usuarioConRol());
+        $order = Order::factory()->create();
+        $orderItem = OrderItem::factory()->for($order)->create();
+
+        $this->postJson('/api/v1/pending-items', [
+            'order_id' => (string) $order->id,
+            'order_item_id' => (string) $orderItem->id,
+            'qty_missing' => 1,
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('pending_items', [
+            'order_id' => $order->id,
+            'order_item_id' => $orderItem->id,
+        ]);
+    }
+
     // ── f. Regla de pertenencia al pedido ───────────────────────────────────
 
     #[Test]
