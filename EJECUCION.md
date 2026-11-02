@@ -521,7 +521,7 @@ Rama `performance/backend-baseline`, creada desde `hardening/request-validation-
 1. Se creó `tests/Feature/Performance/HotEndpointsBenchmarkTest.php` con dataset fijo reproducible (20 pedidos × 12 ítems × 3 pallets × 3 bases × fotos/asignaciones/tickets) y medición por endpoint: queries (`DB::listen`), payload, p50/p95/p99 en 30 iteraciones y memoria.
 2. Cubre los cinco candidatos de `benchmarks/README.md`: `/orders`, `/orders/{id}`, `/public/orders/{token}`, `/pallets/{id}` y la rama de sólo lectura del webhook de Telegram (`/vermas`). El rate limit público se limpia entre iteraciones sin desactivarlo.
 3. Resultado guardado en `benchmarks/results/2026-11-02-backend-baseline.md` con hardware, versiones, metodología, limitaciones y budgets. PHP 8.4.27 NTS / Laravel 12.70.2 / SQLite `:memory:`.
-4. Hallazgo: no hay N+1 medible hoy en los cinco caminos (0 violaciones de `preventLazyLoading`, conteos de queries constantes). El riesgo sigue siendo contractual.
+4. Hallazgo acotado: con dos cardinalidades (4 y 20 pedidos) el conteo de queries es constante en los cinco caminos — el test lo afirma con `assertSame` chico/grande y budgets `≤ observado+1` como assertions. No se afirma ausencia general de N+1 fuera del shape medido. Latencias observacionales (rango de 3 corridas), sin umbral artificial.
 5. `/public/orders/{token}` mide 11 queries aquí vs. 6 del baseline R-06; la diferencia es de dataset y quedó registrada como observación, no como regresión.
 6. Budgets locales definidos (queries ≤ observado+1, p95 < 2000 ms) como guardas de regresión, no como SLO productivo. No se extrapolan a producción.
 7. Siguiente hot path recomendado: `GET /api/v1/orders` (mayor p50/p95 y payload; 5 subqueries correlacionadas por fila).
