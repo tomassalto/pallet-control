@@ -143,7 +143,7 @@ class FinalizationConcurrencyTest extends TestCase
 
     public function test_finalize_de_pallet_vs_adjust_item(): void
     {
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 5; $i++) {
             $token = $this->token();
             [$pallet, , , $itemB, , $baseB] = $this->palletFinalizable();
 
@@ -185,7 +185,7 @@ class FinalizationConcurrencyTest extends TestCase
 
     public function test_finalize_de_pallet_vs_delete_foto_de_base(): void
     {
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 5; $i++) {
             $token = $this->token();
             [$pallet, , , , $baseA, $baseB, $photoA] = $this->palletFinalizable();
 
@@ -214,9 +214,10 @@ class FinalizationConcurrencyTest extends TestCase
                 $this->assertNull(DB::table('activity_logs')
                     ->where('action', 'base_photo_deleted')->where('pallet_id', $pallet->id)->value('id'));
             } else {
-                // Ganó el delete: la foto se borró y el finalize reevaluó
-                // (sin 2 fotos el pallet no cumple y queda abierto).
+                // Ganó el delete: la foto se borró antes del finalize,
+                // que reevaluó y quedó en 409 (sin 2 fotos no cumple).
                 $this->assertSame(200, $deleteStatus, json_encode($responses, JSON_PRETTY_PRINT));
+                $this->assertSame(409, $finalizeStatus, json_encode($responses, JSON_PRETTY_PRINT));
                 $this->assertSame('open', $pallet->status);
                 $this->assertSame(1, PalletBasePhoto::query()
                     ->whereIn('base_id', [$baseA->id, $baseB->id])->count());
@@ -232,7 +233,7 @@ class FinalizationConcurrencyTest extends TestCase
 
     public function test_finalize_de_pedido_vs_cambio_de_cantidad(): void
     {
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 5; $i++) {
             $token = $this->token();
             $order = Order::factory()->create();
             $item = OrderItem::factory()->for($order)->create(['qty' => 10]);
@@ -286,7 +287,7 @@ class FinalizationConcurrencyTest extends TestCase
 
     public function test_dos_finalize_de_pallet_simultaneos(): void
     {
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 5; $i++) {
             $token = $this->token();
             [$pallet] = $this->palletFinalizable();
 
@@ -312,7 +313,7 @@ class FinalizationConcurrencyTest extends TestCase
 
     public function test_dos_finalize_de_pedido_simultaneos(): void
     {
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 5; $i++) {
             $token = $this->token();
             $order = Order::factory()->create();
             $item = OrderItem::factory()->for($order)->create(['qty' => 10]);
@@ -348,7 +349,7 @@ class FinalizationConcurrencyTest extends TestCase
 
     public function test_finalize_de_pallet_vs_crear_base(): void
     {
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 5; $i++) {
             $token = $this->token();
             [$pallet] = $this->palletFinalizable();
             $basesAntes = $pallet->bases()->count();
@@ -373,10 +374,10 @@ class FinalizationConcurrencyTest extends TestCase
                 $this->assertSame(409, $responses[1]['status'], json_encode($responses, JSON_PRETTY_PRINT));
                 $this->assertSame($basesAntes, $pallet->bases()->count());
             } else {
-                // Ganó la creación: el pallet no cumple o igual finaliza
-                // (3 bases con foto requerida) — lo exigible: sin 5xx y
-                // la base existe.
+                // Ganó la creación: la base nueva sin foto hace que el
+                // finalize reevalúe y responda 409.
                 $this->assertSame(201, $responses[1]['status'], json_encode($responses, JSON_PRETTY_PRINT));
+                $this->assertSame(409, $responses[0]['status'], json_encode($responses, JSON_PRETTY_PRINT));
                 $this->assertSame($basesAntes + 1, $pallet->bases()->count());
             }
         }
@@ -389,7 +390,7 @@ class FinalizationConcurrencyTest extends TestCase
 
     public function test_finalize_de_pedido_vs_patch_de_estado(): void
     {
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 5; $i++) {
             $token = $this->token();
             $order = Order::factory()->create();
             $item = OrderItem::factory()->for($order)->create(['qty' => 10]);
@@ -410,21 +411,30 @@ class FinalizationConcurrencyTest extends TestCase
             );
 
             $this->assertNo5xx($responses);
-            $statuses = array_column($responses, 'status');
-            sort($statuses);
-            $this->assertSame([200, 409], $statuses, json_encode($responses, JSON_PRETTY_PRINT));
+            $finalizeStatus = $responses[0]['status'];
+            $patchStatus = $responses[1]['status'];
 
             $order->refresh();
-            $this->assertContains($order->status, ['done', 'paused']);
+            // El PATCH sólo puede confirmar ANTES del commit de finalize:
+            // paused no impide finalizar, así que si tomó el lock primero
+            // escribe paused y luego finalize reevalúa y confirma — ambos
+            // 200 es un orden legal (la escritura precede al finalize).
+            // Si finalize tomó el lock primero, el PATCH debe ser 409.
+            // En ambos órdenes el pedido siempre termina done.
+            $this->assertSame(200, $finalizeStatus, json_encode($responses, JSON_PRETTY_PRINT));
+            $this->assertSame('done', $order->status);
+            $this->assertContains($patchStatus, [200, 409], json_encode($responses, JSON_PRETTY_PRINT));
+            $this->assertNotNull(DB::table('activity_logs')
+                ->where('action', 'order_finalized')->where('entity_id', $order->id)->value('id'));
 
-            if ($order->status === 'done') {
-                // Ganó el finalize: el PATCH quedó rechazado.
-                $this->assertSame(200, $responses[0]['status']);
+            $patchLog = DB::table('activity_logs')
+                ->where('action', 'order_status_changed')->where('entity_id', $order->id)->value('id');
+            if ($patchStatus === 200) {
+                // El PATCH confirmó antes del finalize: quedó auditado.
+                $this->assertNotNull($patchLog);
             } else {
-                // Ganó el PATCH: el finalize re-evaluó y respondió 409 o
-                // pudo finalizar después igual; el estado final es
-                // coherente con exactamente un ganador por turno.
-                $this->assertSame(200, $responses[1]['status']);
+                // El PATCH fue rechazado: no dejó escritura ni auditoría.
+                $this->assertNull($patchLog);
             }
         }
     }
@@ -540,7 +550,7 @@ class FinalizationConcurrencyTest extends TestCase
 
     public function test_finalize_vs_reopen_sobre_pallet_finalizado(): void
     {
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 5; $i++) {
             $token = $this->token();
             [$pallet] = $this->palletFinalizable(status: 'done');
 
