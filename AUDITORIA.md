@@ -543,7 +543,7 @@ Las claves de Cache Storage son la URL: no distinguen usuario ni bearer token. E
 - Integración: arranque en `main.jsx` (purga caches legacy de instalaciones que actualizan), `endSession` (logout, `401` autenticado y `/auth/me` fallido comparten la autoridad de D-024) y login/registro con auto-login (cambio de usuario en el mismo dispositivo).
 
 **Evidencia:** inspección del `sw.js` anterior con las dos rutas y sus expiraciones vs. el nuevo sin ninguna. 51 tests: unitarios de `clearPrivateCaches` (nombres exactos, cache ajena preservada, idempotencia, sin Cache API, fallos de `keys`/`delete`), de política sobre `pwa-workbox.config.js` y `vite.config.js`, e integrados con `AuthProvider` (logout y `401` purgan las caches además de token/usuario/queries; `401`s concurrentes sin Cache API no fallan). `scripts/verify-sw.mjs` falla el build de CI si `sw.js` contiene `api-cache`, `photos-cache`, `NetworkFirst`, `CacheFirst` o `api/v1`, o si falta precache del shell o `manifest.webmanifest`. Limitación: jsdom no ejecuta un service worker real; la actualización desde caches legacy se acredita por la llamada de arranque más la inspección del artefacto, no por una corrida E2E del SW viejo → nuevo.
-**Estado:** ✅ resuelto en `0938c88`; CI remoto pendiente de confirmar en `hardening/pwa-private-cache`.
+**Estado:** ✅ resuelto en `0938c88`; Actions run `41580029108` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 #### H-028 — `RESET_ON_STARTUP=true` borra toda la DB operativa
 ```

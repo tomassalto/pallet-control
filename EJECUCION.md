@@ -567,7 +567,7 @@ Rama `hardening/pwa-private-cache`, creada desde `origin/hardening/frontend-supp
 6. Limitación declarada: jsdom no ejecuta un service worker real; la actualización desde caches legacy se acredita por la purga de arranque y la inspección del artefacto. Verificación manual DevTools recomendada en el próximo deploy.
 7. Documentación: `H-051` en `AUDITORIA.md`, `D-030` en `DECISIONES.md`, `PLAN.md` actualizado. `GAP-OFFLINE` continúa abierto; no se promete uso offline de datos de negocio.
 
-Commits: `3ddfe07` (caracterización y tests), `0938c88` (corrección PWA y limpieza legacy), docs propios. Evidencia CI remoto: pendiente del push.
+Commits: `3ddfe07` (caracterización y tests), `0938c88` (corrección PWA y limpieza legacy), `0e114f1` (documentación). Evidencia CI remoto: Actions run `41580029108` sobre `hardening/pwa-private-cache` con `ci`, `postgres-concurrency` y `container-security` verdes; el job `ci` ejecutó `verify-sw.mjs` tras el build.
 
 ## Próxima sesión
 
