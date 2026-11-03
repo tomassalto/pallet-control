@@ -894,4 +894,12 @@ El service worker generado persistía respuestas autenticadas de `/api/v1/*` en 
 **Trade-off aceptado**
 Sin conexión, la app muestra estados de error recuperables en lugar de datos: no hay lectura offline de negocio hasta que `GAP-OFFLINE` defina identidad, cifrado, expiración y eliminación. La primera visita a una imagen ya vista exige red. jsdom no ejecuta service workers: la purga en dispositivos reales se acredita por la llamada de arranque y la inspección del artefacto, y queda recomendada una verificación manual DevTools en el próximo deploy.
 
+**Revisión 2026-11-03 — barrera de purga y limpieza en `activate`**
+La revisión encontró una carrera: la purga era fire-and-forget, así que el montaje, `login()` y el auto-registro podían publicar identidad antes de terminarla, y la eliminación de caches legacy dependía sólo del JS de la página mientras un worker viejo aún controlaba la carga. Se corrige sin cambiar la política:
+- El arranque pasa a `bootstrapApp`: React no monta hasta que `clearPrivateCaches()` termina, y un fallo inesperado de Cache API no bloquea el arranque.
+- `login()` y el auto-login de `register()` esperan la purga antes de guardar el token o publicar `user`.
+- `endSession` queda fire-and-forget por decisión: borrar es inherentemente asíncrono (la OS no ofrece commit transaccional de Cache Storage) y la garantía exigible es que ninguna **nueva** identidad se publique antes de la purga — eso lo dan bootstrap y login, que sí esperan. Esperar en el cierre no añade seguridad y podría demorar un logout.
+- Las instalaciones que actualizan dejan de depender del JS de la página: `public/sw-cleanup.js` se importa vía `importScripts` de `generateSW` y borra exactamente `api-cache`/`photos-cache` en `activate`, preservando precaches y caches ajenas. `injectManifest` quedó descartado: `importScripts` alcanza y conserva el build mínimo.
+- `verify-sw.mjs` exige ahora el `importScripts` de `sw-cleanup.js` en el artefacto y el archivo con `activate` y ambos nombres.
+
 **Referencia normativa:** `FE-PWA`, `FE-DATA`, `FE-SESSION`, `SEC-DATA`, `SEC-BROWSER`, `SEC-IDENTITY`, `DO-EDGE`, `QA-SEC`, `QA-COMPAT`, `QA-GATE`
