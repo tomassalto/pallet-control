@@ -384,6 +384,25 @@ Composer, frontend y npm auxiliar del backend quedaron en 0. `whatsapp-bot/` fue
 confirmado por el usuario como legado descartado: no se despliega ni participa de los gates.
 Su árbol conserva 3 avisos y no debe reactivarse sin una migración y auditoría separadas. Ver D-001.
 
+**Actualización 2026-11-03 (rama `hardening/frontend-supply-chain`, base `e85a32d`):**
+los advisories `GHSA-3g3m-2fjr-6pw4` (glob `9.0.0`–`14.0.1` → `14.0.2`) y
+`GHSA-g3hv-75wg-m249` (minimatch `<11.0.1` → `11.0.1`), publicados el 2026-10-27,
+introdujeron 13 moderados que mantenían rojo `npm audit --audit-level=moderate` en CI.
+
+| Advisory | Severidad | Paquete | Antes | Después | Cadena | Alcance |
+|---|---|---|---|---|---|---|
+| GHSA-3g3m-2fjr-6pw4 | moderada | glob | 11.1.0 | 14.0.3 (override) | `vite-plugin-pwa → workbox-build → glob` | tooling de build (`generateSW`), no runtime |
+| GHSA-g3hv-75wg-m249 | moderada | minimatch | 3.1.5 / 5.1.9 / 10.2.5 | 11.0.4 (override) | `eslint`, `@eslint/config-array`, `@eslint/eslintrc` → `minimatch@3`; `workbox-build → @trickfilm400/rollup-plugin-off-main-thread → ejs → jake → filelist → minimatch@5`; `glob@11 → minimatch@10` | tooling de lint/build, no runtime |
+| (transitivo) | moderada | ejs/jake/filelist/@eslint-* | — | resuelto por el override | los paquetes se marcaban sólo por su dependencia en minimatch | tooling |
+| GHSA-gcqx-w48m-w2h4 | baja ×4 | deepmerge | 4.3.1 | 4.3.1 (sin cambio) | `vite-plugin-pwa → workbox-build → @rollup/plugin-node-resolve → deepmerge` | build-time; gobernado por `D-004` |
+
+Ambos advisories exigen patrones glob controlados por un atacante; el consumo real es
+sobre fuentes propias del repositorio (config ESLint y `globPatterns` del service worker),
+por lo que el riesgo es de supply chain del tooling, no de explotación remota.
+Remediado con overrides acotados en `D-029`; antes: 2 bajos + 13 moderados, después:
+4 bajos, 0 moderados. No se aplicó `npm audit fix --force` (proponía un downgrade mayor
+de `vite-plugin-pwa`).
+
 #### H-043 — Un `401` autenticado no invalidaba el usuario en memoria
 ```
 Severidad:   🟡 medio · Categoría: seguridad (sesión frontend)

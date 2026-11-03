@@ -244,7 +244,8 @@ Antes de tocar código de negocio (Fase 1 — red de seguridad):
 ✅ Tests de caracterización de los 6 endpoints de stock ANTES   → `QA-LEVELS` (`f114458` + `c44cafd`)
   de tocarlos — congelan el comportamiento actual para detectar
   regresiones durante R-01 a R-05
-✅ Remediar H-042 en todos los componentes activos               → PHP/frontend/backend npm: ✅
+✅ Remediar H-042 en todos los componentes activos               → PHP/frontend/backend npm: ✅;
+  gate de supply chain frontend verde con overrides acotados      (`D-029`, 4 bajos por `D-004`)
   (`whatsapp-bot/` es legado inactivo y queda fuera de gates/deploy)
 □ Handler global de excepciones + respuesta de error estándar   → H-018, H-024
 □ Model::preventLazyLoading() en local                          → ✅ HECHO (esta sesión)

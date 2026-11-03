@@ -834,3 +834,34 @@ Un borrado irreversible de evidencia no puede derivar plazos de un comentario de
 Las fotos de ticket, `ocr_log` y `activity_logs` siguen creciendo sin límite hasta resolver `GAP-RETENTION`, en tensión con el antipatrón de retención infinita de `DO-DR`. El inventario permite medir ese crecimiento. Un operador que ejecutaba el comando a mano ahora recibe un error explícito en vez de un borrado.
 
 **Referencia normativa:** `BE-TX`, `BE-DATA`, `BE-ASYNC`, `SEC-FILE`, `SEC-LOG`, `SEC-DATA`, `DO-DR`, `DO-RELEASE`, `QA-RESILIENCE`
+
+---
+
+## D-029 — Overrides acotados `glob@14`/`minimatch@11` para el toolchain frontend
+
+**Fecha:** 2026-11-03
+**Estado:** ✅ vigente — retirar cuando los consumidores fijen rangos parcheados
+
+**Contexto**
+Los advisories `GHSA-3g3m-2fjr-6pw4` (glob `>=9.0.0 <=14.0.1`, parcheado sólo en `14.0.2`) y `GHSA-g3hv-75wg-m249` (minimatch `<11.0.1`, parcheado sólo en `11.0.1`), publicados el 2026-10-27, dejaron `npm audit --audit-level=moderate` del frontend en rojo: 13 moderados. Ningún consumidor tiene rango corregido: `eslint@9` requiere `minimatch@^3`, `@eslint/config-array`/`filelist` `^10`, `workbox-build@7.4.1` (última versión) requiere `glob@^11`. Tampoco existe `vite-plugin-pwa` que lo evite: la 2.0.0 sigue usando `workbox-build@^7.4.1`.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Esperar rangos corregidos upstream | Sin riesgo de compatibilidad | CI rojo por tiempo indeterminado |
+| `npm audit fix --force` (vite-plugin-pwa@1.1.0) | Audit vacío | Downgrade mayor incompatible y no revisado |
+| Overrides a las versiones parcheadas | Elimina los moderados hoy | Dependencia de la compatibilidad real entre majors |
+
+**Decisión**
+`package.json` fija `"overrides": { "glob": "14.0.3", "minimatch": "11.0.4" }`.
+
+**Por qué es seguro**
+- Compatibilidad verificada por consumo real: `workbox-build` sólo invoca `globSync`, presente en la exportación CJS de glob 14; `eslint`, `@eslint/config-array`, `@eslint/eslintrc` y `filelist` usan únicamente `Minimatch`/`minimatch.match`, presentes en minimatch 11. Ninguno llama al default callable de la línea 3.x.
+- Gates ejecutados contra el resultado: `npm ci`, `npm ls --all` sin inválidos ni extraneous, ESLint, 38 tests Vitest, build con `generateSW` (48 entradas de precache, `sw.js` + `workbox-*.js` generados) y `npm audit --audit-level=moderate` en exit 0.
+- No alcanza el runtime: ambas cadenas son tooling de build/lint; además el código vulnerable requiere patrones controlados por un atacante, y el consumo es sobre fuentes propias del repositorio.
+
+**Trade-off aceptado**
+Los overrides quedan fuera del rango declarado por los consumidores; un cambio de API futuro se detectaría en lint/build, no en `npm ls`. Condición de retiro: cuando `workbox-build` declare `glob@^14` y `eslint`/`filelist` declaren `minimatch@^11` (o los advisories publiquen backports), los overrides se eliminan y el lockfile se regenera. Los cuatro bajos de `deepmerge` siguen gobernados por `D-004`.
+
+**Referencia normativa:** `DO-SUPPLY`, `SEC-SUPPLY`, `QA-SEC`, `QA-STATIC`, `FE-GATE`

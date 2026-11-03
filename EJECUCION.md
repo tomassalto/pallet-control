@@ -542,9 +542,22 @@ Evidencia: commit `cd185f4` (código) y `43af706` (documentación). Actions runs
 
 Pendiente: el resto del inventario de H-050 (otras familias con `exists` sin `bail` y el route binding no numérico), resto de H-020 por familia y H-049.
 
+## Última sesión cerrada — supply chain del frontend (advisories glob/minimatch)
+
+Rama `hardening/frontend-supply-chain`, creada desde `origin/hardening/pending-id-validation` (`e85a32d`, verificado descendiente de `20e5d19` con working tree limpio). Se aplicaron `DO-SUPPLY`, `DO-CI`, `DO-GATE`, `SEC-SUPPLY`, `SEC-GATE`, `QA-SEC`, `QA-RISK`, `QA-GATE`, `QA-STATIC`, `FE-GATE`, `FE-PWA` y `FE-PERF`. Alcance: sólo `pallet-frontend/` y documentación operativa.
+
+1. Diagnóstico con `npm ci` limpio sobre `e85a32d`: 15 vulnerabilidades (2 low, 13 moderate). Los moderados venían de dos advisories publicados el 2026-10-27: `GHSA-3g3m-2fjr-6pw4` (glob `>=9.0.0 <=14.0.1`, parche sólo en `14.0.2`) vía `vite-plugin-pwa → workbox-build → glob@11.1.0`, y `GHSA-g3hv-75wg-m249` (minimatch `<11.0.1`, parche sólo en `11.0.1`) vía `eslint@9 → minimatch@3.1.5`, `@eslint/config-array`/`@eslint/eslintrc → minimatch@3`, `workbox-build → @trickfilm400/rollup-plugin-off-main-thread → ejs → jake → filelist → minimatch@5.1.9` y `glob@11 → minimatch@10.2.5`.
+2. Ningún consumidor tiene rango corregido: `workbox-build@7.4.1` es la última versión y exige `glob@^11`; `eslint@10` aún usa `minimatch@^10`; `vite-plugin-pwa@2.0.0` sigue trayendo `workbox-build@^7.4.1`. La única propuesta de npm era el downgrade mayor `vite-plugin-pwa@1.1.0`, rechazado.
+3. Remediación: overrides acotados `"glob": "14.0.3"` y `"minimatch": "11.0.4"` en `package.json` (D-029). Compatibilidad verificada por consumo real: `workbox-build` sólo usa `globSync`; ESLint/`config-array`/`eslintrc`/`filelist` sólo usan `Minimatch`/`minimatch.match`, todos presentes en las versiones parcheadas. Sin cambios de dependencias directas ni de código.
+4. Gates locales (Node 24, npm 11): `npm ci`, `npm ls --all` sin inválidos ni extraneous (sólo UNMET OPTIONAL de plataformas ajenas de Tailwind Oxide), `npm run lint` verde, `npm test` 38 tests/8 archivos verdes, `npm run build` verde con `generateSW`: `sw.js`, `workbox-3a3a58c4.js`, `manifest.webmanifest` y 48 entradas de precache en `pallet-backend/public/app/` (output ignorado por git, como antes). `npm audit --audit-level=moderate` exit 0.
+5. PWA sin cambios funcionales: misma configuración `generateSW`/`autoUpdate`, `runtimeCaching` idéntico (`photos-cache` CacheFirst, `api-cache` NetworkFirst), `navigateFallback` y denylist conservados. El bundle de aplicación no cambió: los overrides sólo afectan tooling (workbox-build corre en Node durante el build; minimatch en ESLint).
+6. Estado del audit: antes 2 low + 13 moderate; después 4 low + 0 moderate. Los 4 bajos son `deepmerge` (`GHSA-gcqx-w48m-w2h4`), gobernados por `D-004` con vencimiento 2027-01-29. `npm audit --json` confirma `{"low":4,"moderate":0,"high":0,"critical":0}`.
+
+Evidencia: ver commits de la rama y run de Actions del push. `postgres-concurrency` y `container-security` no fueron tocados (alcance frontend-only).
+
 ## Próxima sesión
 
-Sin bloque autónomo asignado. Candidatos: perfilado de `GET /api/v1/orders` (hot path del baseline 2026-11-02), `GAP-RETENTION` (requiere decisión de negocio), avisos npm del frontend (`DO-SUPPLY`), H-046 (previa decisión de dominio), siguiente familia de H-020 (con el inventario restante de H-050), H-049 y política H-009.
+Sin bloque autónomo asignado. Candidatos: perfilado de `GET /api/v1/orders` (hot path del baseline 2026-11-02), `GAP-RETENTION` (requiere decisión de negocio), retiro de los overrides de `D-029` cuando upstream fije rangos parcheados, H-046 (previa decisión de dominio), siguiente familia de H-020 (con el inventario restante de H-050), H-049 y política H-009.
 
 ## Sesiones R-02 a R-07
 
