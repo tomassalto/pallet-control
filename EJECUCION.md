@@ -584,7 +584,9 @@ Corrección post-revisión: Pint aplicado a los 4 archivos en rojo; OCR reescrit
 
 Segunda corrección: `admin/storage` ya no ejecuta `Storage::delete()` con la transacción abierta — dentro de la tx corta sólo quedan lock FOR UPDATE de la entidad, re-lectura del estado `done`, delete de filas, activity log y `StorageCleanupService::scheduleDeletion` (intenciones durables + dispatch `afterCommit`, D-018/D-027); un crash recupera por `storage:retry-pending-deletions`. Tests nuevos: `AdminStorageDeletionTest` (6 casos: 409 sin efectos, intención por archivo, cero I/O en tx con `Queue::fake`, recuperación por barrido, idempotencia, auditoría). Se corrigieron además el mensaje `409` de adjust-item (contrato existente), los conteos acotados de queries (+1 lock `orders` en adjust y migrate), el import faltante de `ActivityLogger` y los errores PHPStan (`ticket()` genérico, `getKey()` en uniones Model, baseline reducido 2→1 en TelegramBotController). Gates locales con PHP 8.4.27: `pint --test` verde, PHPStan sin errores, suite SQLite completa 322 tests verdes (2 skipped por flag), `composer audit` sin advisories.
 
-Pendiente de evidencia remota: gates `ci`, `postgres-concurrency` y `container-security` del push.
+Corrección del gate PostgreSQL (run 41585098217 falló): `test_finalize_de_pedido_vs_patch_de_estado` exigía exactamente {200,409}, pero el PATCH puede tomar el FOR UPDATE primero, escribir `paused` y finalizar luego — `paused` no bloquea la finalización, así que ambos 200 es un orden legal (la escritura precede al commit de finalize). Contrato corregido: finalize siempre 200 con pedido `done`, PATCH 200-auditado (ganó el lock) o 409; ramas delete-foto y crear-base ahora exigen que el finalize perdedor responda 409. Todos los escenarios repiten ×5.
+
+Evidencia CI: Actions run `41587490864` sobre `3388488` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 ## Próxima sesión
 
