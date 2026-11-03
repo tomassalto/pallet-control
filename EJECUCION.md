@@ -553,7 +553,7 @@ Rama `hardening/frontend-supply-chain`, creada desde `origin/hardening/pending-i
 5. PWA sin cambios funcionales: misma configuración `generateSW`/`autoUpdate`, `runtimeCaching` idéntico (`photos-cache` CacheFirst, `api-cache` NetworkFirst), `navigateFallback` y denylist conservados. El bundle de aplicación no cambió: los overrides sólo afectan tooling (workbox-build corre en Node durante el build; minimatch en ESLint).
 6. Estado del audit: antes 2 low + 13 moderate; después 4 low + 0 moderate. Los 4 bajos son `deepmerge` (`GHSA-gcqx-w48m-w2h4`), gobernados por `D-004` con vencimiento 2027-01-29. `npm audit --json` confirma `{"low":4,"moderate":0,"high":0,"critical":0}`.
 
-Evidencia: ver commits de la rama y run de Actions del push. `postgres-concurrency` y `container-security` no fueron tocados (alcance frontend-only).
+Evidencia: commits `aed1002` (overrides y lockfile) y `fd30929` (documentación); Actions run `41576492263` con los tres jobs verdes: `ci` (incluye `npm audit --audit-level=moderate` del frontend), `postgres-concurrency` y `container-security`.
 
 ## Próxima sesión
 

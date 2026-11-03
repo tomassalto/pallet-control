@@ -843,7 +843,7 @@ Las fotos de ticket, `ocr_log` y `activity_logs` siguen creciendo sin límite ha
 **Estado:** ✅ vigente — retirar cuando los consumidores fijen rangos parcheados
 
 **Contexto**
-Los advisories `GHSA-3g3m-2fjr-6pw4` (glob `>=9.0.0 <=14.0.1`, parcheado sólo en `14.0.2`) y `GHSA-g3hv-75wg-m249` (minimatch `<11.0.1`, parcheado sólo en `11.0.1`), publicados el 2026-10-27, dejaron `npm audit --audit-level=moderate` del frontend en rojo: 13 moderados. Ningún consumidor tiene rango corregido: `eslint@9` requiere `minimatch@^3`, `@eslint/config-array`/`filelist` `^10`, `workbox-build@7.4.1` (última versión) requiere `glob@^11`. Tampoco existe `vite-plugin-pwa` que lo evite: la 2.0.0 sigue usando `workbox-build@^7.4.1`.
+Los advisories `GHSA-3g3m-2fjr-6pw4` (glob `>=9.0.0 <=14.0.1`, parcheado sólo en `14.0.2`) y `GHSA-g3hv-75wg-m249` (minimatch `<11.0.1`, parcheado sólo en `11.0.1`), publicados el 2026-10-27, dejaron `npm audit --audit-level=moderate` del frontend en rojo: 13 moderados. Ningún consumidor tiene rango corregido: `eslint@9`, `@eslint/config-array@0.21.1` y `@eslint/eslintrc@3.3.3` requieren `minimatch@^3.1.2`, `filelist@1.0.6` requiere `minimatch@^5.0.1`, la cadena de `glob@11` usaba `minimatch@^10` y `workbox-build@7.4.1` (última versión) requiere `glob@^11`. Tampoco existe `vite-plugin-pwa` que lo evite: la 2.0.0 sigue usando `workbox-build@^7.4.1`.
 
 **Opciones evaluadas**
 
@@ -856,7 +856,8 @@ Los advisories `GHSA-3g3m-2fjr-6pw4` (glob `>=9.0.0 <=14.0.1`, parcheado sólo e
 **Decisión**
 `package.json` fija `"overrides": { "glob": "14.0.3", "minimatch": "11.0.4" }`.
 
-**Por qué es seguro**
+**Compatibilidad acreditada para el uso actual**
+Los overrides quedan fuera de los rangos declarados por los consumidores. La compatibilidad está acreditada sólo para el uso actual, no garantizada por semver:
 - Compatibilidad verificada por consumo real: `workbox-build` sólo invoca `globSync`, presente en la exportación CJS de glob 14; `eslint`, `@eslint/config-array`, `@eslint/eslintrc` y `filelist` usan únicamente `Minimatch`/`minimatch.match`, presentes en minimatch 11. Ninguno llama al default callable de la línea 3.x.
 - Gates ejecutados contra el resultado: `npm ci`, `npm ls --all` sin inválidos ni extraneous, ESLint, 38 tests Vitest, build con `generateSW` (48 entradas de precache, `sw.js` + `workbox-*.js` generados) y `npm audit --audit-level=moderate` en exit 0.
 - No alcanza el runtime: ambas cadenas son tooling de build/lint; además el código vulnerable requiere patrones controlados por un atacante, y el consumo es sobre fuentes propias del repositorio.
