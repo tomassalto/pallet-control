@@ -44,21 +44,21 @@ class PendingItemRouteBindingTest extends TestCase
         ]);
     }
 
-    // H-050 — evidencia del defecto vigente: el segmento {pendingItem}
-    // llega sin chequeo de tipo a la comparación bigint del binding
-    // implícito. PostgreSQL responde SQLSTATE[22P02] y el handler global
-    // devuelve el 500 genérico; SQLite devuelve 404 en el mismo caso.
-    // Tras el fix este test se actualiza deliberadamente al contrato 404.
-    public function test_id_no_numerico_actualmente_produce_500(): void
+    // H-050 — contrato corregido: el segmento {pendingItem} no numérico
+    // se rechaza en el binding antes de la comparación bigint. Antes del
+    // fix este mismo caso devolvía el 500 genérico del handler global
+    // (SQLSTATE[22P02]); ahora devuelve el 404 estándar, igual que SQLite
+    // y que un id inexistente. Nunca 500 ni 22P02.
+    public function test_id_no_numerico_devuelve_404_en_patch_y_delete(): void
     {
         Sanctum::actingAs(User::factory()->withRole()->create());
 
-        $this->patchJson('/api/v1/pending-items/abc', ['status' => 'resolved'])
-            ->assertStatus(500)
-            ->assertJsonPath('message', 'Ocurrió un error inesperado.');
-
-        $this->deleteJson('/api/v1/pending-items/abc')
-            ->assertStatus(500);
+        foreach (['abc', '12abc', '1.5', '-1', '99999999999999999999'] as $id) {
+            $this->patchJson("/api/v1/pending-items/{$id}", ['status' => 'resolved'])
+                ->assertNotFound("PATCH {$id}");
+            $this->deleteJson("/api/v1/pending-items/{$id}")
+                ->assertNotFound("DELETE {$id}");
+        }
 
         $this->assertSame(0, DB::table('activity_logs')->count());
     }
