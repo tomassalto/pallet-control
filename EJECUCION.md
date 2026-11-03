@@ -598,7 +598,7 @@ Rama `hardening/order-attach-pallet-validation`, creada desde `origin/hardening/
 4. Evidencia PostgreSQL: `AttachPalletIdValidationTest` (gate `postgres`) prueba `'abc'` → `422` `validation.integer` sin `22P02` ni efectos, entero inexistente → `422` `validation.exists` y string numérico → `201`. La carrera cruzada `attachPallet`/`attachOrder` del gate siguió verde (`201`/`409`, una fila pivot, un log). Grupo `postgres` completo local: 35 tests/450 assertions contra PostgreSQL 17.11.
 5. Gates locales con PHP 8.4.24/8.4.27: `pint --test` verde, PHPStan sin errores ni baseline nuevo (`--memory-limit=1G`), suite SQLite completa 367 tests/1436 assertions (2 skips de benchmark preexistentes) y `composer audit` sin avisos. Frontend sin cambios.
 
-Evidencia funcional: commits `1da6eff` y `5c3db71`. CI remoto pendiente al cierre de la sesión.
+Evidencia funcional: commits `1da6eff`, `5c3db71` y `4680292`. Actions run `41598502797` sobre `4680292` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 Pendiente: resto del inventario de H-020 (12 controladores + listados) y de H-050 (uniformizar `bail` en las familias restantes y el route binding no numérico), y H-049 abierto para una rebanada de idioma/UX.
 
