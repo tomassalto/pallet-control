@@ -542,7 +542,7 @@ Evidencia: commit `cd185f4` (código) y `43af706` (documentación). Actions runs
 
 Pendiente: el resto del inventario de H-050 (otras familias con `exists` sin `bail` y el route binding no numérico), resto de H-020 por familia y H-049.
 
-## Última sesión cerrada — supply chain del frontend (advisories glob/minimatch)
+## Sesión cerrada — supply chain del frontend (advisories glob/minimatch)
 
 Rama `hardening/frontend-supply-chain`, creada desde `origin/hardening/pending-id-validation` (`e85a32d`, verificado descendiente de `20e5d19` con working tree limpio). Se aplicaron `DO-SUPPLY`, `DO-CI`, `DO-GATE`, `SEC-SUPPLY`, `SEC-GATE`, `QA-SEC`, `QA-RISK`, `QA-GATE`, `QA-STATIC`, `FE-GATE`, `FE-PWA` y `FE-PERF`. Alcance: sólo `pallet-frontend/` y documentación operativa.
 
@@ -554,6 +554,20 @@ Rama `hardening/frontend-supply-chain`, creada desde `origin/hardening/pending-i
 6. Estado del audit: antes 2 low + 13 moderate; después 4 low + 0 moderate. Los 4 bajos son `deepmerge` (`GHSA-gcqx-w48m-w2h4`), gobernados por `D-004` con vencimiento 2027-01-29. `npm audit --json` confirma `{"low":4,"moderate":0,"high":0,"critical":0}`.
 
 Evidencia: commits `aed1002` (overrides y lockfile) y `fd30929` (documentación); Actions run `41576492263` con los tres jobs verdes: `ci` (incluye `npm audit --audit-level=moderate` del frontend), `postgres-concurrency` y `container-security`.
+
+## Última sesión cerrada — caches privadas de la PWA (H-051)
+
+Rama `hardening/pwa-private-cache`, creada desde `origin/hardening/frontend-supply-chain` (`e0a9883`, verificado descendiente de `e85a32d` con working tree limpio). Se aplicaron `FE-PWA`, `FE-SESSION`, `FE-DATA`, `FE-GATE`, `SEC-DATA`, `SEC-BROWSER`, `SEC-IDENTITY`, `SEC-AUTHZ`, `SEC-GATE`, `QA-SEC`, `QA-CONTRACT`, `QA-RISK`, `QA-COMPAT`, `QA-GATE`, `DO-EDGE`, `DO-SUPPLY`, `DO-GATE`, `DOMINIO.md`, `D-023`, `D-024` y `D-029`. Alcance: `pallet-frontend/`, el paso frontend del job `ci` y documentación operativa. Sin dependencias nuevas ni cambios en los overrides de `D-029`.
+
+1. Caracterización: `npm run build` sobre `e0a9883` generó un `sw.js` con `registerRoute` `NetworkFirst` → `cacheName:"api-cache"` (`networkTimeoutSeconds:10`, `maxAgeSeconds:86400`) sobre `/api/v1/*` y `CacheFirst` → `cacheName:"photos-cache"` (`maxAgeSeconds:604800`) sobre `/storage/*.webp`. Las claves son sólo URL; logout/401 no tocaban Cache Storage; `cleanupOutdatedCaches` no elimina caches no-precache, así que las caches legacy sobreviven a la actualización del SW.
+2. Corrección: `runtimeCaching` retirado; configuración Workbox extraída a `pwa-workbox.config.js` (fuente única). `clearPrivateCaches()` (`src/auth/privateCaches.js`) borra exactamente `api-cache`/`photos-cache`, es idempotente y nunca rechaza sin Cache API. Integrada en `main.jsx` (arranque, purga legacy), `endSession` (logout, `401` autenticado, `/auth/me` fallido — misma autoridad de D-024) y `login`/auto-registro.
+3. Verificación: `scripts/verify-sw.mjs` inspecciona el `sw.js` generado tras el build y se enchufó al paso frontend del job `ci`. Falla si aparecen `api-cache`, `photos-cache`, `NetworkFirst`, `CacheFirst` o `api/v1`, o si falta precache del shell o `manifest.webmanifest`.
+4. Gates locales (Node 24, npm 11): `npm ci`, `npm run lint` verde, `npm test` 51 tests/10 archivos verdes, `npm run build` verde (`generateSW`, 48 entradas de precache, `sw.js` + `workbox-*.js` + `manifest.webmanifest`), `node scripts/verify-sw.mjs` OK, `npm audit --audit-level=moderate` exit 0, `npm audit --json` → `{"low":4,"moderate":0,"high":0,"critical":0}` (deepmerge, `D-004`), `npm ls --all` sin inválidos ni extraneous.
+5. El `sw.js` nuevo no contiene `api-cache`, `photos-cache`, `NetworkFirst`, `CacheFirst` ni `api/v1`; conserva `precacheAndRoute`, `cleanupOutdatedCaches` y la ruta de navegación con `denylist:[/^\/api/,/^\/storage/]`.
+6. Limitación declarada: jsdom no ejecuta un service worker real; la actualización desde caches legacy se acredita por la purga de arranque y la inspección del artefacto. Verificación manual DevTools recomendada en el próximo deploy.
+7. Documentación: `H-051` en `AUDITORIA.md`, `D-030` en `DECISIONES.md`, `PLAN.md` actualizado. `GAP-OFFLINE` continúa abierto; no se promete uso offline de datos de negocio.
+
+Commits: `3ddfe07` (caracterización y tests), `0938c88` (corrección PWA y limpieza legacy), docs propios. Evidencia CI remoto: pendiente del push.
 
 ## Próxima sesión
 

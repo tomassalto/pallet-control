@@ -522,9 +522,28 @@ Origen:      caracterización de H-020 (pendientes)
 **Inventario restante de la misma falla (no corregido en este bloque):** toda regla `exists` sin `bail` comparte el riesgo aunque tenga `integer` antes, porque el validador ejecuta las demás reglas igual: `MissingItemRequestController::store` (`order_item_id`, además sin `integer`), `OrderController::attachPallet` (`pallet_id`), `PhotoAnnotationController` (`annotations.*.orderItemId`), `AdjustPalletBaseItemRequest` (`order_item_id`), `MigratePalletBaseRequest` (`items.*.order_item_id`, `destination_pallet_id`, `destination_base_id`), `StoreOrderRequest` (`customer_id`), `StorePalletBaseRequest` (`items.*.order_item_id`). Además, el route binding de `/pending-items/{pendingItem}` con un id no numérico consulta `bigint` y produce el mismo `500` en PostgreSQL (verificado con `QueryException` `22P02`); en SQLite devuelve `404`.
 **Estado:** 🟡 parcial: resuelto para la familia de pendientes; el inventario restante sigue abierto y se trata por familia con H-020.
 
----
+#### H-051 — El service worker persistía respuestas autenticadas y evidencia privada entre sesiones
+```
+Severidad:   � medio · Categoría: seguridad (datos privados en navegador)
+Ubicación:   pallet-frontend/vite.config.js (workbox.runtimeCaching); cierre en src/auth/AuthContext.jsx
+Referencia:  `FE-PWA`, `FE-DATA`, `FE-SESSION`, `SEC-DATA`, `SEC-BROWSER`, `SEC-IDENTITY`, `DO-EDGE`, `QA-SEC`, `QA-COMPAT`
+Origen:      rebanada dedicada de hardening PWA sobre `e0a9883`
+```
+**Qué estaba pasando:** `generateSW` registraba dos rutas runtime en el `sw.js` generado (verificado inspeccionando el artefacto del build, no sólo la configuración):
+- `NetworkFirst` sobre `/api/v1/*` → cache `api-cache`, `networkTimeoutSeconds: 10`, hasta 100 entradas y 24 h. Ante timeout o fallo de red servía la respuesta cacheada: pedidos, pallets, clientes, pendientes y `/auth/me` consultados por un usuario quedaban disponibles para el siguiente.
+- `CacheFirst` sobre `/storage/*.webp` → cache `photos-cache`, hasta 500 entradas y 7 días. Las fotos y tickets son evidencia documental (`DOMINIO.md`), no datos públicos por tener URL de storage.
 
-### 🔴 INFRAESTRUCTURA / PÉRDIDA DE DATOS
+Las claves de Cache Storage son la URL: no distinguen usuario ni bearer token. El cierre de sesión (D-024) limpiaba token, usuario y React Query, pero nunca Cache Storage. `cleanupOutdatedCaches` de Workbox sólo elimina caches de precache (`workbox-precache-*`), así que quitar `runtimeCaching` de la configuración **no** borra las caches ya instaladas en dispositivos con la PWA previa.
+
+**Escenarios caracterizados:** usuario A → logout → usuario B con la misma URL obtiene datos de A ante fallo de red; usuario A → logout → navegador offline recibe respuestas autenticadas de A; un `401` autenticado cerraba la sesión lógica pero dejaba las caches llenas; una nueva sesión heredaba las entradas del token anterior; una instalación PWA actualizada conservaba ambas caches legacy por no ser precaches.
+
+**Resolución:** política sin fallback offline de datos mientras `GAP-OFFLINE` siga abierto (D-030):
+- `runtimeCaching` retirado por completo; la configuración de Workbox vive en `pwa-workbox.config.js` como fuente única testeable. Sobreviven precache del shell estático, manifest, instalación y `navigateFallback` con denylist de `/api` y `/storage`.
+- `src/auth/privateCaches.js` es la única autoridad que elimina por nombre exacto `api-cache` y `photos-cache`. Idempotente, lista cerrada (nunca borra caches ajenas ni `workbox-precache-*`) y nunca rechaza: la ausencia de Cache API no rompe arranque, login, logout ni `401`.
+- Integración: arranque en `main.jsx` (purga caches legacy de instalaciones que actualizan), `endSession` (logout, `401` autenticado y `/auth/me` fallido comparten la autoridad de D-024) y login/registro con auto-login (cambio de usuario en el mismo dispositivo).
+
+**Evidencia:** inspección del `sw.js` anterior con las dos rutas y sus expiraciones vs. el nuevo sin ninguna. 51 tests: unitarios de `clearPrivateCaches` (nombres exactos, cache ajena preservada, idempotencia, sin Cache API, fallos de `keys`/`delete`), de política sobre `pwa-workbox.config.js` y `vite.config.js`, e integrados con `AuthProvider` (logout y `401` purgan las caches además de token/usuario/queries; `401`s concurrentes sin Cache API no fallan). `scripts/verify-sw.mjs` falla el build de CI si `sw.js` contiene `api-cache`, `photos-cache`, `NetworkFirst`, `CacheFirst` o `api/v1`, o si falta precache del shell o `manifest.webmanifest`. Limitación: jsdom no ejecuta un service worker real; la actualización desde caches legacy se acredita por la llamada de arranque más la inspección del artefacto, no por una corrida E2E del SW viejo → nuevo.
+**Estado:** ✅ resuelto en `0938c88`; CI remoto pendiente de confirmar en `hardening/pwa-private-cache`.
 
 #### H-028 — `RESET_ON_STARTUP=true` borra toda la DB operativa
 ```
@@ -646,13 +665,13 @@ Con 120 registros sobre SQLite local, el escenario reproducible pasó de 120 a 2
 
 | Categoría | 🔴 | 🟠 | 🟡 | ⚪ | Total |
 |---|---|---|---|---|---|
-| Seguridad | 1 | 3 | 4 | 0 | 8 |
+| Seguridad | 1 | 3 | 5 | 0 | 9 |
 | Integridad de datos | 7 | 6 | 3 | 2 | 18 |
 | Performance | 0 | 0 | 1 | 0 | 1 |
 | Calidad | 0 | 3 | 10 | 7 | 20 |
-| **Total** | **8** | **12** | **18** | **9** | **47** |
+| **Total** | **8** | **12** | **19** | **9** | **48** |
 
-*(H-043 y H-044 provienen de la auditoría posterior sobre `127b828`; H-045 y H-046, de la rebanada de finalización; H-048, de la auditoría de `pallet:archive`.)*
+*(H-043 y H-044 provienen de la auditoría posterior sobre `127b828`; H-045 y H-046, de la rebanada de finalización; H-048, de la auditoría de `pallet:archive`; H-051, de la rebanada PWA.)*
 
 *(algunos hallazgos tocan más de una categoría; se contaron en la categoría dominante — p. ej. H-019 es fuga de información pero se cuenta como seguridad, H-030/H-032 son de Docker/git pero también seguridad)*
 

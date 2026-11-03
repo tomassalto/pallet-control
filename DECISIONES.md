@@ -866,3 +866,32 @@ Los overrides quedan fuera de los rangos declarados por los consumidores. La com
 Los overrides quedan fuera del rango declarado por los consumidores; un cambio de API futuro se detectaría en lint/build, no en `npm ls`. Condición de retiro: cuando `workbox-build` declare `glob@^14` y `eslint`/`filelist` declaren `minimatch@^11` (o los advisories publiquen backports), los overrides se eliminan y el lockfile se regenera. Los cuatro bajos de `deepmerge` siguen gobernados por `D-004`.
 
 **Referencia normativa:** `DO-SUPPLY`, `SEC-SUPPLY`, `QA-SEC`, `QA-STATIC`, `FE-GATE`
+
+---
+
+## D-030 — Sin persistencia de datos privados en caches de la PWA mientras `GAP-OFFLINE` esté abierto
+
+**Fecha:** 2026-11-03
+**Estado:** ✅ vigente — se revisa al aprobar `GAP-OFFLINE`
+
+**Contexto**
+El service worker generado persistía respuestas autenticadas de `/api/v1/*` en `api-cache` (`NetworkFirst`, 10 s de timeout, 24 h) y fotos/tickets de `/storage/*.webp` en `photos-cache` (`CacheFirst`, 7 días), con claves que sólo distinguen URL (H-051). `FE-PWA` exige runtime cache por clasificación de dato y prohíbe mezclar usuarios; `FE-DATA` prohíbe persistir respuestas autenticadas como sustituto de un diseño offline; `SEC-DATA` hace heredar la clasificación al cache y `DOMINIO.md` clasifica fotos y tickets como evidencia documental. `GAP-OFFLINE` sigue abierto, así que no existe política aprobada de identidad, cifrado, expiración y eliminación para esos datos.
+
+**Opciones evaluadas**
+
+| Opción | A favor | En contra |
+|---|---|---|
+| Mantener `NetworkFirst`/`CacheFirst` | Fallback de lectura ante cortes | Mezcla usuarios en dispositivos compartidos; persiste evidencia sin política; antipatrón explícito de `FE-PWA` |
+| Cache runtime por usuario/token | Conserva fallback | Cache Storage no se clavea por bearer; exige el diseño de `GAP-OFFLINE` que no existe |
+| Sólo quitar `runtimeCaching` | Cambio mínimo | Las caches ya instaladas sobreviven: `cleanupOutdatedCaches` no toca caches no-precache |
+| Precache del shell + borrado por nombre de caches legacy | Instalable, sin datos privados, verificable | Sin fallback offline de datos de negocio |
+
+**Decisión**
+- `runtimeCaching` queda retirado. Permitido: precache del shell estático y assets públicos del build, `navigateFallback` con denylist de `/api` y `/storage`. Prohibido: cualquier cache runtime de `/api/v1/*`, fotos, tickets u otra evidencia, y cualquier mecanismo nuevo que almacene tokens, respuestas API o datos sensibles.
+- `clearPrivateCaches()` (`src/auth/privateCaches.js`) es la autoridad de eliminación: lista cerrada `api-cache`/`photos-cache`, idempotente, tolerante a la ausencia de Cache API. Corre al arrancar la app (instalaciones que actualizan desde el SW viejo), dentro de `endSession` (misma autoridad de cierre de D-024: logout, `401` autenticado, `/auth/me` fallido) y al iniciar sesión o auto-registrarse (cambio de usuario).
+- La retirada se verifica en dos niveles: tests sobre `pwa-workbox.config.js`/`vite.config.js` y `scripts/verify-sw.mjs` sobre el `sw.js` generado, ejecutado en CI tras el build.
+
+**Trade-off aceptado**
+Sin conexión, la app muestra estados de error recuperables en lugar de datos: no hay lectura offline de negocio hasta que `GAP-OFFLINE` defina identidad, cifrado, expiración y eliminación. La primera visita a una imagen ya vista exige red. jsdom no ejecuta service workers: la purga en dispositivos reales se acredita por la llamada de arranque y la inspección del artefacto, y queda recomendada una verificación manual DevTools en el próximo deploy.
+
+**Referencia normativa:** `FE-PWA`, `FE-DATA`, `FE-SESSION`, `SEC-DATA`, `SEC-BROWSER`, `SEC-IDENTITY`, `DO-EDGE`, `QA-SEC`, `QA-COMPAT`, `QA-GATE`
