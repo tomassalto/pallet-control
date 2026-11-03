@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\DomainConflictException;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\BotSecretMiddleware;
 use App\Http\Middleware\EnsureHasRole;
@@ -31,6 +32,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $errorIdFor = function (Throwable $exception) use ($errorReferences): string {
             return $errorReferences[$exception] ??= (string) Str::uuid();
         };
+
+        // Los conflictos de dominio lanzados dentro de transacciones
+        // (p.ej. para compensar archivos) conservan su contrato 409.
+        $exceptions->render(function (DomainConflictException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 409);
+        });
 
         // La misma referencia viaja en el log técnico, el cuerpo y el header.
         $exceptions->context(fn (Throwable $exception): array => [

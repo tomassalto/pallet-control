@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Exceptions\DomainConflictException;
 use App\Models\Order;
 use App\Models\Pallet;
+use App\Services\PalletBaseService;
 use App\Services\PhotoUploadService;
 use App\Services\TelegramBotClient;
 use App\Services\TelegramBotCommandParser;
@@ -333,7 +335,15 @@ class TelegramBotController extends Controller
         try {
             $pallet = Pallet::with(['bases', 'orders.customer'])->findOrFail($palletId);
             $nextNum = $pallet->bases->count() + 1;
-            $base = $pallet->bases()->create(['name' => "Base {$nextNum}"]);
+            // La creación pasa por el servicio: bloquea y relee el estado,
+            // un pallet finalizado es inmutable.
+            $result = app(PalletBaseService::class)->createBase($pallet, ['name' => "Base {$nextNum}"]);
+            if (isset($result['error'])) {
+                $this->editMessage($chatId, $messageId, '❌ ' . $result['error']['message']);
+
+                return response()->json(['ok' => true]);
+            }
+            $base = $result['base'];
 
             $uploadedFile = $this->downloadPhoto($fileId);
             if (! $uploadedFile) {
@@ -356,6 +366,8 @@ class TelegramBotController extends Controller
             }
             $this->editMessage($chatId, $messageId, $msg);
 
+        } catch (DomainConflictException $e) {
+            $this->editMessage($chatId, $messageId, '❌ ' . $e->getMessage());
         } catch (ModelNotFoundException) {
             $this->editMessage($chatId, $messageId, '❌ Pallet no encontrado.');
         } catch (\Throwable $e) {
@@ -418,6 +430,8 @@ class TelegramBotController extends Controller
             Cache::forget("tg_photo_{$userId}");
             $this->editMessage($chatId, $messageId, $result['msg'] ?? '✅ Foto guardada');
 
+        } catch (DomainConflictException $e) {
+            $this->editMessage($chatId, $messageId, '❌ ' . $e->getMessage());
         } catch (ModelNotFoundException) {
             $this->editMessage($chatId, $messageId, '❌ No encontrado. Puede que el destino haya sido cerrado.');
         } catch (\Throwable $e) {
@@ -515,6 +529,8 @@ class TelegramBotController extends Controller
             $result = app(PhotoUploadService::class)->upload($uploadedFile, $params);
             $this->reply($chatId, $result['msg'] ?? '✅ Foto guardada');
 
+        } catch (DomainConflictException $e) {
+            $this->reply($chatId, '❌ ' . $e->getMessage());
         } catch (ModelNotFoundException) {
             $this->reply($chatId, '❌ No encontrado. Verificá el código.');
         } catch (\Throwable $e) {

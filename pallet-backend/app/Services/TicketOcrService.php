@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\OrderTicketPhoto;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -17,6 +18,10 @@ class TicketOcrService
 {
     private const EAN_LENGTH = 13;
 
+    public function __construct(
+        private readonly FinalizationService $finalizationService,
+    ) {}
+
     /**
      * Procesa una foto de ticket: ejecuta OCR y guarda el resultado en el modelo.
      * Retorna true si se procesó correctamente, false si Tesseract no está disponible.
@@ -24,10 +29,30 @@ class TicketOcrService
      */
     public function processPhoto(OrderTicketPhoto $photo, ?callable $logCallback = null): bool
     {
-        $log = function (string $msg) use ($photo, $logCallback): void {
+        $orderId = $photo->ticket?->order_id;
+        $orderFinalized = false;
+
+        if ($orderId !== null && ! $this->orderIsWritable($orderId)) {
+            Log::info("OCR omitido: el pedido {$orderId} está finalizado (foto {$photo->id}).");
+
+            return false;
+        }
+
+        $log = function (string $msg) use ($photo, $logCallback, $orderId, &$orderFinalized): void {
             $line = '[' . date('H:i:s') . '] ' . $msg;
             Log::info('OCR LOG | ' . $msg);
-            // Append al ocr_log en BD para que el frontend pueda hacer polling
+            // Append al ocr_log en BD para que el frontend pueda hacer polling.
+            // Cada escritura relee el estado del pedido bajo lock: si el
+            // pedido finalizó durante el OCR, nada más se escribe.
+            if ($orderFinalized) {
+                return;
+            }
+            if ($orderId !== null && ! $this->orderIsWritable($orderId)) {
+                $orderFinalized = true;
+                Log::info("OCR abortado a mitad de proceso: el pedido {$orderId} está finalizado.");
+
+                return;
+            }
             $current = $photo->getRawOriginal('ocr_log') ?? '';
             $photo->ocr_log = $current === '' ? $line : $current . "\n" . $line;
             $photo->saveQuietly();
@@ -54,7 +79,9 @@ class TicketOcrService
 
         if (! file_exists($imagePath)) {
             $log('ERROR: imagen no encontrada en disco. Abortando.');
-            $photo->update(['ocr_processed_at' => now()]);
+            if (! $orderFinalized) {
+                $photo->update(['ocr_processed_at' => now()]);
+            }
             if ($tempOcrFile && file_exists($tempOcrFile)) {
                 @unlink($tempOcrFile);
             }
@@ -65,7 +92,7 @@ class TicketOcrService
         $log('Tamaño: ' . number_format(filesize($imagePath) / 1024, 1) . ' KB');
         $log('Proveedor OCR: ' . strtoupper((string) config('ocr.provider', 'tesseract')));
 
-        $result = $this->extractEans($imagePath, $log);
+        $result = $orderFinalized ? null : $this->extractEans($imagePath, $log);
 
         if ($result === null) {
             $log('RESULTADO: OCR devolvió null (Tesseract/PaddleOCR no disponible o falló).');
@@ -79,6 +106,18 @@ class TicketOcrService
             } else {
                 $log('  No se encontraron EANs válidos. Los highlights NO aparecerán.');
             }
+        }
+
+        // Última escritura: relee el estado del pedido bajo lock. Si
+        // finalizó durante el OCR, el resultado se descarta.
+        if ($orderFinalized || ($orderId !== null && ! $this->orderIsWritable($orderId))) {
+            Log::info("Resultado de OCR descartado: el pedido {$orderId} está finalizado (foto {$photo->id}).");
+
+            if ($tempOcrFile && file_exists($tempOcrFile)) {
+                @unlink($tempOcrFile);
+            }
+
+            return false;
         }
 
         $log('Guardando resultado en BD...');
@@ -95,6 +134,18 @@ class TicketOcrService
         }
 
         return $result !== null;
+    }
+
+    /**
+     * Relee el estado del pedido bajo FOR SHARE en una transacción
+     * corta: serializa contra el FOR UPDATE de finalize/reopen, así un
+     * OCR en vuelo no escribe nada después del commit de finalización.
+     */
+    private function orderIsWritable(int $orderId): bool
+    {
+        return DB::transaction(
+            fn (): bool => ! is_array($this->finalizationService->lockOrderForWrite($orderId))
+        );
     }
 
     /**

@@ -570,9 +570,21 @@ Rama `hardening/pwa-private-cache`, creada desde `origin/hardening/frontend-supp
 
 Commits: `3ddfe07` (caracterización y tests), `0938c88` (corrección PWA y limpieza legacy), `0e114f1` (documentación). Evidencia CI remoto: Actions run `41580029108` sobre `hardening/pwa-private-cache` con `ci`, `postgres-concurrency` y `container-security` verdes; el job `ci` ejecutó `verify-sw.mjs` tras el build.
 
+## Última sesión cerrada — inmutabilidad de pedidos y pallets finalizados (H-046)
+
+Rama `hardening/finalized-entity-immutability`, creada desde `origin/hardening/pwa-private-cache` (`7f35674`, verificado descendiente de `e0a9883` con working tree limpio). Se aplicaron `BE-VALID`, `BE-TX`, `BE-API`, `BE-ERR`, `BE-DATA`, `BE-ARCH`, `SEC-AUTHZ`, `SEC-INPUT`, `SEC-LOG`, `QA-INVARIANT`, `QA-CONTRACT`, `QA-DATA`, `QA-RISK`, `QA-RESILIENCE`, `DOMINIO.md`, `FE-MUTATION`/`FE-DATA`/`FE-FORM` (revisión de consumidores), D-020, D-025, D-026 y H-045/H-046. Decisión de negocio ya aprobada por el usuario: `done` es inmutable, `paused` sin cambios, sin GAP.
+
+1. Guarda central: `FinalizationService::lockPalletForWrite`/`lockOrderForWrite` toman `FOR SHARE` sobre la autoridad y releen el estado (serializa contra el `FOR UPDATE` de finalize/reopen); `assert*Writable` lanza `DomainConflictException` → `409` para callbacks de subida (compensa el archivo). `POST /orders/{order}/reopen` agrega la reapertura auditada que faltaba.
+2. H-046: PATCH de estado corre en transacción con `FOR UPDATE`; `done` actual u objetivo → `409`; `open`↔`paused` conservado con nuevos logs `*_status_changed`.
+3. Escritores cubiertos: attach/detach (ambos lados), import, items add/update, bases create/update/destroy/migrate/adjust (ítems de pedido `done` incluidos), fotos pallet/base/ticket, anotaciones, tickets, trigger-ocr + job OCR (descarta resultado si el pedido finalizó), pendientes, faltantes públicos y su revisión, borrados de entidad web/admin, uploads del bot y creación de base por Telegram (ahora vía `PalletBaseService`).
+4. Frontend (revisión de consumidores): `updateStatus` apuntaba a `/…/status` inexistente → corregido a `/orders/{id}` y `/pallets/{id}`; acción "Reabrir pedido" en `OrderDetailActions` con `useOrderDetail::reopen`.
+5. Tests: `FinalizedEntityImmutabilityTest` (≈35 casos SQLite: rechazo 409 sin efectos en cada escritor, compensación de archivos, paused con auditoría, mutabilidad restaurada tras reopen). PostgreSQL: dos escenarios nuevos con compuerta (finalize pallet vs crear base; finalize pedido vs PATCH estado).
+
+Pendiente de evidencia remota: gates `ci`, `postgres-concurrency` y `container-security` del push.
+
 ## Próxima sesión
 
-Sin bloque autónomo asignado. Candidatos: perfilado de `GET /api/v1/orders` (hot path del baseline 2026-11-02), `GAP-RETENTION` (requiere decisión de negocio), retiro de los overrides de `D-029` cuando upstream fije rangos parcheados, H-046 (previa decisión de dominio), siguiente familia de H-020 (con el inventario restante de H-050), H-049 y política H-009.
+Sin bloque autónomo asignado. Candidatos: perfilado de `GET /api/v1/orders` (hot path del baseline 2026-11-02), `GAP-RETENTION` (requiere decisión de negocio), retiro de los overrides de `D-029` cuando upstream fije rangos parcheados, siguiente familia de H-020 (con el inventario restante de H-050), H-049 y política H-009.
 
 ## Sesiones R-02 a R-07
 

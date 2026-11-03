@@ -903,3 +903,27 @@ La revisión encontró una carrera: la purga era fire-and-forget, así que el mo
 - `verify-sw.mjs` exige ahora el `importScripts` de `sw-cleanup.js` en el artefacto y el archivo con `activate` y ambos nombres.
 
 **Referencia normativa:** `FE-PWA`, `FE-DATA`, `FE-SESSION`, `SEC-DATA`, `SEC-BROWSER`, `SEC-IDENTITY`, `DO-EDGE`, `QA-SEC`, `QA-COMPAT`, `QA-GATE`
+
+---
+
+## D-031 — Inmutabilidad global de pedidos y pallets finalizados
+
+**Fecha:** 2026-11-03
+**Estado:** ✅ vigente
+
+**Contexto**
+D-026 dejó como trade-off explícito que crear, actualizar o eliminar bases y fotos seguía permitido sobre un pallet `done`, y que actualizar ítems o asignar sobre un pedido `done` también: una entidad finalizada podía quedar incumpliendo los requisitos que la cerraron. H-046 documentó además que `PATCH /pallets/{pallet}` y `PATCH /orders/{order}` escribían `status` (incluido `done` y reapertura) sin reglas, lock ni auditoría, un segundo camino de transición que eludía la autoridad de D-026. El usuario aprobó la decisión de negocio: `done` es inmutable, toda modificación exige reapertura explícita y auditada, `paused` conserva su comportamiento y los endpoints genéricos no pueden finalizar ni reabrir.
+
+**Decisión**
+- Invariante de dominio (`DOMINIO.md`): `status = done` ⇒ ningún escritor confirma cambios sin una reapertura auditada anterior. Aplica a estado, datos, relaciones e invariantes del pedido/pallet y de sus descendientes (bases, fotos, asignaciones, ítems, tickets, pendientes, anotaciones, solicitudes de faltantes).
+- `FinalizationService` expone `lockPalletForWrite`/`lockOrderForWrite`: el escritor toma `FOR SHARE` sobre la autoridad dentro de su transacción, relee el estado y rechaza `done` con `409`. `FOR SHARE` serializa contra el `FOR UPDATE` de finalize/reopen: quien espera ve el estado ya confirmado. El orden de locks respeta D-020 (`orders` después de `order_items`).
+- `POST /orders/{order}/reopen` completa la simetría: antes no existía reapertura auditada de pedidos (el PATCH era el único camino).
+- `PATCH` genérico: transacción + `FOR UPDATE` sobre la entidad. Entidad `done` → `409`; `status` destino `done` → `409` indicando el endpoint dedicado. Transiciones `open`↔`paused` se conservan y ahora dejan activity log `order_status_changed`/`pallet_status_changed` (cierra la falta de evidencia de H-046).
+- Subidas con archivo: la re-evaluación ocurre dentro de la transacción de `PhotoPersistenceService`; el conflicto lanza `DomainConflictException`, renderizada como `409` en el handler global, que además dispara la compensación del objeto almacenado.
+- OCR: `ProcessTicketOcr`/`TicketOcrService` relee el estado del pedido bajo `FOR SHARE` al inicio, antes de cada escritura de `ocr_log` y antes de persistir el resultado; si el pedido finalizó, el resultado se descarta.
+- Escritores cubiertos: PATCH de estado/nota, attach/detach (ambos lados), import, alta y edición de ítems, crear/actualizar/eliminar/migrar bases, adjust-item (también pedido `done`), subir/borrar fotos de pallet, base y ticket, anotaciones, alta/borrado de tickets, trigger-ocr, pendientes (alta/resolución/borrado), solicitudes públicas de faltante y su revisión, borrados de admin storage, uploads del bot/Telegram (incluida la creación de base que eludía el servicio) y eliminación de la entidad.
+
+**Trade-off aceptado**
+Todo escritor de una entidad potencialmente finalizada ejecuta una consulta de lock adicional y serializa contra una transición en vuelo. Una revisión de faltante sobre un pedido `done` queda en `pending_review` hasta reabrir. El OCR iniciado antes de la finalización pierde su resultado (queda sólo log técnico). La mutación `updateStatus` del frontend apuntaba a una ruta inexistente y se corrige a `/orders/{id}` y `/pallets/{id}`.
+
+**Referencia normativa:** `BE-TX`, `BE-VALID`, `BE-ERR`, `BE-API`, `BE-ARCH`, `SEC-LOG`, `SEC-AUTHZ`, `QA-INVARIANT`, `QA-CONTRACT`, `QA-RESILIENCE`, `DOMINIO.md`, `FE-MUTATION`

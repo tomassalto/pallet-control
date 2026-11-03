@@ -9,6 +9,7 @@ use App\Jobs\ProcessTicketOcr;
 use App\Models\Order;
 use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
+use App\Services\FinalizationService;
 use App\Services\PhotoPersistenceService;
 use App\Services\StorageCleanupService;
 use App\Services\TicketOcrService;
@@ -20,6 +21,7 @@ class OrderTicketController extends Controller
     public function __construct(
         private readonly PhotoPersistenceService $photoPersistence,
         private readonly StorageCleanupService $storageCleanup,
+        private readonly FinalizationService $finalizationService,
     ) {}
 
     // GET /orders/{order}/tickets
@@ -38,22 +40,30 @@ class OrderTicketController extends Controller
             'note' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $ticket = OrderTicket::create([
-            'order_id' => $order->id,
-            'code' => $data['code'],
-            'note' => $data['note'] ?? null,
-        ]);
+        return DB::transaction(function () use ($order, $data) {
+            // El estado se relee bajo lock: un pedido finalizado es inmutable.
+            $lockedOrder = $this->finalizationService->lockOrderForWrite($order->id);
+            if (is_array($lockedOrder)) {
+                return response()->json($lockedOrder['error'], $lockedOrder['status']);
+            }
 
-        ActivityLogger::log(
-            action: 'order_ticket_created',
-            entityType: 'order_ticket',
-            entityId: $ticket->id,
-            description: "Ticket agregado al pedido '{$order->code}': " . ($ticket->code ?? 'Sin código'),
-            newValues: ['ticket_id' => $ticket->id, 'code' => $ticket->code],
-            orderId: $order->id,
-        );
+            $ticket = OrderTicket::create([
+                'order_id' => $order->id,
+                'code' => $data['code'],
+                'note' => $data['note'] ?? null,
+            ]);
 
-        return response()->json($ticket->load('photos'), 201);
+            ActivityLogger::log(
+                action: 'order_ticket_created',
+                entityType: 'order_ticket',
+                entityId: $ticket->id,
+                description: "Ticket agregado al pedido '{$order->code}': " . ($ticket->code ?? 'Sin código'),
+                newValues: ['ticket_id' => $ticket->id, 'code' => $ticket->code],
+                orderId: $order->id,
+            );
+
+            return response()->json($ticket->load('photos'), 201);
+        });
     }
 
     // POST /orders/{order}/tickets/{ticket}/photos
@@ -81,6 +91,11 @@ class OrderTicketController extends Controller
             6000,
             6000,
             function (string $path) use ($data, $file, $order, $ticket): OrderTicketPhoto {
+                // El estado se relee bajo lock dentro de la transacción:
+                // un pedido finalizado es inmutable. El conflicto lanza
+                // DomainConflictException, que además compensa el archivo.
+                $this->finalizationService->assertOrderWritable($order->id);
+
                 $maxIndex = $ticket->photos()->max('order_index') ?? -1;
 
                 $photo = OrderTicketPhoto::create([
@@ -306,6 +321,12 @@ class OrderTicketController extends Controller
         }
 
         return DB::transaction(function () use ($order, $ticket) {
+            // El estado se relee bajo lock: un pedido finalizado es inmutable.
+            $lockedOrder = $this->finalizationService->lockOrderForWrite($order->id);
+            if (is_array($lockedOrder)) {
+                return response()->json($lockedOrder['error'], $lockedOrder['status']);
+            }
+
             $lockedTicket = OrderTicket::whereKey($ticket->id)->lockForUpdate()->first();
             if (! $lockedTicket || $lockedTicket->order_id !== $order->id) {
                 return response()->json(['message' => 'Ticket no encontrado'], 404);
@@ -348,20 +369,35 @@ class OrderTicketController extends Controller
             return response()->json(['message' => 'Esta foto ya fue escaneada anteriormente.'], 409);
         }
 
-        // Marcar inmediatamente como "encolado" para que el frontend
-        // pueda distinguir "nunca iniciado" de "en proceso".
-        $photo->ocr_log = '[' . date('H:i:s') . '] Escaneo encolado. Iniciando en breve…';
-        $photo->saveQuietly();
+        $result = DB::transaction(function () use ($order, $photo) {
+            // El estado se relee bajo lock: un pedido finalizado es inmutable.
+            $lockedOrder = $this->finalizationService->lockOrderForWrite($order->id);
+            if (is_array($lockedOrder)) {
+                return $lockedOrder;
+            }
 
+            // Marcar inmediatamente como "encolado" para que el frontend
+            // pueda distinguir "nunca iniciado" de "en proceso".
+            $photo->ocr_log = '[' . date('H:i:s') . '] Escaneo encolado. Iniciando en breve…';
+            $photo->saveQuietly();
+
+            ActivityLogger::log(
+                action: 'order_ticket_ocr_triggered',
+                entityType: 'order_ticket_photo',
+                entityId: $photo->id,
+                description: "OCR disparado manualmente para foto del ticket del pedido '{$order->code}'",
+                orderId: $order->id,
+            );
+
+            return null;
+        });
+
+        if (is_array($result)) {
+            return response()->json($result['error'], $result['status']);
+        }
+
+        // El job se despacha después del commit: el estado "encolado" ya es durable.
         ProcessTicketOcr::dispatch($photo->id);
-
-        ActivityLogger::log(
-            action: 'order_ticket_ocr_triggered',
-            entityType: 'order_ticket_photo',
-            entityId: $photo->id,
-            description: "OCR disparado manualmente para foto del ticket del pedido '{$order->code}'",
-            orderId: $order->id,
-        );
 
         return response()->json(['message' => 'OCR iniciado', 'photo' => $photo->fresh()]);
     }
@@ -375,6 +411,12 @@ class OrderTicketController extends Controller
         }
 
         return DB::transaction(function () use ($order, $ticket, $photo) {
+            // El estado se relee bajo lock: un pedido finalizado es inmutable.
+            $lockedOrder = $this->finalizationService->lockOrderForWrite($order->id);
+            if (is_array($lockedOrder)) {
+                return response()->json($lockedOrder['error'], $lockedOrder['status']);
+            }
+
             $lockedPhoto = OrderTicketPhoto::whereKey($photo->id)->lockForUpdate()->first();
             if (! $lockedPhoto || $lockedPhoto->ticket_id !== $ticket->id) {
                 return response()->json(['message' => 'Foto no encontrada'], 404);

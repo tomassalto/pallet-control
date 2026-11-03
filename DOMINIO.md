@@ -31,6 +31,7 @@ Cambiar estados o transiciones requiere una decisión de dominio y tests de tran
 
 ## Invariantes conocidas
 
+- Un pedido o pallet con estado `done` es inmutable: no puede modificarse directa ni indirectamente (datos, estado, relaciones ni invariantes) hasta que una reapertura explícita y auditada lo deje en `open`. Finalizar y reabrir sólo ocurren por la autoridad transaccional dedicada; `paused` conserva su comportamiento actual (D-031).
 - Una cantidad no puede ser negativa.
 - La cantidad total asignada de un ítem no puede superar la cantidad pedida.
 - Reducir la cantidad pedida no puede dejar asignaciones por encima del nuevo total.

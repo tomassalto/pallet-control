@@ -15,7 +15,10 @@ use Illuminate\Support\Facades\Storage;
 
 class PhotoUploadService
 {
-    public function __construct(private readonly PhotoPersistenceService $photoPersistence) {}
+    public function __construct(
+        private readonly PhotoPersistenceService $photoPersistence,
+        private readonly FinalizationService $finalizationService,
+    ) {}
 
     /**
      * Sube una foto al destino indicado en $params['type'].
@@ -82,6 +85,10 @@ class PhotoUploadService
             4000,
             4000,
             function (string $path) use ($data, $pallet): string {
+                // Estado releído bajo lock: pallet finalizado = inmutable.
+                // El conflicto lanza DomainConflictException → 409 + compensación.
+                $this->finalizationService->assertPalletWritable($pallet->id);
+
                 $photo = PalletPhoto::create([
                     'pallet_id' => $pallet->id,
                     'path' => $path,
@@ -130,6 +137,10 @@ class PhotoUploadService
             4000,
             4000,
             function (string $path) use ($base, $baseName, $data, $pallet): string {
+                // Estado releído bajo lock: pallet finalizado = inmutable.
+                $this->finalizationService->assertPalletWritable($pallet->id);
+                PalletBase::query()->whereKey($base->id)->sharedLock()->first();
+
                 $photo = PalletBasePhoto::create([
                     'base_id' => $base->id,
                     'path' => $path,
@@ -164,6 +175,9 @@ class PhotoUploadService
             6000,
             6000,
             function (string $path) use ($data, $order): string {
+                // Estado releído bajo lock: pedido finalizado = inmutable.
+                $this->finalizationService->assertOrderWritable($order->id);
+
                 $ticket = OrderTicket::create([
                     'order_id' => $order->id,
                     'code' => null,

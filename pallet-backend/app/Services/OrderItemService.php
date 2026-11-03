@@ -28,7 +28,16 @@ class OrderItemService
             }
 
             $lockedItem = OrderItem::query()->lockForUpdate()->findOrFail($item->id);
-            Order::query()->whereKey($lockedItem->order_id)->sharedLock()->first();
+            $lockedOrder = Order::query()->whereKey($lockedItem->order_id)->sharedLock()->first();
+
+            // Un pedido finalizado es inmutable: sus ítems no cambian
+            // hasta la reapertura auditada.
+            if ($lockedOrder?->status === 'done') {
+                return [
+                    'error' => ['message' => 'El pedido está finalizado. Reabrilo antes de modificarlo.'],
+                    'status' => 409,
+                ];
+            }
 
             $allocations = DB::table('pallet_base_order_items')
                 ->where('order_item_id', $lockedItem->id)
@@ -113,6 +122,16 @@ class OrderItemService
                 }
 
                 $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+
+                // Un pedido finalizado es inmutable: no admita altas de
+                // ítems hasta la reapertura auditada.
+                if ($lockedOrder->status === 'done') {
+                    return [
+                        'error' => ['message' => 'El pedido está finalizado. Reabrilo antes de modificarlo.'],
+                        'status' => 409,
+                    ];
+                }
+
                 $existingItem = OrderItem::query()
                     ->where('order_id', $lockedOrder->id)
                     ->where('ean', $ean)

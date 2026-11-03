@@ -30,6 +30,15 @@ class OrderImportService
 
             $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
 
+            // Un pedido finalizado es inmutable: el import no puede
+            // reescribir sus ítems hasta la reapertura auditada.
+            if ($lockedOrder->status === 'done') {
+                return [
+                    'error' => ['message' => 'El pedido está finalizado. Reabrilo antes de modificarlo.', 'conflicts' => []],
+                    'status' => 409,
+                ];
+            }
+
             $assignedByItem = collect();
             $itemIds = $items->pluck('id');
             if ($itemIds->isNotEmpty()) {

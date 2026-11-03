@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\DB;
 
 class MissingItemRequestService
 {
+    public function __construct(
+        private readonly FinalizationService $finalizationService,
+    ) {}
+
     /**
      * @return array{request: MissingItemRequest}|array{error: array{message: string}, status: int}
      */
@@ -25,6 +29,14 @@ class MissingItemRequestService
                     'error' => ['message' => 'La solicitud ya fue revisada.'],
                     'status' => 409,
                 ];
+            }
+
+            // Revisar crea un pendiente sobre el pedido: si está
+            // finalizado, la operación se rechaza (orden D-020: orders
+            // se bloquea después del recurso propio del recorrido).
+            $lockedOrder = $this->finalizationService->lockOrderForWrite($lockedRequest->order_id);
+            if (is_array($lockedOrder)) {
+                return $lockedOrder;
             }
 
             $lockedRequest->update([

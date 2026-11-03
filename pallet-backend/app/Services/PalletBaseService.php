@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\DB;
 
 class PalletBaseService
 {
+    public function __construct(
+        private readonly FinalizationService $finalizationService,
+    ) {}
+
     public function migrateBase(Pallet $sourcePallet, PalletBase $sourceBase, array $data): array
     {
         if ($sourceBase->pallet_id !== $sourcePallet->id) {
@@ -57,6 +61,21 @@ class PalletBaseService
                 ->get()
                 ->keyBy('id')
                 ->all();
+            // Las asignaciones de un pedido finalizado son inmutables:
+            // orden D-020 → orders se bloquea después de order_items.
+            $orderIds = collect($orderItems)->pluck('order_id')->unique()->sort()->values();
+            $ordersDone = Order::query()
+                ->whereIn('id', $orderIds)
+                ->orderBy('id')
+                ->sharedLock()
+                ->get()
+                ->contains(fn (Order $order) => $order->status === 'done');
+            if ($ordersDone) {
+                return [
+                    'error' => ['message' => 'El pedido está finalizado. Reabrilo antes de migrar sus productos.'],
+                    'status' => 409,
+                ];
+            }
             $allocations = DB::table('pallet_base_order_items')
                 ->whereIn('order_item_id', $itemIds)
                 ->orderBy('order_item_id')
@@ -203,8 +222,12 @@ class PalletBaseService
         return DB::transaction(function () use ($pallet, $data) {
             // El insert de pallet_bases y los activity logs toman FOR KEY
             // SHARE en el pallet. Se adquiere FOR SHARE primero (orden
-            // D-020) para no esperarlo reteniendo locks posteriores.
-            Pallet::query()->whereKey($pallet->id)->sharedLock()->first();
+            // D-020) para no esperarlo reteniendo locks posteriores, y se
+            // relee el estado: un pallet finalizado es inmutable.
+            $lockedPallet = $this->finalizationService->lockPalletForWrite($pallet->id);
+            if (is_array($lockedPallet)) {
+                return $lockedPallet;
+            }
 
             $itemsToSync = [];
             $orderItemsMap = collect();
@@ -306,8 +329,12 @@ class PalletBaseService
         return DB::transaction(function () use ($pallet, $base, $data) {
             // Los activity logs toman FOR KEY SHARE en el pallet: se
             // adquiere FOR SHARE antes del lock FOR UPDATE de la base
-            // (orden D-020) para no invertir la espera.
-            Pallet::query()->whereKey($pallet->id)->sharedLock()->first();
+            // (orden D-020) para no invertir la espera, y se relee el
+            // estado: un pallet finalizado es inmutable.
+            $lockedPallet = $this->finalizationService->lockPalletForWrite($pallet->id);
+            if (is_array($lockedPallet)) {
+                return $lockedPallet;
+            }
             $base = PalletBase::query()->lockForUpdate()->findOrFail($base->id);
             $changeLog = $this->buildBaseChangeLog($base, $data);
             $syncResult = null;

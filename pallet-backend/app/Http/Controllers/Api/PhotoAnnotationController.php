@@ -7,10 +7,16 @@ use App\Http\Controllers\Controller;
 use App\Models\Pallet;
 use App\Models\PalletBase;
 use App\Models\PhotoAnnotation;
+use App\Services\FinalizationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PhotoAnnotationController extends Controller
 {
+    public function __construct(
+        private readonly FinalizationService $finalizationService,
+    ) {}
+
     // GET /pallets/{pallet}/bases/{base}/photos/{photo}/annotations
     public function index(Pallet $pallet, $baseId, $photoId)
     {
@@ -54,6 +60,15 @@ class PhotoAnnotationController extends Controller
             'annotations.*.orderItemId' => ['nullable', 'integer', 'exists:order_items,id'],
         ]);
 
+        return DB::transaction(function () use ($pallet, $base, $photo, $data) {
+            // FOR SHARE sobre los padres en orden D-020 y re-lectura del
+            // estado: un pallet finalizado es inmutable.
+            $lockedPallet = $this->finalizationService->lockPalletForWrite($pallet->id);
+            if (is_array($lockedPallet)) {
+                return response()->json($lockedPallet['error'], $lockedPallet['status']);
+            }
+            PalletBase::query()->whereKey($base->id)->sharedLock()->first();
+
         // Contar anotaciones existentes antes de eliminarlas
         $existingCount = $photo->annotations()->count();
 
@@ -92,5 +107,6 @@ class PhotoAnnotationController extends Controller
             'message' => 'Anotaciones guardadas',
             'annotations' => $created,
         ], 201);
+        });
     }
 }

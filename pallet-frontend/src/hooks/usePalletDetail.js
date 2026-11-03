@@ -49,7 +49,7 @@ export function usePalletDetail(palletId) {
 
   const updateStatusMutation = useMutation({
     mutationFn: (status) =>
-      apiPatch(`/pallets/${palletId}/status`, { status }),
+      apiPatch(`/pallets/${palletId}`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pallet", palletId] });
       queryClient.invalidateQueries({ queryKey: ["pallets"] });

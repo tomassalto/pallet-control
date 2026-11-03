@@ -448,7 +448,9 @@ Origen:      inventario de escritores de estado de D-026
 ```
 **Qué está pasando:** `PATCH /pallets/{pallet}` y `PATCH /orders/{order}` aceptan `status` en `open`, `paused` o `done` y lo escriben sin requisitos, lock ni auditoría. Pueden finalizar o reabrir sin pasar por D-026.
 **Por qué importa:** existe un segundo camino de transición que omite la autoridad transaccional y no deja evidencia.
-**Estado:** 🔲 abierto. Requiere decidir si `paused` es una transición soportada y qué consumidores usan el endpoint antes de restringirlo.
+**Resolución:** `PATCH` corre en transacción con `FOR UPDATE` sobre la entidad: entidad `done` → `409`, `status` destino `done` → `409` apuntando al endpoint dedicado. `open`↔`paused` se conserva y ahora registra `order_status_changed`/`pallet_status_changed`. Se agregó `POST /orders/{order}/reopen` (reapertura auditada simétrica a pallets). La decisión de dominio D-031 hizo inmutable todo `done` y cubrió además todos los escritores directos e indirectos: bases, fotos, asignaciones, ítems, tickets, OCR, pendientes, faltantes, anotaciones, attach/detach, borrados web/admin/bot. Ver D-031.
+**Evidencia:** `FinalizedEntityImmutabilityTest` (≈35 tests SQLite): ambos PATCH rechazan `done` con `409` sin escribir, `paused` sigue funcionando con auditoría, reapertura de pedido con estado+log+Telegram post-commit, rechazo `409` en cada escritor inventariado sin efectos (incluida compensación de archivos en subidas), y restauración de mutabilidad tras reapertura. PostgreSQL suma dos escenarios con compuerta: finalize pallet vs crear base y finalize pedido vs PATCH de estado — sin `5xx`, un solo ganador por turno.
+**Estado:** ✅ resuelto (D-031).
 
 #### H-047 — Intenciones de borrado sin retención ni exclusión entre procesos
 ```

@@ -24,6 +24,8 @@ export function useOrderDetailPage(orderId) {
     canFinalize,
     finalize,
     finalizing,
+    reopen,
+    reopening,
     refetch,
   } = useOrderDetail(orderId);
 
@@ -146,6 +148,22 @@ export function useOrderDetailPage(orderId) {
     }
   }
 
+  async function handleReopen() {
+    if (!window.confirm("¿Reabrir este pedido para modificarlo?")) {
+      return;
+    }
+
+    try {
+      await reopen();
+      toastSuccess("Pedido reabierto correctamente");
+      refetch();
+    } catch (e) {
+      toastError(
+        e?.response?.data?.message || e?.message || "Error al reabrir pedido",
+      );
+    }
+  }
+
   async function onAddManual(e) {
     e.preventDefault();
     setSaving(true);
@@ -206,6 +224,8 @@ export function useOrderDetailPage(orderId) {
     finalizing,
     load,
     handleFinalize,
+    handleReopen,
+    reopening,
     openAttachPallet,
     setOpenAttachPallet,
     availablePallets: availablePalletsQuery.data || [],

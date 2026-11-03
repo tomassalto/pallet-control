@@ -11,6 +11,8 @@ export default function OrderDetailActions({
   onOpenAttachPallet,
   onOpenAddProduct,
   onFinalize,
+  onReopen,
+  reopening,
 }) {
   if (!order) return null;
 
@@ -81,6 +83,15 @@ export default function OrderDetailActions({
             label="Ver historial"
             sublabel="Registro de actividad del pedido"
             to={`/order/${orderId}/history`}
+          />
+          <ActionItem
+            icon={Icons.Check}
+            iconBg="bg-amber-500"
+            label={reopening ? "Reabriendo..." : "Reabrir pedido"}
+            sublabel="Habilita la modificación del pedido"
+            onClick={onReopen}
+            disabled={reopening}
+            noChevron
           />
         </>
       )}

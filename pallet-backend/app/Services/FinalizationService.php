@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\DomainConflictException;
 use App\Helpers\ActivityLogger;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -215,5 +216,106 @@ class FinalizationService
 
             return ['order' => $locked];
         });
+    }
+
+    /**
+     * @return array{order: Order}|array{error: array, status: int}
+     */
+    public function reopenOrder(Order $order): array
+    {
+        return DB::transaction(function () use ($order) {
+            $locked = Order::query()->lockForUpdate()->find($order->id);
+            if (! $locked) {
+                return ['error' => ['message' => 'Pedido no encontrado'], 'status' => 404];
+            }
+
+            if ($locked->status !== 'done') {
+                return ['error' => ['message' => 'Solo se pueden reabrir pedidos que estén finalizados'], 'status' => 409];
+            }
+
+            $oldStatus = $locked->status;
+            $locked->update(['status' => 'open']);
+
+            ActivityLogger::log(
+                action: 'order_reopened',
+                entityType: 'order',
+                entityId: $locked->id,
+                description: "Pedido '{$locked->code}' reabierto",
+                oldValues: ['status' => $oldStatus],
+                newValues: ['status' => 'open'],
+                orderId: $locked->id,
+            );
+
+            return ['order' => $locked];
+        });
+    }
+
+    /**
+     * Guarda de inmutabilidad: bloquea el pallet FOR SHARE dentro de la
+     * transacción del llamador y relee su estado. FOR SHARE serializa
+     * contra el FOR UPDATE de finalizar/reabrir: si la transición
+     * confirmó primero, el escritor ve 'done' y se rechaza.
+     *
+     * @return Pallet|array{error: array{message: string}, status: int}
+     */
+    public function lockPalletForWrite(int $palletId): Pallet|array
+    {
+        $locked = Pallet::query()->whereKey($palletId)->sharedLock()->first();
+        if (! $locked) {
+            return ['error' => ['message' => 'Pallet no encontrado'], 'status' => 404];
+        }
+
+        if ($locked->status === 'done') {
+            return [
+                'error' => ['message' => 'El pallet está finalizado. Reabrilo antes de modificarlo.'],
+                'status' => 409,
+            ];
+        }
+
+        return $locked;
+    }
+
+    /**
+     * Igual que lockPalletForWrite pero sobre el pedido (orden D-020:
+     * orders se bloquea después de order_items).
+     *
+     * @return Order|array{error: array{message: string}, status: int}
+     */
+    public function lockOrderForWrite(int $orderId): Order|array
+    {
+        $locked = Order::query()->whereKey($orderId)->sharedLock()->first();
+        if (! $locked) {
+            return ['error' => ['message' => 'Pedido no encontrado'], 'status' => 404];
+        }
+
+        if ($locked->status === 'done') {
+            return [
+                'error' => ['message' => 'El pedido está finalizado. Reabrilo antes de modificarlo.'],
+                'status' => 409,
+            ];
+        }
+
+        return $locked;
+    }
+
+    /**
+     * Variante que lanza DomainConflictException: se usa dentro de
+     * callbacks que no pueden devolver un resultado de error (p.ej.
+     * PhotoPersistenceService, que compensa el archivo al capturarla).
+     */
+    public function assertPalletWritable(int $palletId): void
+    {
+        $result = $this->lockPalletForWrite($palletId);
+        if (is_array($result)) {
+            throw new DomainConflictException($result['error']['message']);
+        }
+    }
+
+    public function assertOrderWritable(int $orderId): void
+    {
+        $result = $this->lockOrderForWrite($orderId);
+        if (is_array($result)) {
+            throw new DomainConflictException($result['error']['message']);
+        }
     }
 }

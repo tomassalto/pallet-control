@@ -113,6 +113,14 @@ class StorageController extends Controller
 
     public function deletePallet(Request $request, int $id): JsonResponse
     {
+        // Un pallet finalizado es inmutable: el borrado exige reapertura.
+        $locked = Pallet::query()->whereKey($id)->lockForUpdate()->first();
+        if ($locked?->status === 'done') {
+            return response()->json([
+                'message' => 'El pallet está finalizado. Reabrilo antes de eliminarlo.',
+            ], 409);
+        }
+
         $pallet = Pallet::with(['bases.photos', 'photos'])->findOrFail($id);
 
         // Delete storage files for all PalletBasePhoto records
@@ -142,6 +150,14 @@ class StorageController extends Controller
 
     public function deleteOrder(Request $request, int $id): JsonResponse
     {
+        // Un pedido finalizado es inmutable: el borrado exige reapertura.
+        $locked = Order::query()->whereKey($id)->lockForUpdate()->first();
+        if ($locked?->status === 'done') {
+            return response()->json([
+                'message' => 'El pedido está finalizado. Reabrilo antes de eliminarlo.',
+            ], 409);
+        }
+
         $order = Order::with(['tickets.photos'])->findOrFail($id);
 
         // Delete storage files for all OrderTicketPhoto records

@@ -50,9 +50,17 @@ export function useOrderDetail(orderId) {
 
   const updateStatusMutation = useMutation({
     mutationFn: (status) =>
-      apiPatch(`/orders/${orderId}/status`, { status }),
+      apiPatch(`/orders/${orderId}`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+    },
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: () => apiPost(`/orders/${orderId}/reopen`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
     },
   });
 
@@ -76,6 +84,8 @@ export function useOrderDetail(orderId) {
     finalize: finalizeMutation.mutate,
     finalizing: finalizeMutation.isPending,
     updateStatus: updateStatusMutation.mutate,
+    reopen: reopenMutation.mutate,
+    reopening: reopenMutation.isPending,
   };
 }
 

@@ -86,6 +86,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/orders/{order}/activity-logs', [OrderController::class, 'activityLogs']);
             Route::get('/orders/{order}/can-finalize', [OrderController::class, 'canFinalize']);
             Route::post('/orders/{order}/finalize', [OrderController::class, 'finalize']);
+            Route::post('/orders/{order}/reopen', [OrderController::class, 'reopen']);
             Route::delete('/orders/{order}/detach-pallet/{pallet}', [OrderController::class, 'detachPallet']);
 
             // Order Tickets

@@ -193,9 +193,45 @@ class OrderController extends Controller
             'note' => 'nullable|string',
         ]);
 
-        $order->update($data);
+        return DB::transaction(function () use ($order, $data) {
+            $locked = Order::query()->whereKey($order->id)->lockForUpdate()->first();
+            if (! $locked) {
+                return response()->json(['message' => 'Pedido no encontrado'], 404);
+            }
 
-        return response()->json($order->load('customer'));
+            // Un pedido finalizado es inmutable: ni estado ni nota pueden
+            // cambiar hasta la reapertura auditada.
+            if ($locked->status === 'done') {
+                return response()->json([
+                    'message' => 'El pedido está finalizado. Reabrilo antes de modificarlo.',
+                ], 409);
+            }
+
+            // El endpoint genérico no puede finalizar: la autoridad es
+            // POST /orders/{id}/finalize (D-026).
+            if ($data['status'] === 'done') {
+                return response()->json([
+                    'message' => 'Para finalizar el pedido usá el endpoint de finalización.',
+                ], 409);
+            }
+
+            $oldStatus = $locked->status;
+            $locked->update($data);
+
+            if ($oldStatus !== $locked->status) {
+                ActivityLogger::log(
+                    action: 'order_status_changed',
+                    entityType: 'order',
+                    entityId: $locked->id,
+                    description: "Pedido '{$locked->code}': estado '{$oldStatus}' → '{$locked->status}'",
+                    oldValues: ['status' => $oldStatus],
+                    newValues: ['status' => $locked->status],
+                    orderId: $locked->id,
+                );
+            }
+
+            return response()->json($locked->load('customer'));
+        });
     }
 
     public function lastOpen()
@@ -309,6 +345,24 @@ class OrderController extends Controller
 
         return response()->json([
             'message' => 'Pedido finalizado correctamente',
+            'order' => $order->load('customer'),
+        ]);
+    }
+
+    // POST /orders/{order}/reopen
+    public function reopen(Order $order)
+    {
+        $result = $this->finalizationService->reopenOrder($order);
+        if (isset($result['error'])) {
+            return response()->json($result['error'], $result['status']);
+        }
+
+        // La transacción ya confirmó: notificar y cargar relaciones afuera.
+        $order = $result['order'];
+        TelegramNotifier::send("🔄 Pedido `#{$order->code}` *reabierto*");
+
+        return response()->json([
+            'message' => 'Pedido reabierto correctamente',
             'order' => $order->load('customer'),
         ]);
     }

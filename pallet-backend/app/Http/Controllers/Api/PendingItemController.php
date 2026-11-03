@@ -9,9 +9,15 @@ use App\Http\Requests\StorePendingItemRequest;
 use App\Http\Requests\UpdatePendingItemRequest;
 use App\Models\OrderItem;
 use App\Models\PendingItem;
+use App\Services\FinalizationService;
+use Illuminate\Support\Facades\DB;
 
 class PendingItemController extends Controller
 {
+    public function __construct(
+        private readonly FinalizationService $finalizationService,
+    ) {}
+
     // GET /pending-items
     public function index(IndexPendingItemsRequest $request)
     {
@@ -62,6 +68,13 @@ class PendingItemController extends Controller
             return response()->json(['message' => 'El producto no pertenece a ese pedido'], 422);
         }
 
+        return DB::transaction(function () use ($data, $orderItem, $request) {
+            // El estado se relee bajo lock: un pedido finalizado es inmutable.
+            $lockedOrder = $this->finalizationService->lockOrderForWrite((int) $data['order_id']);
+            if (is_array($lockedOrder)) {
+                return response()->json($lockedOrder['error'], $lockedOrder['status']);
+            }
+
         $pending = PendingItem::create([
             ...$data,
             'status' => 'pending',
@@ -81,12 +94,20 @@ class PendingItemController extends Controller
             $this->format($pending->load(['order', 'orderItem.product', 'creator'])),
             201
         );
+        });
     }
 
     // PATCH /pending-items/{pendingItem}
     public function update(UpdatePendingItemRequest $request, PendingItem $pendingItem)
     {
         $data = $request->validated();
+
+        return DB::transaction(function () use ($request, $pendingItem, $data) {
+            // El estado se relee bajo lock: un pedido finalizado es inmutable.
+            $lockedOrder = $this->finalizationService->lockOrderForWrite($pendingItem->order_id);
+            if (is_array($lockedOrder)) {
+                return response()->json($lockedOrder['error'], $lockedOrder['status']);
+            }
 
         $wasResolved = $pendingItem->status === 'resolved';
 
@@ -114,11 +135,19 @@ class PendingItemController extends Controller
         return response()->json(
             $this->format($pendingItem->load(['order', 'orderItem.product', 'creator', 'resolver']))
         );
+        });
     }
 
     // DELETE /pending-items/{pendingItem}
     public function destroy(PendingItem $pendingItem)
     {
+        return DB::transaction(function () use ($pendingItem) {
+            // El estado se relee bajo lock: un pedido finalizado es inmutable.
+            $lockedOrder = $this->finalizationService->lockOrderForWrite($pendingItem->order_id);
+            if (is_array($lockedOrder)) {
+                return response()->json($lockedOrder['error'], $lockedOrder['status']);
+            }
+
         $description = $pendingItem->orderItem->description;
         $orderId = $pendingItem->order_id;
         $qty = $pendingItem->qty_missing;
@@ -135,6 +164,7 @@ class PendingItemController extends Controller
         $pendingItem->delete();
 
         return response()->json(['message' => 'Pendiente eliminado']);
+        });
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

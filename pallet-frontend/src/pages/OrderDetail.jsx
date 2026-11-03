@@ -36,6 +36,8 @@ export default function OrderDetail() {
     finalizing,
     load,
     handleFinalize,
+    handleReopen,
+    reopening,
     openAttachPallet,
     setOpenAttachPallet,
     availablePallets,
@@ -163,6 +165,8 @@ export default function OrderDetail() {
         onOpenAttachPallet={() => setOpenAttachPallet(true)}
         onOpenAddProduct={() => setOpenAddProduct(true)}
         onFinalize={handleFinalize}
+        onReopen={handleReopen}
+        reopening={reopening}
       />
 
       <AddProductModal

@@ -6,13 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\MissingItemRequest;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Services\FinalizationService;
 use App\Services\MissingItemRequestService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class MissingItemRequestController extends Controller
 {
     public function __construct(
-        private readonly MissingItemRequestService $missingItemRequestService
+        private readonly MissingItemRequestService $missingItemRequestService,
+        private readonly FinalizationService $finalizationService,
     ) {}
 
     // POST /public/orders/{token}/missing-items — sin auth, protegido por token opaco
@@ -50,16 +53,24 @@ class MissingItemRequestController extends Controller
             return response()->json(['message' => 'Ya existe una solicitud reciente para este producto'], 409);
         }
 
-        $req = MissingItemRequest::create([
-            'order_id' => $order->id,
-            'order_item_id' => $data['order_item_id'],
-            'qty_missing' => $data['qty_missing'],
-            'requester_name' => $data['requester_name'] ?? null,
-            'note' => $data['note'] ?? null,
-            'status' => 'pending_review',
-        ]);
+        return DB::transaction(function () use ($order, $data) {
+            // El estado se relee bajo lock: un pedido finalizado es inmutable.
+            $lockedOrder = $this->finalizationService->lockOrderForWrite($order->id);
+            if (is_array($lockedOrder)) {
+                return response()->json($lockedOrder['error'], $lockedOrder['status']);
+            }
 
-        return response()->json(['message' => 'Solicitud recibida', 'id' => $req->id], 201);
+            $req = MissingItemRequest::create([
+                'order_id' => $order->id,
+                'order_item_id' => $data['order_item_id'],
+                'qty_missing' => $data['qty_missing'],
+                'requester_name' => $data['requester_name'] ?? null,
+                'note' => $data['note'] ?? null,
+                'status' => 'pending_review',
+            ]);
+
+            return response()->json(['message' => 'Solicitud recibida', 'id' => $req->id], 201);
+        });
     }
 
     // GET /admin/missing-item-requests — admin autenticado

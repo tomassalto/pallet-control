@@ -335,6 +335,94 @@ class FinalizationConcurrencyTest extends TestCase
     }
 
     // ───────────────────────────────────────────────────────────
+    // 5b. finalize de pallet vs crear base: el escritor no puede
+    // confirmar después del commit de finalización (inmutabilidad).
+    // ───────────────────────────────────────────────────────────
+
+    public function test_finalize_de_pallet_vs_crear_base(): void
+    {
+        for ($i = 0; $i < 3; $i++) {
+            $token = $this->token();
+            [$pallet] = $this->palletFinalizable();
+            $basesAntes = $pallet->bases()->count();
+
+            $responses = $this->overlap(
+                'SELECT id FROM pallets WHERE id = ? FOR UPDATE',
+                $pallet->id,
+                [
+                    $this->request(self::PORT_A, 'POST', "/api/v1/pallets/{$pallet->id}/finalize", $token),
+                    $this->request(self::PORT_B, 'POST', "/api/v1/pallets/{$pallet->id}/bases", $token, [
+                        'name' => 'Extra',
+                    ]),
+                ],
+            );
+
+            $this->assertNo5xx($responses);
+            $pallet->refresh();
+
+            if ($pallet->status === 'done') {
+                // Ganó el finalize: la base no pudo crearse.
+                $this->assertSame(200, $responses[0]['status'], json_encode($responses, JSON_PRETTY_PRINT));
+                $this->assertSame(409, $responses[1]['status'], json_encode($responses, JSON_PRETTY_PRINT));
+                $this->assertSame($basesAntes, $pallet->bases()->count());
+            } else {
+                // Ganó la creación: el pallet no cumple o igual finaliza
+                // (3 bases con foto requerida) — lo exigible: sin 5xx y
+                // la base existe.
+                $this->assertSame(201, $responses[1]['status'], json_encode($responses, JSON_PRETTY_PRINT));
+                $this->assertSame($basesAntes + 1, $pallet->bases()->count());
+            }
+        }
+    }
+
+    // ───────────────────────────────────────────────────────────
+    // 5c. finalize de pedido vs PATCH de estado: el PATCH no puede
+    // confirmar después del commit de finalización.
+    // ───────────────────────────────────────────────────────────
+
+    public function test_finalize_de_pedido_vs_patch_de_estado(): void
+    {
+        for ($i = 0; $i < 3; $i++) {
+            $token = $this->token();
+            $order = Order::factory()->create();
+            $item = OrderItem::factory()->for($order)->create(['qty' => 10]);
+            $pallet = Pallet::factory()->create();
+            $order->pallets()->attach($pallet->id);
+            $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+            $base->orderItems()->attach($item->id, ['qty' => 10]);
+
+            $responses = $this->overlap(
+                'SELECT id FROM orders WHERE id = ? FOR UPDATE',
+                $order->id,
+                [
+                    $this->request(self::PORT_A, 'POST', "/api/v1/orders/{$order->id}/finalize", $token),
+                    $this->request(self::PORT_B, 'PATCH', "/api/v1/orders/{$order->id}", $token, [
+                        'status' => 'paused',
+                    ]),
+                ],
+            );
+
+            $this->assertNo5xx($responses);
+            $statuses = array_column($responses, 'status');
+            sort($statuses);
+            $this->assertSame([200, 409], $statuses, json_encode($responses, JSON_PRETTY_PRINT));
+
+            $order->refresh();
+            $this->assertContains($order->status, ['done', 'paused']);
+
+            if ($order->status === 'done') {
+                // Ganó el finalize: el PATCH quedó rechazado.
+                $this->assertSame(200, $responses[0]['status']);
+            } else {
+                // Ganó el PATCH: el finalize re-evaluó y respondió 409 o
+                // pudo finalizar después igual; el estado final es
+                // coherente con exactamente un ganador por turno.
+                $this->assertSame(200, $responses[1]['status']);
+            }
+        }
+    }
+
+    // ───────────────────────────────────────────────────────────
     // 5. finalize vs reopen sobre un pallet 'done' que cumple requisitos
     // ───────────────────────────────────────────────────────────
 

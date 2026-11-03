@@ -8,6 +8,7 @@ use App\Http\Requests\StorePalletBasePhotoRequest;
 use App\Models\Pallet;
 use App\Models\PalletBase;
 use App\Models\PalletBasePhoto;
+use App\Services\FinalizationService;
 use App\Services\PhotoPersistenceService;
 use App\Services\StorageCleanupService;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ class PalletBasePhotoController extends Controller
     public function __construct(
         private readonly PhotoPersistenceService $photoPersistence,
         private readonly StorageCleanupService $storageCleanup,
+        private readonly FinalizationService $finalizationService,
     ) {}
 
     public function store(Request $request, Pallet $pallet, $baseId)
@@ -47,6 +49,12 @@ class PalletBasePhotoController extends Controller
             4000,
             4000,
             function (string $path) use ($base, $data, $file, $pallet): PalletBasePhoto {
+                // El estado se relee bajo lock dentro de la transacción:
+                // un pallet finalizado es inmutable. El conflicto lanza
+                // DomainConflictException, que además compensa el archivo.
+                $this->finalizationService->assertPalletWritable($pallet->id);
+                PalletBase::query()->whereKey($base->id)->sharedLock()->first();
+
                 $photo = PalletBasePhoto::create([
                     'base_id' => $base->id,
                     'path' => $path,
@@ -86,8 +94,12 @@ class PalletBasePhotoController extends Controller
         return DB::transaction(function () use ($base, $pallet, $photoId) {
             // El activity log toma FOR KEY SHARE en el pallet al insertar:
             // se adquieren FOR SHARE sobre los padres en orden D-020 antes
-            // del lock FOR UPDATE de la foto para no invertir la espera.
-            Pallet::query()->whereKey($pallet->id)->sharedLock()->first();
+            // del lock FOR UPDATE de la foto para no invertir la espera,
+            // y se relee el estado: un pallet finalizado es inmutable.
+            $lockedPallet = $this->finalizationService->lockPalletForWrite($pallet->id);
+            if (is_array($lockedPallet)) {
+                return response()->json($lockedPallet['error'], $lockedPallet['status']);
+            }
             PalletBase::query()->whereKey($base->id)->sharedLock()->first();
 
             $photo = $base->photos()->lockForUpdate()->find($photoId);

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StorePalletPhotoRequest;
 use App\Models\Pallet;
 use App\Models\PalletPhoto;
+use App\Services\FinalizationService;
 use App\Services\PhotoPersistenceService;
 use App\Services\StorageCleanupService;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,7 @@ class PalletPhotoController extends Controller
     public function __construct(
         private readonly PhotoPersistenceService $photoPersistence,
         private readonly StorageCleanupService $storageCleanup,
+        private readonly FinalizationService $finalizationService,
     ) {}
 
     public function index(Pallet $pallet)
@@ -40,6 +42,11 @@ class PalletPhotoController extends Controller
             4000,
             4000,
             function (string $path) use ($data, $file, $pallet): PalletPhoto {
+                // El estado se relee bajo lock dentro de la transacción:
+                // un pallet finalizado es inmutable. El conflicto lanza
+                // DomainConflictException, que además compensa el archivo.
+                $this->finalizationService->assertPalletWritable($pallet->id);
+
                 $photo = PalletPhoto::create([
                     'pallet_id' => $pallet->id,
                     'path' => $path,
@@ -69,6 +76,13 @@ class PalletPhotoController extends Controller
     public function destroy(Pallet $pallet, $photoId)
     {
         return DB::transaction(function () use ($pallet, $photoId) {
+            // FOR SHARE sobre el padre antes del lock de la foto (orden
+            // D-020) y re-lectura del estado: pallet finalizado = inmutable.
+            $lockedPallet = $this->finalizationService->lockPalletForWrite($pallet->id);
+            if (is_array($lockedPallet)) {
+                return response()->json($lockedPallet['error'], $lockedPallet['status']);
+            }
+
             $photo = $pallet->photos()->lockForUpdate()->find($photoId);
             if (! $photo) {
                 return response()->json(['message' => 'Foto no encontrada'], 404);

@@ -110,9 +110,45 @@ class PalletController extends Controller
             'note' => 'nullable|string',
         ]);
 
-        $pallet->update($data);
+        return DB::transaction(function () use ($pallet, $data) {
+            $locked = Pallet::query()->whereKey($pallet->id)->lockForUpdate()->first();
+            if (! $locked) {
+                return response()->json(['message' => 'Pallet no encontrado'], 404);
+            }
 
-        return response()->json($pallet->load('orders'));
+            // Un pallet finalizado es inmutable: ni estado ni nota pueden
+            // cambiar hasta la reapertura auditada.
+            if ($locked->status === 'done') {
+                return response()->json([
+                    'message' => 'El pallet está finalizado. Reabrilo antes de modificarlo.',
+                ], 409);
+            }
+
+            // El endpoint genérico no puede finalizar: la autoridad es
+            // POST /pallets/{id}/finalize (D-026).
+            if ($data['status'] === 'done') {
+                return response()->json([
+                    'message' => 'Para finalizar el pallet usá el endpoint de finalización.',
+                ], 409);
+            }
+
+            $oldStatus = $locked->status;
+            $locked->update($data);
+
+            if ($oldStatus !== $locked->status) {
+                ActivityLogger::log(
+                    action: 'pallet_status_changed',
+                    entityType: 'pallet',
+                    entityId: $locked->id,
+                    description: "Pallet '{$locked->code}': estado '{$oldStatus}' → '{$locked->status}'",
+                    palletId: $locked->id,
+                    oldValues: ['status' => $oldStatus],
+                    newValues: ['status' => $locked->status],
+                );
+            }
+
+            return response()->json($locked->load('orders'));
+        });
     }
 
     // GET /pallets/{pallet}/activity-logs
@@ -238,10 +274,18 @@ class PalletController extends Controller
         $palletCode = $pallet->code;
         $palletId = $pallet->id;
 
-        DB::transaction(function () use ($palletCode, $palletId) {
+        $result = DB::transaction(function () use ($palletCode, $palletId) {
             $lockedPallet = Pallet::whereKey($palletId)->lockForUpdate()->first();
             if (! $lockedPallet) {
-                return;
+                return null;
+            }
+
+            // Un pallet finalizado es inmutable: eliminarlo también exige
+            // la reapertura auditada.
+            if ($lockedPallet->status === 'done') {
+                return response()->json([
+                    'message' => 'El pallet está finalizado. Reabrilo antes de eliminarlo.',
+                ], 409);
             }
 
             // Eager-load photos y bases.photos en 2 queries fijas (evita N+1)
@@ -265,6 +309,10 @@ class PalletController extends Controller
             // objeto queda con una intención durable de borrado.
             $this->storageCleanup->scheduleDeletion($paths, 'pallet_deleted');
         });
+
+        if ($result instanceof \Illuminate\Http\JsonResponse) {
+            return $result;
+        }
 
         TelegramNotifier::send("🗑️ Pallet `{$palletCode}` eliminado");
 

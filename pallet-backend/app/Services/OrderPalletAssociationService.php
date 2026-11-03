@@ -71,6 +71,20 @@ class OrderPalletAssociationService
                 ];
             }
 
+            // Entidades finalizadas: sus relaciones son inmutables.
+            if ($lockedOrder->status === 'done') {
+                return [
+                    'error' => ['message' => 'El pedido está finalizado. Reabrilo antes de modificarlo.'],
+                    'status' => 409,
+                ];
+            }
+            if ($lockedPallet->status === 'done') {
+                return [
+                    'error' => ['message' => 'El pallet está finalizado. Reabrilo antes de modificarlo.'],
+                    'status' => 409,
+                ];
+            }
+
             if ($baseIds->isNotEmpty() && $orderItemIds->isNotEmpty()) {
                 DB::table('pallet_base_order_items')
                     ->whereIn('base_id', $baseIds)
@@ -107,6 +121,20 @@ class OrderPalletAssociationService
         if ($alreadyAttached) {
             return [
                 'error' => ['message' => 'El pedido ya está asociado a este pallet.'],
+                'status' => 409,
+            ];
+        }
+
+        // Entidades finalizadas: sus relaciones son inmutables.
+        if ($order->status === 'done') {
+            return [
+                'error' => ['message' => 'El pedido está finalizado. Reabrilo antes de modificarlo.'],
+                'status' => 409,
+            ];
+        }
+        if ($pallet->status === 'done') {
+            return [
+                'error' => ['message' => 'El pallet está finalizado. Reabrilo antes de modificarlo.'],
                 'status' => 409,
             ];
         }

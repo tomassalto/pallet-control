@@ -10,6 +10,7 @@ use App\Http\Requests\StorePalletBaseRequest;
 use App\Models\OrderItem;
 use App\Models\Pallet;
 use App\Models\PalletBase;
+use App\Services\FinalizationService;
 use App\Services\PalletBaseService;
 use App\Services\StorageCleanupService;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,7 @@ class PalletBaseController extends Controller
     public function __construct(
         private readonly PalletBaseService $palletBaseService,
         private readonly StorageCleanupService $storageCleanup,
+        private readonly FinalizationService $finalizationService,
     ) {}
 
     public function index(Pallet $pallet)
@@ -81,21 +83,12 @@ class PalletBaseController extends Controller
             // FOR SHARE en orden D-020 ANTES del lock del order_item:
             // si detach u otro recorrido retiene pallet/bases FOR UPDATE,
             // aquí se espera sin poseer el item — nunca hay ciclo.
-            $lockedPallet = Pallet::query()->whereKey($pallet->id)->sharedLock()->first();
-            if (! $lockedPallet) {
-                return [
-                    'error' => ['message' => 'Base no encontrada en este pallet'],
-                    'status' => 404,
-                ];
-            }
-
-            // El estado se re-evalúa bajo lock: un finalize que confirme
-            // mientras se espera el FOR SHARE no puede dejar entrar el ajuste.
-            if ($lockedPallet->status === 'done') {
-                return [
-                    'error' => ['message' => 'El pallet está finalizado. Reabrilo antes de modificar sus bases.'],
-                    'status' => 409,
-                ];
+            // El estado se re-evalúa bajo lock: un pallet finalizado es inmutable.
+            $lockedPallet = $this->finalizationService->lockPalletForWrite($pallet->id);
+            if (is_array($lockedPallet)) {
+                return $lockedPallet['status'] === 404
+                    ? ['error' => ['message' => 'Base no encontrada en este pallet'], 'status' => 404]
+                    : $lockedPallet;
             }
 
             PalletBase::query()->whereKey($base->id)->sharedLock()->first();
@@ -104,6 +97,13 @@ class PalletBaseController extends Controller
             $orderItem = OrderItem::query()
                 ->lockForUpdate()
                 ->findOrFail($data['order_item_id']);
+
+            // Las asignaciones de un pedido finalizado también son
+            // inmutables: el pedido se relee bajo lock (orden D-020).
+            $lockedOrder = $this->finalizationService->lockOrderForWrite($orderItem->order_id);
+            if (is_array($lockedOrder)) {
+                return $lockedOrder;
+            }
 
             $belongsToPallet = $pallet->orders()
                 ->whereKey($orderItem->order_id)
@@ -187,8 +187,12 @@ class PalletBaseController extends Controller
         return DB::transaction(function () use ($pallet, $base) {
             // El activity log toma FOR KEY SHARE en el pallet: se
             // adquiere FOR SHARE antes del lock FOR UPDATE de la base
-            // (orden D-020) para no invertir la espera.
-            Pallet::query()->whereKey($pallet->id)->sharedLock()->first();
+            // (orden D-020) para no invertir la espera, y se relee el
+            // estado: un pallet finalizado es inmutable.
+            $lockedPallet = $this->finalizationService->lockPalletForWrite($pallet->id);
+            if (is_array($lockedPallet)) {
+                return response()->json($lockedPallet['error'], $lockedPallet['status']);
+            }
 
             $lockedBase = PalletBase::whereKey($base->id)->lockForUpdate()->first();
             if (! $lockedBase || $lockedBase->pallet_id !== $pallet->id) {
