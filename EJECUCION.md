@@ -588,6 +588,20 @@ Corrección del gate PostgreSQL (run 41585098217 falló): `test_finalize_de_pedi
 
 Evidencia CI: Actions run `41587490864` sobre `3388488` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
+## Última sesión cerrada — validación de solicitudes de faltantes (H-020/H-050)
+
+Rama `hardening/missing-item-request-validation`, creada desde `origin/hardening/finalized-entity-immutability` (`055eb45`, verificado como HEAD de la base con working tree limpio). Se aplicaron `BE-VALID`, `BE-API`, `BE-ERR`, `BE-TX`, `SEC-INPUT`, `SEC-AUTHZ`, `SEC-ABUSE`, `SEC-LOG`, `QA-CONTRACT`, `QA-INVARIANT`, `QA-RISK`, `QA-DATA`, `QA-GATE`, `DOMINIO.md` y D-031. Alcance: sólo `MissingItemRequestController`; H-049 quedó sin tocar.
+
+1. Caracterización previa (`ad8043a`): `MissingItemRequestValidationContractTest` con 29 tests/82 assertions congeló el contrato — `401` anónimo, `403` de `admin` con cuerpo `{"error": ...}` (distinto del `message` de sanctum), `404` de binding antes del `403`, `404` de token desconocido antes de validar, `422` estándar con orden de claves según declaración, pertenencia ítem/pedido `422` sin `errors`, techo de cantidad, anti-duplicado `409`, `409` de pedido `done` tanto en el alta pública como en la revisión, `429` del throttle `public-order-write`, allowlist de campos y cero filas/logs ante fallo.
+2. Refactor (`9abe2b2`): `IndexMissingItemRequestsRequest`, `StoreMissingItemRequestRequest` y `UpdateMissingItemRequestRequest` con las mismas reglas en el mismo orden y `authorize()` en `true`. El store conserva la precedencia `404` del token resolviéndolo en `prepareForValidation` con `HttpResponseException` (cuerpo exacto `{"message":"Pedido no encontrado"}` en cualquier `APP_DEBUG`). Pertenencia, techo, anti-duplicado y la revisión transaccional quedaron en sus límites; nada de lógica de negocio se movió al Form Request.
+3. Cambios de contrato deliberados: `order_item_id` pasó a `['bail','required','integer','exists:order_items,id']` (H-050 — antes no tenía ni `integer`, así que `'abc'` daba `422` `validation.exists` en SQLite y `500` `22P02` en PostgreSQL) y el filtro `status` del index pasó de lectura cruda (valor inválido → `200` lista vacía) a `in:` (`422` `validation.in`), criterio consistente con la familia de pendientes.
+4. Evidencia PostgreSQL: `MissingItemRequestIdValidationTest` (gate `postgres`) prueba `'abc'` → `422` `validation.integer` sin `22P02` ni efectos, entero inexistente → `422` `validation.exists` y string numérico → `201`. El grupo `postgres` completo corrió en CI, incluida la carrera de dos aprobaciones concurrentes (`200`/`409`, un pendiente y un log) — la atomicidad de la revisión no se rompió.
+5. Gates locales con PHP 8.4.27: `pint --test` verde, PHPStan sin errores ni baseline nuevo (`--memory-limit=1G`), suite SQLite completa 351 tests/1378 assertions (2 skips de benchmark preexistentes) y `composer audit` sin avisos. Frontend sin cambios.
+
+Evidencia funcional: commits `ad8043a` y `9abe2b2`. Actions run `41591367510` sobre `9abe2b2` con `ci`, `postgres-concurrency` y `container-security` verdes.
+
+Pendiente: resto del inventario de H-020 (12 controladores + listados) y de H-050 (reglas `exists` sin `bail` en otras familias y el route binding no numérico), y H-049 abierto para una rebanada de idioma/UX.
+
 ## Próxima sesión
 
 Sin bloque autónomo asignado. Candidatos: perfilado de `GET /api/v1/orders` (hot path del baseline 2026-11-02), `GAP-RETENTION` (requiere decisión de negocio), retiro de los overrides de `D-029` cuando upstream fije rangos parcheados, siguiente familia de H-020 (con el inventario restante de H-050), H-049 y política H-009.
