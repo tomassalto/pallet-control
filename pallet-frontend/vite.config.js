@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
+import { workboxConfig } from "./pwa-workbox.config.js";
 
 export default defineConfig({
   plugins: [
@@ -36,42 +37,10 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
-        // Pre-cachear todos los assets del build
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,woff,woff2}"],
-        // Ignorar el service worker mismo para evitar loops
-        globIgnores: ["sw.js"],
-        runtimeCaching: [
-          {
-            // Fotos/imágenes del storage → CacheFirst (no cambian)
-            urlPattern: /\/storage\/.+\.webp$/,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "photos-cache",
-              expiration: {
-                maxEntries: 500,
-                maxAgeSeconds: 7 * 24 * 60 * 60, // 7 días
-              },
-            },
-          },
-          {
-            // Llamadas a la API → NetworkFirst (datos frescos, con fallback)
-            urlPattern: /\/api\/v1\/.*/,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-cache",
-              networkTimeoutSeconds: 10,
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 24 * 60 * 60, // 1 día
-              },
-            },
-          },
-        ],
-        // Página a mostrar cuando se va a una ruta no cacheada offline
-        navigateFallback: "/",
-        navigateFallbackDenylist: [/^\/api/, /^\/storage/],
-      },
+      // Política de cache en pwa-workbox.config.js (H-051): sólo precache
+      // del shell; sin caching en runtime de datos privados mientras
+      // GAP-OFFLINE esté abierto.
+      workbox: workboxConfig,
     }),
   ],
   build: {

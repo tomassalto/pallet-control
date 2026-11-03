@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, setOnUnauthorized } from "../api/client";
+import { clearPrivateCaches } from "./privateCaches";
 import { toastError } from "../ui/toast";
 import { AuthContext } from "./AuthContextValue";
 
@@ -12,11 +13,16 @@ export function AuthProvider({ children }) {
 
   // Única autoridad de invalidación de sesión: un 401 autenticado
   // (registrado en api/client) o un logout terminan acá. Idempotente.
+  // También purga las caches privadas del service worker (H-051): Cache
+  // Storage no se limpia solo y sobreviviría al cambio de usuario en un
+  // dispositivo compartido. clearPrivateCaches nunca rechaza, así que no
+  // puede romper el cierre de sesión en navegadores sin Cache API.
   const endSession = useCallback(() => {
     localStorage.removeItem("token");
     queryClient.cancelQueries();
     queryClient.clear();
     setUser(null);
+    void clearPrivateCaches();
   }, [queryClient]);
 
   useEffect(() => {
@@ -43,6 +49,10 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     const data = await apiPost("/auth/login", { email, password });
+    // Defensa adicional ante cambio de usuario en el mismo dispositivo:
+    // cualquier resto cacheado de una sesión anterior se descarta antes
+    // de establecer la nueva identidad (H-051).
+    void clearPrivateCaches();
     localStorage.setItem("token", data.token);
     setUser(data.user);
     return data.user;
@@ -63,6 +73,7 @@ export function AuthProvider({ children }) {
 
     if (data.token) {
       // Primer usuario (superadmin) — loguear directo
+      void clearPrivateCaches();
       localStorage.setItem("token", data.token);
       setUser(data.user);
       return { autoLogin: true, user: data.user };

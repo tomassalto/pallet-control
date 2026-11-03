@@ -189,9 +189,19 @@ describe("arranque con sesión", () => {
   });
 });
 
+function stubCacheStorage(existing = ["api-cache", "photos-cache"]) {
+  const deleted = [];
+  vi.stubGlobal("caches", {
+    keys: vi.fn(async () => existing),
+    delete: vi.fn(async (name) => (deleted.push(name), true)),
+  });
+  return deleted;
+}
+
 describe("cache de sesión", () => {
   it("un 401 autenticado invalida la sesión vía AuthProvider", async () => {
     localStorage.setItem("token", "tok-1");
+    const deletedCaches = stubCacheStorage();
     const user = userEvent.setup();
     fetch.mockImplementation((url) =>
       url.includes("/auth/me")
@@ -214,6 +224,10 @@ describe("cache de sesión", () => {
     expect(localStorage.getItem("token")).toBeNull();
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
     expect(screen.queryByText("CONTENIDO PROTEGIDO")).toBeNull();
+    // El 401 también purga las caches privadas del service worker (H-051).
+    await waitFor(() =>
+      expect(deletedCaches.sort()).toEqual(["api-cache", "photos-cache"]),
+    );
   });
 
   it("401s concurrentes invalidan la sesión una sola vez, sin errores", async () => {
@@ -237,6 +251,8 @@ describe("cache de sesión", () => {
     await screen.findByText("CONTENIDO PROTEGIDO");
     await screen.findByText("a@b.c");
 
+    // Sin Cache API disponible el cierre no debe fallar (H-051).
+    vi.stubGlobal("caches", undefined);
     await user.click(screen.getByRole("button", { name: "disparar-0" }));
     await user.click(screen.getByRole("button", { name: "disparar-1" }));
     await waitFor(() => expect(respuestas).toHaveLength(2));
@@ -263,8 +279,13 @@ describe("cache de sesión", () => {
     consoleError.mockRestore();
   });
 
-  it("logout limpia la cache de queries", async () => {
+  it("logout limpia la cache de queries y las caches privadas", async () => {
     const queryClient = renderApp("/login");
+    const deletedCaches = stubCacheStorage([
+      "api-cache",
+      "photos-cache",
+      "cache-de-otra-app",
+    ]);
     queryClient.setQueryData(["privado"], { secreto: 1 });
 
     // logout usa el contexto: lo invocamos dentro del provider renderizado.
@@ -293,5 +314,10 @@ describe("cache de sesión", () => {
 
     expect(queryClient.getQueryData(["privado"])).toBeUndefined();
     expect(localStorage.getItem("token")).toBeNull();
+    // Purga exacta por nombre: las caches ajenas sobreviven (H-051).
+    await waitFor(() =>
+      expect(deletedCaches.sort()).toEqual(["api-cache", "photos-cache"]),
+    );
+    expect(caches.delete).not.toHaveBeenCalledWith("cache-de-otra-app");
   });
 });

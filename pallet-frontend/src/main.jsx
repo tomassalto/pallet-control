@@ -5,7 +5,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./auth/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import App from "./App.jsx";
+import { clearPrivateCaches } from "./auth/privateCaches";
 import "./index.css";
+
+// Purga única al arrancar (H-051): instalaciones que actualizan desde un
+// service worker anterior pueden conservar "api-cache"/"photos-cache" en
+// Cache Storage; cleanupOutdatedCaches no las toca porque no son caches
+// de precache. Es idempotente y no exige Cache API.
+void clearPrivateCaches();
 
 const queryClient = new QueryClient({
   defaultOptions: {
