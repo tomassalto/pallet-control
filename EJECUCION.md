@@ -588,7 +588,21 @@ Corrección del gate PostgreSQL (run 41585098217 falló): `test_finalize_de_pedi
 
 Evidencia CI: Actions run `41587490864` sobre `3388488` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
-## Última sesión cerrada — validación de attach-pallet (H-020/H-050)
+## Última sesión cerrada — route binding numérico de pending items (H-050)
+
+Rama `hardening/pending-item-route-binding`, creada desde `origin/hardening/order-attach-pallet-validation` (`cc5bedc`, verificado como HEAD de la base con working tree limpio y descendiente de `c25ca82`). Se aplicaron `BE-API`, `BE-VALID`, `BE-ERR`, `BE-DATA`, `SEC-INPUT`, `SEC-AUTHZ`, `SEC-LOG`, `QA-CONTRACT`, `QA-RISK`, `QA-DATA`, `QA-GATE`, `DOMINIO.md` y D-031. Alcance: sólo `PATCH`/`DELETE /pending-items/{pendingItem}` y la resolución de `PendingItem $pendingItem`; H-049 sin tocar, sin GAP.
+
+1. Caracterización previa (`2f2a502`): `PendingItemRouteBindingContractTest` con 11 tests/43 assertions congeló la precedencia vigente — `auth:sanctum` (401) → `SubstituteBindings` (404/500) → `user.active` (401) → `has.role` (403) → Form Request. El binding corre antes que `user.active` y `has.role`: un inactivo o sin-rol recibe el resultado del binding antes que su 401/403. En SQLite todo id inválido (`'abc'`, `'12abc'`, `'1.5'`, `'-1'`, overflow, caracteres codificados) devolvía 404, con cero filas y cero logs.
+2. Evidencia del defecto: `PendingItemRouteBindingTest` (gate `postgres`) acreditó el `500` real en PATCH y DELETE para `'abc'` antes del fix — el segmento llega sin tipo a la comparación `bigint` y PostgreSQL responde `SQLSTATE[22P02]`, traducido por el handler global al 500 genérico.
+3. Solución (`911a041`): `PendingItem::resolveRouteBinding` devuelve `null` para segmentos que no son un entero no negativo dentro del rango bigint (`filter_var` + `min_range: 0`); el framework emite el `404` estándar (`ModelNotFoundException`) en el mismo punto de precedencia. Se descartó `whereNumber()` porque falla en el matching de ruta, antes de cualquier middleware, y convertiría el `401` de anónimo en `404`. Sin casts permisivos ni captura de `QueryException`.
+4. Tests posteriores: el test PostgreSQL se actualizó deliberadamente al contrato 404 (documentado como evidencia antes/después); `'abc'`/`'12abc'`/`'1.5'`/`'-1'`/overflow → 404 en ambos métodos, ids numéricos inexistentes → 404, válidos → flujo normal con auditoría, y el `409` de pedido `done` conservado para ids válidos.
+5. Gates locales: `pint --test` verde, PHPStan sin errores ni baseline nuevo, suite SQLite 378 tests/1479 assertions (2 skips benchmark preexistentes), grupo `postgres` completo 37 tests/468 assertions contra PostgreSQL 17.11 local y `composer audit` sin avisos. Frontend sin cambios.
+
+Evidencia funcional: commits `2f2a502` y `911a041`. CI remoto pendiente al cierre de la sesión.
+
+Pendiente: uniformización de `bail` y guardas de binding en las demás familias (bajo H-020: bindings implícitos `{order}`, `{pallet}`, `{item}`, etc. comparten la misma forma de defecto, no verificados en este bloque) y H-049 abierto para una rebanada de idioma/UX.
+
+## Sesión anterior — validación de attach-pallet (H-020/H-050)
 
 Rama `hardening/order-attach-pallet-validation`, creada desde `origin/hardening/missing-item-request-validation` (`c25ca82`, verificado como HEAD de la base con working tree limpio y descendiente de `055eb45`). Se aplicaron `BE-VALID`, `BE-API`, `BE-ERR`, `BE-TX`, `SEC-INPUT`, `SEC-AUTHZ`, `SEC-LOG`, `QA-CONTRACT`, `QA-INVARIANT`, `QA-RISK`, `QA-DATA`, `QA-GATE`, `DOMINIO.md`, D-020, D-025 y D-031. Alcance: sólo `OrderController::attachPallet`; H-049 quedó sin tocar y no hubo GAP (el patrón `bail`+`integer`+`exists` ya estaba gobernado).
 
