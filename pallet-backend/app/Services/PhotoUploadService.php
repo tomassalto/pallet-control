@@ -138,8 +138,8 @@ class PhotoUploadService
             4000,
             function (string $path) use ($base, $baseName, $data, $pallet): string {
                 // Estado releído bajo lock: pallet finalizado = inmutable.
-                $this->finalizationService->assertPalletWritable($pallet->id);
-                PalletBase::query()->whereKey($base->id)->sharedLock()->first();
+                $this->finalizationService->assertPalletWritable($pallet->getKey());
+                PalletBase::query()->whereKey($base->getKey())->sharedLock()->first();
 
                 $photo = PalletBasePhoto::create([
                     'base_id' => $base->id,

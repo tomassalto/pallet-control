@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\OrderTicketPhoto;
+use App\Services\TicketOcrService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 
@@ -12,11 +14,11 @@ Artisan::command('inspire', function () {
 // carrera contra la finalización.
 if (app()->environment('testing')) {
     Artisan::command('test:ocr-persist {photoId} {--result}', function () {
-        $photo = \App\Models\OrderTicketPhoto::find($this->argument('photoId'));
+        $photo = OrderTicketPhoto::find($this->argument('photoId'));
         if (! $photo) {
             return 1;
         }
-        $service = app(\App\Services\TicketOcrService::class);
+        $service = app(TicketOcrService::class);
         $written = $service->writePhotoWhileOrderOpen($photo, function ($locked) {
             if ($this->option('result')) {
                 $locked->update([
@@ -30,6 +32,7 @@ if (app()->environment('testing')) {
             }
         });
         $this->info($written ? 'written' : 'discarded');
+
         return $written ? 0 : 1;
     });
 }

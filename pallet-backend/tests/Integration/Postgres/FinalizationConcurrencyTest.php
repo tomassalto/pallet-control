@@ -441,7 +441,7 @@ class FinalizationConcurrencyTest extends TestCase
      */
     private function startOcrPersist(int $photoId, bool $result): Process
     {
-        $command = [PHP_BINARY, 'artisan', "test:ocr-persist", (string) $photoId];
+        $command = [PHP_BINARY, 'artisan', 'test:ocr-persist', (string) $photoId];
         if ($result) {
             $command[] = '--result';
         }

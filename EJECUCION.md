@@ -582,6 +582,8 @@ Rama `hardening/finalized-entity-immutability`, creada desde `origin/hardening/p
 
 Corrección post-revisión: Pint aplicado a los 4 archivos en rojo; OCR reescrito al patrón transaccional (se eliminó el check-then-write); guards auditados — todos los locks comparten transacción con su escritura, incluido `StorageController` admin que ahora bloquea dentro de `DB::transaction`.
 
+Segunda corrección: `admin/storage` ya no ejecuta `Storage::delete()` con la transacción abierta — dentro de la tx corta sólo quedan lock FOR UPDATE de la entidad, re-lectura del estado `done`, delete de filas, activity log y `StorageCleanupService::scheduleDeletion` (intenciones durables + dispatch `afterCommit`, D-018/D-027); un crash recupera por `storage:retry-pending-deletions`. Tests nuevos: `AdminStorageDeletionTest` (6 casos: 409 sin efectos, intención por archivo, cero I/O en tx con `Queue::fake`, recuperación por barrido, idempotencia, auditoría). Se corrigieron además el mensaje `409` de adjust-item (contrato existente), los conteos acotados de queries (+1 lock `orders` en adjust y migrate), el import faltante de `ActivityLogger` y los errores PHPStan (`ticket()` genérico, `getKey()` en uniones Model, baseline reducido 2→1 en TelegramBotController). Gates locales con PHP 8.4.27: `pint --test` verde, PHPStan sin errores, suite SQLite completa 322 tests verdes (2 skipped por flag), `composer audit` sin advisories.
+
 Pendiente de evidencia remota: gates `ci`, `postgres-concurrency` y `container-security` del push.
 
 ## Próxima sesión

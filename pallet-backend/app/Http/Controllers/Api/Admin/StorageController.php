@@ -2,40 +2,24 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Helpers\ActivityLogger;
 use App\Models\ActivityLog;
 use App\Models\Order;
 use App\Models\OrderTicketPhoto;
 use App\Models\Pallet;
 use App\Models\PalletBasePhoto;
 use App\Models\PalletPhoto;
-use Illuminate\Contracts\Filesystem\Filesystem;
+use App\Services\StorageCleanupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class StorageController extends Controller
 {
-    // ── Helpers ───────────────────────────────────────────────────────────
-
-    private function storageDisk(): Filesystem
-    {
-        return Storage::disk(config('filesystems.default', 'public'));
-    }
-
-    private function deleteFile(?string $path): void
-    {
-        if (empty($path)) {
-            return;
-        }
-
-        try {
-            $this->storageDisk()->delete($path);
-        } catch (\Throwable) {
-            // Skip files that cannot be deleted (already missing, permissions, etc.)
-        }
-    }
+    public function __construct(
+        private readonly StorageCleanupService $storageCleanup,
+    ) {}
 
     // ── stats() ───────────────────────────────────────────────────────────
 
@@ -115,40 +99,48 @@ class StorageController extends Controller
     public function deletePallet(Request $request, int $id): JsonResponse
     {
         return DB::transaction(function () use ($id) {
-        // Un pallet finalizado es inmutable: el borrado exige reapertura.
-        $pallet = Pallet::query()->whereKey($id)->lockForUpdate()->first();
-        if (! $pallet) {
-            return response()->json(['message' => 'Pallet no encontrado'], 404);
-        }
-        if ($pallet->status === 'done') {
-            return response()->json([
-                'message' => 'El pallet está finalizado. Reabrilo antes de eliminarlo.',
-            ], 409);
-        }
-
-        $pallet->load(['bases.photos', 'photos']);
-
-        // Delete storage files for all PalletBasePhoto records
-        foreach ($pallet->bases as $base) {
-            foreach ($base->photos as $photo) {
-                $this->deleteFile($photo->path);
+            // Un pallet finalizado es inmutable: el borrado exige reapertura.
+            $pallet = Pallet::query()->whereKey($id)->lockForUpdate()->first();
+            if (! $pallet) {
+                return response()->json(['message' => 'Pallet no encontrado'], 404);
             }
-        }
+            if ($pallet->status === 'done') {
+                return response()->json([
+                    'message' => 'El pallet está finalizado. Reabrilo antes de eliminarlo.',
+                ], 409);
+            }
 
-        // Delete storage files for all PalletPhoto records
-        foreach ($pallet->photos as $photo) {
-            $this->deleteFile($photo->path);
-        }
+            // Las fotos se leen bajo lock y cada objeto queda con una
+            // intención durable; el filesystem corre post-commit vía
+            // StorageCleanupService — nada de I/O externo con la tx abierta.
+            $pallet->load([
+                'photos' => fn ($q) => $q->lockForUpdate(),
+                'bases.photos' => fn ($q) => $q->lockForUpdate(),
+            ]);
 
-        $code = $pallet->code;
+            $paths = $pallet->photos->pluck('path')
+                ->merge($pallet->bases->flatMap(fn ($base) => $base->photos->pluck('path')))
+                ->all();
 
-        // Delete the Pallet record; rely on DB cascade for child records
-        $pallet->delete();
+            $code = $pallet->code;
 
-        return response()->json([
-            'deleted' => true,
-            'code' => $code,
-        ]);
+            // Las fotos del pallet y de sus bases caen por cascada con la fila.
+            $pallet->delete();
+
+            ActivityLogger::log(
+                action: 'admin_pallet_deleted',
+                entityType: 'pallet',
+                entityId: $id,
+                description: "Pallet '{$code}' eliminado desde administración de storage",
+                oldValues: ['code' => $code],
+            );
+
+            $this->storageCleanup->scheduleDeletion($paths, 'admin_pallet_deleted');
+
+            return response()->json([
+                'deleted' => true,
+                'code' => $code,
+            ]);
         });
     }
 
@@ -157,35 +149,46 @@ class StorageController extends Controller
     public function deleteOrder(Request $request, int $id): JsonResponse
     {
         return DB::transaction(function () use ($id) {
-        // Un pedido finalizado es inmutable: el borrado exige reapertura.
-        $order = Order::query()->whereKey($id)->lockForUpdate()->first();
-        if (! $order) {
-            return response()->json(['message' => 'Pedido no encontrado'], 404);
-        }
-        if ($order->status === 'done') {
-            return response()->json([
-                'message' => 'El pedido está finalizado. Reabrilo antes de eliminarlo.',
-            ], 409);
-        }
-
-        $order->load(['tickets.photos']);
-
-        // Delete storage files for all OrderTicketPhoto records
-        foreach ($order->tickets as $ticket) {
-            foreach ($ticket->photos as $photo) {
-                $this->deleteFile($photo->path);
+            // Un pedido finalizado es inmutable: el borrado exige reapertura.
+            $order = Order::query()->whereKey($id)->lockForUpdate()->first();
+            if (! $order) {
+                return response()->json(['message' => 'Pedido no encontrado'], 404);
             }
-        }
+            if ($order->status === 'done') {
+                return response()->json([
+                    'message' => 'El pedido está finalizado. Reabrilo antes de eliminarlo.',
+                ], 409);
+            }
 
-        $code = $order->code;
+            // Idéntico patrón: intenciones durables dentro de la tx,
+            // borrado físico post-commit por StorageCleanupService.
+            $order->load(['tickets.photos' => fn ($q) => $q->lockForUpdate()]);
 
-        // Delete the Order record; rely on DB cascade for child records
-        $order->delete();
+            $paths = $order->tickets
+                ->flatMap(fn ($ticket) => $ticket->photos->pluck('path'))
+                ->all();
 
-        return response()->json([
-            'deleted' => true,
-            'code' => $code,
-        ]);
+            $code = $order->code;
+
+            // Sin orderId: la fila se borra a continuación y la FK del
+            // log no puede quedar apuntando al pedido eliminado.
+            ActivityLogger::log(
+                action: 'admin_order_deleted',
+                entityType: 'order',
+                entityId: $id,
+                description: "Pedido '{$code}' eliminado desde administración de storage",
+                oldValues: ['code' => $code],
+            );
+
+            // Las fotos de los tickets caen por cascada con la fila.
+            $order->delete();
+
+            $this->storageCleanup->scheduleDeletion($paths, 'admin_order_deleted');
+
+            return response()->json([
+                'deleted' => true,
+                'code' => $code,
+            ]);
         });
     }
 }

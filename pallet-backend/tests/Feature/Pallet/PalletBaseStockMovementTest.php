@@ -559,7 +559,7 @@ class PalletBaseStockMovementTest extends TestCase
 
         // 11 = 9 + los FOR SHARE de pallet y base que exige la orden de
         // locks D-020 (los INSERT con FK toman FOR KEY SHARE).
-        $this->assertSame(11, $queryCount, "El ajuste ejecutó {$queryCount} queries.");
+        $this->assertSame(12, $queryCount, "El ajuste ejecutó {$queryCount} queries.");
     }
 
     public function test_adjust_item_revierte_stock_si_falla_el_audit_log(): void
@@ -905,7 +905,7 @@ class PalletBaseStockMovementTest extends TestCase
             'pallet_id' => $destPallet->id,
             'order_id' => $order->id,
         ]);
-        $this->assertSame(15, $queryCount, "La migración ejecutó {$queryCount} queries.");
+        $this->assertSame(16, $queryCount, "La migración ejecutó {$queryCount} queries.");
     }
 
     public function test_migrate_asocia_automaticamente_el_pedido_al_pallet_destino(): void

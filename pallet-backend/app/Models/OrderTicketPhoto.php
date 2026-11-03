@@ -34,6 +34,7 @@ class OrderTicketPhoto extends Model
         return Storage::disk(config('filesystems.default', 'public'))->url($this->path);
     }
 
+    /** @return BelongsTo<OrderTicket, $this> */
     public function ticket(): BelongsTo
     {
         return $this->belongsTo(OrderTicket::class, 'ticket_id');
