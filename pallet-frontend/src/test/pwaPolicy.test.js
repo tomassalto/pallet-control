@@ -40,6 +40,10 @@ describe("política PWA/Workbox (H-051)", () => {
     expect(storageRefs.length).toBeLessThanOrEqual(1);
   });
 
+  it("el worker importa la limpieza de caches legacy en activate", () => {
+    expect(workboxConfig.importScripts).toContain("sw-cleanup.js");
+  });
+
   it("conserva el precache del shell estático", () => {
     expect(workboxConfig.globPatterns).toContain(
       "**/*.{js,css,html,ico,png,svg,webp,woff,woff2}",

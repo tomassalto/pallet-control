@@ -15,8 +15,11 @@ export function AuthProvider({ children }) {
   // (registrado en api/client) o un logout terminan acá. Idempotente.
   // También purga las caches privadas del service worker (H-051): Cache
   // Storage no se limpia solo y sobreviviría al cambio de usuario en un
-  // dispositivo compartido. clearPrivateCaches nunca rechaza, así que no
-  // puede romper el cierre de sesión en navegadores sin Cache API.
+  // dispositivo compartido. Es fire-and-forget a propósito: el borrado
+  // es inherentemente asíncrono y la barrera para una identidad nueva ya
+  // la dan el bootstrap y login/register, que sí esperan la purga.
+  // clearPrivateCaches nunca rechaza, así que no puede romper el cierre
+  // de sesión en navegadores sin Cache API.
   const endSession = useCallback(() => {
     localStorage.removeItem("token");
     queryClient.cancelQueries();
@@ -49,10 +52,10 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     const data = await apiPost("/auth/login", { email, password });
-    // Defensa adicional ante cambio de usuario en el mismo dispositivo:
-    // cualquier resto cacheado de una sesión anterior se descarta antes
-    // de establecer la nueva identidad (H-051).
-    void clearPrivateCaches();
+    // Barrera ante cambio de usuario en el mismo dispositivo (H-051): la
+    // identidad nueva no se publica hasta que termine la purga privada.
+    // El catch evita que una Cache API rota bloquee el login.
+    await clearPrivateCaches().catch(() => {});
     localStorage.setItem("token", data.token);
     setUser(data.user);
     return data.user;
@@ -72,8 +75,8 @@ export function AuthProvider({ children }) {
     });
 
     if (data.token) {
-      // Primer usuario (superadmin) — loguear directo
-      void clearPrivateCaches();
+      // Primer usuario (superadmin) — misma barrera que login (H-051)
+      await clearPrivateCaches().catch(() => {});
       localStorage.setItem("token", data.token);
       setUser(data.user);
       return { autoLogin: true, user: data.user };

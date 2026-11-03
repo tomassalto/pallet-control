@@ -51,6 +51,23 @@ if (!existsSync(join(appDir, "manifest.webmanifest"))) {
   fail("manifest.webmanifest ausente en el build");
 }
 
+// El worker nuevo debe importar la limpieza de caches legacy en activate
+// (H-051): sin importScripts la eliminación dependería sólo del JS de la
+// página, que el worker viejo puede seguir sirviendo hasta activarse.
+if (!sw.includes("importScripts") || !sw.includes("sw-cleanup.js")) {
+  fail("sw.js no importa sw-cleanup.js — falta la limpieza en activate");
+}
+const cleanupPath = join(appDir, "sw-cleanup.js");
+if (!existsSync(cleanupPath)) {
+  fail("sw-cleanup.js no llegó al artefacto del build");
+}
+const cleanup = readFileSync(cleanupPath, "utf8");
+for (const token of ["activate", "api-cache", "photos-cache"]) {
+  if (!cleanup.includes(token)) {
+    fail(`sw-cleanup.js sin "${token}" — limpieza de activate incompleta`);
+  }
+}
+
 console.log(
   "verify-sw: OK — sw.js sin caches privadas, precache del shell y manifest presentes.",
 );

@@ -14,6 +14,9 @@ export const workboxConfig = {
   globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,woff,woff2}"],
   // Ignorar el service worker mismo para evitar loops
   globIgnores: ["sw.js"],
+  // Script importado por el worker generado: elimina las caches privadas
+  // legacy durante activate, aunque la app todavía no haya montado (H-051).
+  importScripts: ["sw-cleanup.js"],
   // Página a mostrar cuando se va a una ruta no cacheada offline
   navigateFallback: "/",
   navigateFallbackDenylist: [/^\/api/, /^\/storage/],

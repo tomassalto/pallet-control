@@ -5,14 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./auth/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import App from "./App.jsx";
-import { clearPrivateCaches } from "./auth/privateCaches";
+import { bootstrapApp } from "./appBootstrap";
 import "./index.css";
-
-// Purga única al arrancar (H-051): instalaciones que actualizan desde un
-// service worker anterior pueden conservar "api-cache"/"photos-cache" en
-// Cache Storage; cleanupOutdatedCaches no las toca porque no son caches
-// de precache. Es idempotente y no exige Cache API.
-void clearPrivateCaches();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,7 +19,11 @@ const queryClient = new QueryClient({
   },
 });
 
-createRoot(document.getElementById("root")).render(
+// React no monta hasta que la purga de caches privadas legacy termina
+// (H-051): ninguna sesión ni request autenticada arranca con restos de
+// una sesión previa en Cache Storage.
+void bootstrapApp(() =>
+  createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
@@ -37,4 +35,5 @@ createRoot(document.getElementById("root")).render(
       </QueryClientProvider>
     </BrowserRouter>
   </StrictMode>
+  ),
 );
