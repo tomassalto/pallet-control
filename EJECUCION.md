@@ -588,7 +588,21 @@ Corrección del gate PostgreSQL (run 41585098217 falló): `test_finalize_de_pedi
 
 Evidencia CI: Actions run `41587490864` sobre `3388488` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
-## Última sesión cerrada — validación de solicitudes de faltantes (H-020/H-050)
+## Última sesión cerrada — validación de attach-pallet (H-020/H-050)
+
+Rama `hardening/order-attach-pallet-validation`, creada desde `origin/hardening/missing-item-request-validation` (`c25ca82`, verificado como HEAD de la base con working tree limpio y descendiente de `055eb45`). Se aplicaron `BE-VALID`, `BE-API`, `BE-ERR`, `BE-TX`, `SEC-INPUT`, `SEC-AUTHZ`, `SEC-LOG`, `QA-CONTRACT`, `QA-INVARIANT`, `QA-RISK`, `QA-DATA`, `QA-GATE`, `DOMINIO.md`, D-020, D-025 y D-031. Alcance: sólo `OrderController::attachPallet`; H-049 quedó sin tocar y no hubo GAP (el patrón `bail`+`integer`+`exists` ya estaba gobernado).
+
+1. Caracterización previa (`1da6eff`): `AttachPalletValidationContractTest` con 16 tests/58 assertions congeló el contrato — `401` anónimo e inactivo, `403` de `has.role` aun con payload inválido, `404` de binding antes del `403` y de la validación, `422` con cuerpo exacto y orden de claves, cero pivot y cero activity logs ante fallo, `201` con `message`/`pallet`/`pallets`, `409` de asociación repetida y de pedido o pallet `done` sin efectos, campos extra ignorados, string numérico que asocia y Telegram sólo en el éxito.
+2. Hallazgo de la caracterización: con `integer` antes de `exists`, Laravel 12 ya omite la regla `exists` tras un fallo previo del mismo atributo (`hasNotFailedPreviousRuleIfPresenceRule`, "to avoid possible database type comparison errors"), así que `'abc'` ya devolvía `422` `validation.integer` — el `500` `22P02` de H-050 no se materializaba en este endpoint. El inventario de H-050 se corrigió en consecuencia: las reglas restantes con `integer` previo están cubiertas por la misma guarda y el `500` real sigue sólo en el route binding de `/pending-items/{pendingItem}`.
+3. Refactor (`5c3db71`): `AttachPalletToOrderRequest` con `authorize()` en `true` (autorización en `auth:sanctum`, `user.active` y `has.role`), reglas `['bail','required','integer','exists:pallets,id']` como array y el controlador consumiendo `validated()`. `bail` hace explícita la garantía H-050 sin depender del detalle interno del validador. Sin cambio de contrato observable: los 16 tests pasaron sin modificaciones.
+4. Evidencia PostgreSQL: `AttachPalletIdValidationTest` (gate `postgres`) prueba `'abc'` → `422` `validation.integer` sin `22P02` ni efectos, entero inexistente → `422` `validation.exists` y string numérico → `201`. La carrera cruzada `attachPallet`/`attachOrder` del gate siguió verde (`201`/`409`, una fila pivot, un log). Grupo `postgres` completo local: 35 tests/450 assertions contra PostgreSQL 17.11.
+5. Gates locales con PHP 8.4.24/8.4.27: `pint --test` verde, PHPStan sin errores ni baseline nuevo (`--memory-limit=1G`), suite SQLite completa 367 tests/1436 assertions (2 skips de benchmark preexistentes) y `composer audit` sin avisos. Frontend sin cambios.
+
+Evidencia funcional: commits `1da6eff` y `5c3db71`. CI remoto pendiente al cierre de la sesión.
+
+Pendiente: resto del inventario de H-020 (12 controladores + listados) y de H-050 (uniformizar `bail` en las familias restantes y el route binding no numérico), y H-049 abierto para una rebanada de idioma/UX.
+
+## Sesión anterior — validación de solicitudes de faltantes (H-020/H-050)
 
 Rama `hardening/missing-item-request-validation`, creada desde `origin/hardening/finalized-entity-immutability` (`055eb45`, verificado como HEAD de la base con working tree limpio). Se aplicaron `BE-VALID`, `BE-API`, `BE-ERR`, `BE-TX`, `SEC-INPUT`, `SEC-AUTHZ`, `SEC-ABUSE`, `SEC-LOG`, `QA-CONTRACT`, `QA-INVARIANT`, `QA-RISK`, `QA-DATA`, `QA-GATE`, `DOMINIO.md` y D-031. Alcance: sólo `MissingItemRequestController`; H-049 quedó sin tocar.
 
