@@ -7,7 +7,6 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -142,17 +141,20 @@ class MissingItemRequestValidationContractTest extends TestCase
     }
 
     #[Test]
-    public function index_filtro_status_invalido_devuelve_lista_vacia(): void
+    public function index_filtro_status_invalido_devuelve_422(): void
     {
-        // Contrato actual (pre-Form Request): el filtro se lee sin validar y
-        // un valor desconocido simplemente no coincide con ninguna fila.
+        // Cambio deliberado del refactor: el filtro deja de leerse crudo y un
+        // valor fuera del allowlist devuelve 422 en lugar de una lista vacía.
         Sanctum::actingAs($this->admin());
         [$order, $item] = $this->pedidoConItem();
         $this->solicitudPendiente($item);
 
         $this->getJson('/api/v1/admin/missing-item-requests?status=no_existe')
-            ->assertOk()
-            ->assertExactJson([]);
+            ->assertUnprocessable()
+            ->assertExactJson([
+                'message' => 'validation.in',
+                'errors' => ['status' => ['validation.in']],
+            ]);
     }
 
     // ── STORE público ───────────────────────────────────────────────────────
@@ -218,16 +220,12 @@ class MissingItemRequestValidationContractTest extends TestCase
     }
 
     #[Test]
-    public function store_order_item_id_no_numerico_devuelve_422_exists_en_sqlite(): void
+    public function store_order_item_id_no_numerico_devuelve_422_integer(): void
     {
-        // SQLite es flexible con tipos: `exists` no encuentra 'abc' y devuelve
-        // 422 validation.exists. En PostgreSQL esta misma entrada producía
-        // SQLSTATE[22P02] → 500 (H-050). Tras la corrección, ambos motores
-        // devuelven 422 validation.integer.
-        if (DB::getDriverName() !== 'sqlite') {
-            $this->markTestSkipped('Caracteriza el comportamiento SQLite previo a H-050.');
-        }
-
+        // H-050: en SQLite 'abc' devolvía 422 validation.exists y en
+        // PostgreSQL la consulta `exists` fallaba con SQLSTATE[22P02] → 500.
+        // Con bail+integer previo a exists, ambos motores devuelven 422
+        // validation.integer sin efectos.
         [$order] = $this->pedidoConItem();
 
         $this->postJson($this->urlPublica($order), [
@@ -235,8 +233,8 @@ class MissingItemRequestValidationContractTest extends TestCase
             'qty_missing' => 1,
         ])->assertUnprocessable()
             ->assertExactJson([
-                'message' => 'validation.exists',
-                'errors' => ['order_item_id' => ['validation.exists']],
+                'message' => 'validation.integer',
+                'errors' => ['order_item_id' => ['validation.integer']],
             ]);
 
         $this->assertDatabaseCount('missing_item_requests', 0);
@@ -292,7 +290,7 @@ class MissingItemRequestValidationContractTest extends TestCase
     #[Test]
     public function store_token_desconocido_devuelve_404_antes_de_validar(): void
     {
-        $this->postJson('/api/v1/public/orders/'.str_repeat('a', 48).'/missing-items', [])
+        $this->postJson('/api/v1/public/orders/' . str_repeat('a', 48) . '/missing-items', [])
             ->assertNotFound()
             ->assertExactJson(['message' => 'Pedido no encontrado']);
     }

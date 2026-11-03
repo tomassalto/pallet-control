@@ -3,12 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\IndexMissingItemRequestsRequest;
+use App\Http\Requests\StoreMissingItemRequestRequest;
+use App\Http\Requests\UpdateMissingItemRequestRequest;
 use App\Models\MissingItemRequest;
-use App\Models\Order;
 use App\Models\OrderItem;
 use App\Services\FinalizationService;
 use App\Services\MissingItemRequestService;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class MissingItemRequestController extends Controller
@@ -19,19 +20,13 @@ class MissingItemRequestController extends Controller
     ) {}
 
     // POST /public/orders/{token}/missing-items — sin auth, protegido por token opaco
-    public function store(Request $request, string $token)
+    public function store(StoreMissingItemRequestRequest $request, string $token)
     {
-        $order = Order::where('public_token', $token)->first();
-        if (! $order) {
-            return response()->json(['message' => 'Pedido no encontrado'], 404);
-        }
+        // El Form Request ya resolvió el token: un pedido desconocido ni
+        // siquiera llega a validar (404 conserva su precedencia sobre 422).
+        $order = $request->order();
 
-        $data = $request->validate([
-            'order_item_id' => ['required', 'exists:order_items,id'],
-            'qty_missing' => ['required', 'integer', 'min:1'],
-            'requester_name' => ['nullable', 'string', 'max:100'],
-            'note' => ['nullable', 'string', 'max:500'],
-        ]);
+        $data = $request->validated();
 
         $item = OrderItem::findOrFail($data['order_item_id']);
 
@@ -74,12 +69,14 @@ class MissingItemRequestController extends Controller
     }
 
     // GET /admin/missing-item-requests — admin autenticado
-    public function index(Request $request)
+    public function index(IndexMissingItemRequestsRequest $request)
     {
+        $filters = $request->validated();
+
         $items = MissingItemRequest::with(['order', 'orderItem.product', 'reviewer'])
             ->when(
-                $request->filled('status'),
-                fn ($q) => $q->where('status', $request->string('status'))
+                isset($filters['status']),
+                fn ($q) => $q->where('status', $filters['status'])
             )
             ->orderByRaw("CASE WHEN status = 'pending_review' THEN 0 ELSE 1 END")
             ->orderBy('created_at', 'desc')
@@ -90,11 +87,9 @@ class MissingItemRequestController extends Controller
     }
 
     // PATCH /admin/missing-item-requests/{missingItemRequest} — admin autenticado
-    public function update(Request $request, MissingItemRequest $missingItemRequest)
+    public function update(UpdateMissingItemRequestRequest $request, MissingItemRequest $missingItemRequest)
     {
-        $data = $request->validate([
-            'status' => ['required', 'in:approved,rejected'],
-        ]);
+        $data = $request->validated();
 
         $result = $this->missingItemRequestService->review(
             $missingItemRequest,
