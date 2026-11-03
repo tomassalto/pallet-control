@@ -598,7 +598,7 @@ Rama `hardening/pending-item-route-binding`, creada desde `origin/hardening/orde
 4. Tests posteriores: el test PostgreSQL se actualizó deliberadamente al contrato 404 (documentado como evidencia antes/después); `'abc'`/`'12abc'`/`'1.5'`/`'-1'`/overflow → 404 en ambos métodos, ids numéricos inexistentes → 404, válidos → flujo normal con auditoría, y el `409` de pedido `done` conservado para ids válidos.
 5. Gates locales: `pint --test` verde, PHPStan sin errores ni baseline nuevo, suite SQLite 378 tests/1479 assertions (2 skips benchmark preexistentes), grupo `postgres` completo 37 tests/468 assertions contra PostgreSQL 17.11 local y `composer audit` sin avisos. Frontend sin cambios.
 
-Evidencia funcional: commits `2f2a502` y `911a041`. CI remoto pendiente al cierre de la sesión.
+Evidencia funcional: commits `2f2a502`, `911a041` y `2344612`. Actions run `41606237868` sobre `2344612` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 Pendiente: uniformización de `bail` y guardas de binding en las demás familias (bajo H-020: bindings implícitos `{order}`, `{pallet}`, `{item}`, etc. comparten la misma forma de defecto, no verificados en este bloque) y H-049 abierto para una rebanada de idioma/UX.
 
