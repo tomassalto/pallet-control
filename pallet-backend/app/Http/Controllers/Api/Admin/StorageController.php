@@ -12,6 +12,7 @@ use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class StorageController extends Controller
@@ -113,15 +114,19 @@ class StorageController extends Controller
 
     public function deletePallet(Request $request, int $id): JsonResponse
     {
+        return DB::transaction(function () use ($id) {
         // Un pallet finalizado es inmutable: el borrado exige reapertura.
-        $locked = Pallet::query()->whereKey($id)->lockForUpdate()->first();
-        if ($locked?->status === 'done') {
+        $pallet = Pallet::query()->whereKey($id)->lockForUpdate()->first();
+        if (! $pallet) {
+            return response()->json(['message' => 'Pallet no encontrado'], 404);
+        }
+        if ($pallet->status === 'done') {
             return response()->json([
                 'message' => 'El pallet está finalizado. Reabrilo antes de eliminarlo.',
             ], 409);
         }
 
-        $pallet = Pallet::with(['bases.photos', 'photos'])->findOrFail($id);
+        $pallet->load(['bases.photos', 'photos']);
 
         // Delete storage files for all PalletBasePhoto records
         foreach ($pallet->bases as $base) {
@@ -144,21 +149,26 @@ class StorageController extends Controller
             'deleted' => true,
             'code' => $code,
         ]);
+        });
     }
 
     // ── deleteOrder() ─────────────────────────────────────────────────────
 
     public function deleteOrder(Request $request, int $id): JsonResponse
     {
+        return DB::transaction(function () use ($id) {
         // Un pedido finalizado es inmutable: el borrado exige reapertura.
-        $locked = Order::query()->whereKey($id)->lockForUpdate()->first();
-        if ($locked?->status === 'done') {
+        $order = Order::query()->whereKey($id)->lockForUpdate()->first();
+        if (! $order) {
+            return response()->json(['message' => 'Pedido no encontrado'], 404);
+        }
+        if ($order->status === 'done') {
             return response()->json([
                 'message' => 'El pedido está finalizado. Reabrilo antes de eliminarlo.',
             ], 409);
         }
 
-        $order = Order::with(['tickets.photos'])->findOrFail($id);
+        $order->load(['tickets.photos']);
 
         // Delete storage files for all OrderTicketPhoto records
         foreach ($order->tickets as $ticket) {
@@ -176,5 +186,6 @@ class StorageController extends Controller
             'deleted' => true,
             'code' => $code,
         ]);
+        });
     }
 }

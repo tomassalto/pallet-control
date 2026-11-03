@@ -38,24 +38,32 @@ class TicketOcrService
             return false;
         }
 
-        $log = function (string $msg) use ($photo, $logCallback, $orderId, &$orderFinalized): void {
+        $log = function (string $msg) use ($photo, $logCallback, &$orderFinalized): void {
             $line = '[' . date('H:i:s') . '] ' . $msg;
             Log::info('OCR LOG | ' . $msg);
-            // Append al ocr_log en BD para que el frontend pueda hacer polling.
-            // Cada escritura relee el estado del pedido bajo lock: si el
-            // pedido finalizó durante el OCR, nada más se escribe.
+            // Append al ocr_log en BD para que el frontend pueda hacer
+            // polling. Lock del pedido y escritura en la misma
+            // transacción: si finalizó, no se escribe nada.
             if ($orderFinalized) {
                 return;
             }
-            if ($orderId !== null && ! $this->orderIsWritable($orderId)) {
+
+            $written = $this->writePhotoWhileOrderOpen(
+                $photo,
+                function (OrderTicketPhoto $locked) use ($line): void {
+                    $current = $locked->getRawOriginal('ocr_log') ?? '';
+                    $locked->ocr_log = $current === '' ? $line : $current . "\n" . $line;
+                    $locked->saveQuietly();
+                },
+            );
+
+            if (! $written) {
                 $orderFinalized = true;
-                Log::info("OCR abortado a mitad de proceso: el pedido {$orderId} está finalizado.");
+                Log::info('OCR abortado a mitad de proceso: el pedido está finalizado.');
 
                 return;
             }
-            $current = $photo->getRawOriginal('ocr_log') ?? '';
-            $photo->ocr_log = $current === '' ? $line : $current . "\n" . $line;
-            $photo->saveQuietly();
+
             if ($logCallback) {
                 $logCallback($line);
             }
@@ -80,7 +88,10 @@ class TicketOcrService
         if (! file_exists($imagePath)) {
             $log('ERROR: imagen no encontrada en disco. Abortando.');
             if (! $orderFinalized) {
-                $photo->update(['ocr_processed_at' => now()]);
+                $this->writePhotoWhileOrderOpen(
+                    $photo,
+                    fn (OrderTicketPhoto $locked) => $locked->update(['ocr_processed_at' => now()]),
+                );
             }
             if ($tempOcrFile && file_exists($tempOcrFile)) {
                 @unlink($tempOcrFile);
@@ -108,9 +119,9 @@ class TicketOcrService
             }
         }
 
-        // Última escritura: relee el estado del pedido bajo lock. Si
-        // finalizó durante el OCR, el resultado se descarta.
-        if ($orderFinalized || ($orderId !== null && ! $this->orderIsWritable($orderId))) {
+        // Última escritura: lock del pedido y persistencia del resultado
+        // en la misma transacción. Si finalizó durante el OCR, se descarta.
+        if ($orderFinalized) {
             Log::info("Resultado de OCR descartado: el pedido {$orderId} está finalizado (foto {$photo->id}).");
 
             if ($tempOcrFile && file_exists($tempOcrFile)) {
@@ -121,11 +132,26 @@ class TicketOcrService
         }
 
         $log('Guardando resultado en BD...');
-        $photo->update([
-            'ocr_data' => $result,
-            'ocr_processed_at' => now(),
-            'ocr_log' => $photo->ocr_log,
-        ]);
+        $persisted = $this->writePhotoWhileOrderOpen(
+            $photo,
+            function (OrderTicketPhoto $locked) use ($photo, $result): void {
+                $locked->update([
+                    'ocr_data' => $result,
+                    'ocr_processed_at' => now(),
+                    'ocr_log' => $photo->ocr_log,
+                ]);
+            },
+        );
+
+        if (! $persisted) {
+            Log::info("Resultado de OCR descartado: el pedido {$orderId} está finalizado (foto {$photo->id}).");
+
+            if ($tempOcrFile && file_exists($tempOcrFile)) {
+                @unlink($tempOcrFile);
+            }
+
+            return false;
+        }
         $log('Listo.');
 
         // Limpiar archivo temporal si se creó para R2
@@ -138,14 +164,42 @@ class TicketOcrService
 
     /**
      * Relee el estado del pedido bajo FOR SHARE en una transacción
-     * corta: serializa contra el FOR UPDATE de finalize/reopen, así un
-     * OCR en vuelo no escribe nada después del commit de finalización.
+     * corta: serializa contra el FOR UPDATE de finalize/reopen.
+     * Sólo se usa como salida temprana; ninguna escritura depende de ella.
      */
     private function orderIsWritable(int $orderId): bool
     {
         return DB::transaction(
             fn (): bool => ! is_array($this->finalizationService->lockOrderForWrite($orderId))
         );
+    }
+
+    /**
+     * Único camino de escritura del flujo OCR. En una sola transacción:
+     * bloquea el pedido FOR SHARE, relee su estado, bloquea la foto
+     * FOR UPDATE y ejecuta la escritura antes de liberar los locks.
+     * Devuelve false si el pedido está finalizado o la foto ya no existe.
+     */
+    public function writePhotoWhileOrderOpen(OrderTicketPhoto $photo, callable $write): bool
+    {
+        $orderId = $photo->ticket?->order_id;
+
+        return DB::transaction(function () use ($photo, $write, $orderId): bool {
+            if ($orderId !== null
+                && is_array($this->finalizationService->lockOrderForWrite($orderId))) {
+                return false;
+            }
+
+            $locked = OrderTicketPhoto::query()->lockForUpdate()->find($photo->id);
+            if (! $locked) {
+                return false;
+            }
+
+            $write($locked);
+            $photo->setRawAttributes($locked->getAttributes(), true);
+
+            return true;
+        });
     }
 
     /**

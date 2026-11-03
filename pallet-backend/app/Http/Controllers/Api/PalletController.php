@@ -13,6 +13,7 @@ use App\Services\OrderPalletAssociationService;
 use App\Services\OrderService;
 use App\Services\PalletService;
 use App\Services\StorageCleanupService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -310,7 +311,7 @@ class PalletController extends Controller
             $this->storageCleanup->scheduleDeletion($paths, 'pallet_deleted');
         });
 
-        if ($result instanceof \Illuminate\Http\JsonResponse) {
+        if ($result instanceof JsonResponse) {
             return $result;
         }
 

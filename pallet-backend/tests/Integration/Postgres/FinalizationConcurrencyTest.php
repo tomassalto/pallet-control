@@ -4,6 +4,8 @@ namespace Tests\Integration\Postgres;
 
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderTicket;
+use App\Models\OrderTicketPhoto;
 use App\Models\Pallet;
 use App\Models\PalletBase;
 use App\Models\PalletBasePhoto;
@@ -11,6 +13,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Group;
+use Symfony\Component\Process\Process;
 use Tests\Integration\Postgres\Concerns\RunsConcurrentRequests;
 use Tests\TestCase;
 
@@ -177,7 +180,7 @@ class FinalizationConcurrencyTest extends TestCase
     }
 
     // ───────────────────────────────────────────────────────────
-    // 2. finalize vs DELETE de foto de base (quedan 1 foto)
+    // 2. finalize vs DELETE de foto de base (inmutabilidad D-031)
     // ───────────────────────────────────────────────────────────
 
     public function test_finalize_de_pallet_vs_delete_foto_de_base(): void
@@ -199,23 +202,26 @@ class FinalizationConcurrencyTest extends TestCase
             $finalizeStatus = $responses[0]['status'];
             $deleteStatus = $responses[1]['status'];
 
-            if ($deleteStatus === 200 && $finalizeStatus === 409) {
-                // El delete ganó: sin 2 fotos el pallet ya no cumple.
-                $this->assertSame('open', $pallet->fresh()->status);
+            $pallet->refresh();
+            if ($pallet->status === 'done') {
+                // Ganó el finalize: el delete quedó rechazado y la foto
+                // permanece — ningún escritor confirma después del commit.
+                $this->assertSame(200, $finalizeStatus, json_encode($responses, JSON_PRETTY_PRINT));
+                $this->assertSame(409, $deleteStatus, json_encode($responses, JSON_PRETTY_PRINT));
+                $this->assertSame(2, PalletBasePhoto::query()
+                    ->whereIn('base_id', [$baseA->id, $baseB->id])->count());
+                $this->assertNotNull($photoA->fresh());
+                $this->assertNull(DB::table('activity_logs')
+                    ->where('action', 'base_photo_deleted')->where('pallet_id', $pallet->id)->value('id'));
+            } else {
+                // Ganó el delete: la foto se borró y el finalize reevaluó
+                // (sin 2 fotos el pallet no cumple y queda abierto).
+                $this->assertSame(200, $deleteStatus, json_encode($responses, JSON_PRETTY_PRINT));
+                $this->assertSame('open', $pallet->status);
                 $this->assertSame(1, PalletBasePhoto::query()
                     ->whereIn('base_id', [$baseA->id, $baseB->id])->count());
-            } else {
-                // Ganó el finalize: ambos 200 y su log precede al de la foto.
-                $this->assertSame(200, $finalizeStatus, json_encode($responses, JSON_PRETTY_PRINT));
-                $this->assertSame('done', $pallet->fresh()->status);
-
-                $finalizeLog = DB::table('activity_logs')
-                    ->where('action', 'pallet_finalized')->where('entity_id', $pallet->id)->value('id');
-                $deleteLog = DB::table('activity_logs')
-                    ->where('action', 'base_photo_deleted')->where('pallet_id', $pallet->id)->value('id');
-                $this->assertNotNull($finalizeLog);
-                $this->assertNotNull($deleteLog);
-                $this->assertLessThan($deleteLog, $finalizeLog);
+                $this->assertNull(DB::table('activity_logs')
+                    ->where('action', 'pallet_finalized')->where('entity_id', $pallet->id)->value('id'));
             }
         }
     }
@@ -251,24 +257,25 @@ class FinalizationConcurrencyTest extends TestCase
             $finalizeLog = DB::table('activity_logs')
                 ->where('action', 'order_finalized')->where('entity_id', $order->id)->value('id');
 
-            if ($finalizeStatus === 409) {
-                // Ganó el patch: qty 12 > 10 asignadas, el pedido no cumple.
+            $order->refresh();
+            if ($order->status === 'done') {
+                // Ganó el finalize: el patch quedó rechazado y la
+                // cantidad original queda intacta — ningún escritor
+                // confirma después del commit de finalización.
+                $this->assertSame(200, $finalizeStatus, json_encode($responses, JSON_PRETTY_PRINT));
+                $this->assertSame(409, $patchStatus, json_encode($responses, JSON_PRETTY_PRINT));
+                $this->assertNotNull($finalizeLog);
+                $this->assertSame(10, (int) $item->fresh()->qty);
+                $this->assertNull(DB::table('activity_logs')
+                    ->where('action', 'item_quantity_changed')->where('entity_id', $item->id)->value('id'));
+            } else {
+                // Ganó el patch: qty 12 > 10 asignadas, el pedido no
+                // cumple y el finalize reevaluó con 409.
                 $this->assertSame(200, $patchStatus, json_encode($responses, JSON_PRETTY_PRINT));
-                $this->assertSame('open', $order->fresh()->status);
+                $this->assertSame(409, $finalizeStatus, json_encode($responses, JSON_PRETTY_PRINT));
+                $this->assertSame('open', $order->status);
                 $this->assertNull($finalizeLog);
                 $this->assertSame(12, (int) $item->fresh()->qty);
-            } else {
-                // Ganó el finalize: el patch después sube a 12 y ambos 200;
-                // el log del pedido precede al del ítem.
-                $this->assertSame(200, $finalizeStatus, json_encode($responses, JSON_PRETTY_PRINT));
-                $this->assertSame(200, $patchStatus, json_encode($responses, JSON_PRETTY_PRINT));
-                $this->assertSame('done', $order->fresh()->status);
-                $this->assertNotNull($finalizeLog);
-
-                $patchLog = DB::table('activity_logs')
-                    ->where('action', 'item_quantity_changed')->where('entity_id', $item->id)->value('id');
-                $this->assertNotNull($patchLog);
-                $this->assertLessThan($patchLog, $finalizeLog);
             }
         }
     }
@@ -419,6 +426,111 @@ class FinalizationConcurrencyTest extends TestCase
                 // coherente con exactamente un ganador por turno.
                 $this->assertSame(200, $responses[1]['status']);
             }
+        }
+    }
+
+    // ───────────────────────────────────────────────────────────
+    // 5d. finalize de pedido vs persistencia del OCR (D-031):
+    // la cola FIFO de locks de PostgreSQL deja ganar al finalize;
+    // la escritura del OCR debe descartarse bajo FOR SHARE.
+    // ───────────────────────────────────────────────────────────
+
+    /**
+     * Lanza el comando testing que invoca el camino real de escritura
+     * del OCR (writePhotoWhileOrderOpen) y devuelve el proceso.
+     */
+    private function startOcrPersist(int $photoId, bool $result): Process
+    {
+        $command = [PHP_BINARY, 'artisan', "test:ocr-persist", (string) $photoId];
+        if ($result) {
+            $command[] = '--result';
+        }
+        $process = new Process($command, base_path());
+        $process->setTimeout(30);
+        $process->start();
+        $this->processes[] = $process;
+
+        return $process;
+    }
+
+    private function orderConTicketOcr(): array
+    {
+        $order = Order::factory()->create();
+        $item = OrderItem::factory()->for($order)->create(['qty' => 10]);
+        $pallet = Pallet::factory()->create();
+        $order->pallets()->attach($pallet->id);
+        $base = PalletBase::factory()->for($pallet, 'pallet')->create();
+        $base->orderItems()->attach($item->id, ['qty' => 10]);
+
+        $ticket = OrderTicket::create(['order_id' => $order->id, 'code' => 'T-1']);
+        $photo = OrderTicketPhoto::create([
+            'ticket_id' => $ticket->id,
+            'path' => "orders/{$order->id}/tickets/{$ticket->id}/foto.webp",
+            'original_name' => 'foto.webp',
+        ]);
+
+        return [$order, $photo];
+    }
+
+    public function test_finalize_de_pedido_vs_persistencia_final_de_ocr(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $token = $this->token();
+            [$order, $photo] = $this->orderConTicketOcr();
+
+            $gate = $this->openGateLock('SELECT id FROM orders WHERE id = ? FOR UPDATE', $order->id);
+            [$multiHandle, $handles] = $this->startJsonRequests([
+                $this->request(self::PORT_A, 'POST', "/api/v1/orders/{$order->id}/finalize", $token),
+            ]);
+            $ocrProcess = $this->startOcrPersist($photo->id, result: true);
+
+            $this->waitForLockWaits(2, pump: $multiHandle);
+            $gate->commit();
+
+            $responses = $this->collectJsonResponses($multiHandle, $handles);
+            $ocrProcess->wait();
+            unset($gate);
+
+            $this->assertNo5xx($responses);
+            // El finalize confirmó primero (cola FIFO): el pedido queda
+            // done y la escritura del OCR se descartó — nunca persiste
+            // ocr_data sobre una entidad finalizada.
+            $this->assertSame(200, $responses[0]['status'], json_encode($responses, JSON_PRETTY_PRINT));
+            $this->assertSame('done', $order->fresh()->status);
+            $this->assertSame(1, $ocrProcess->getExitCode(), $ocrProcess->getOutput() . $ocrProcess->getErrorOutput());
+            $this->assertStringContainsString('discarded', $ocrProcess->getOutput());
+
+            $fresh = $photo->fresh();
+            $this->assertNull($fresh->ocr_data);
+            $this->assertNull($fresh->ocr_processed_at);
+        }
+    }
+
+    public function test_finalize_de_pedido_vs_persistencia_incremental_de_ocr(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $token = $this->token();
+            [$order, $photo] = $this->orderConTicketOcr();
+
+            $gate = $this->openGateLock('SELECT id FROM orders WHERE id = ? FOR UPDATE', $order->id);
+            [$multiHandle, $handles] = $this->startJsonRequests([
+                $this->request(self::PORT_A, 'POST', "/api/v1/orders/{$order->id}/finalize", $token),
+            ]);
+            $ocrProcess = $this->startOcrPersist($photo->id, result: false);
+
+            $this->waitForLockWaits(2, pump: $multiHandle);
+            $gate->commit();
+
+            $responses = $this->collectJsonResponses($multiHandle, $handles);
+            $ocrProcess->wait();
+            unset($gate);
+
+            $this->assertNo5xx($responses);
+            $this->assertSame(200, $responses[0]['status'], json_encode($responses, JSON_PRETTY_PRINT));
+            $this->assertSame('done', $order->fresh()->status);
+            $this->assertSame(1, $ocrProcess->getExitCode(), $ocrProcess->getOutput() . $ocrProcess->getErrorOutput());
+            $this->assertStringContainsString('discarded', $ocrProcess->getOutput());
+            $this->assertNull($photo->fresh()->ocr_log);
         }
     }
 

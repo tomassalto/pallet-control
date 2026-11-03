@@ -75,25 +75,25 @@ class PendingItemController extends Controller
                 return response()->json($lockedOrder['error'], $lockedOrder['status']);
             }
 
-        $pending = PendingItem::create([
-            ...$data,
-            'status' => 'pending',
-            'created_by' => $request->user()->id,
-        ]);
+            $pending = PendingItem::create([
+                ...$data,
+                'status' => 'pending',
+                'created_by' => $request->user()->id,
+            ]);
 
-        ActivityLogger::log(
-            action: 'pending_item_created',
-            entityType: 'pending_item',
-            entityId: $pending->id,
-            description: "Pendiente creado: {$orderItem->description} (faltan {$pending->qty_missing} unid.) — pedido #{$pending->order->code}",
-            newValues: ['order_id' => $pending->order_id, 'qty_missing' => $pending->qty_missing],
-            orderId: $pending->order_id,
-        );
+            ActivityLogger::log(
+                action: 'pending_item_created',
+                entityType: 'pending_item',
+                entityId: $pending->id,
+                description: "Pendiente creado: {$orderItem->description} (faltan {$pending->qty_missing} unid.) — pedido #{$pending->order->code}",
+                newValues: ['order_id' => $pending->order_id, 'qty_missing' => $pending->qty_missing],
+                orderId: $pending->order_id,
+            );
 
-        return response()->json(
-            $this->format($pending->load(['order', 'orderItem.product', 'creator'])),
-            201
-        );
+            return response()->json(
+                $this->format($pending->load(['order', 'orderItem.product', 'creator'])),
+                201
+            );
         });
     }
 
@@ -109,32 +109,32 @@ class PendingItemController extends Controller
                 return response()->json($lockedOrder['error'], $lockedOrder['status']);
             }
 
-        $wasResolved = $pendingItem->status === 'resolved';
+            $wasResolved = $pendingItem->status === 'resolved';
 
-        if (isset($data['status'])) {
-            if ($data['status'] === 'resolved' && ! $wasResolved) {
-                $data['resolved_at'] = now();
-                $data['resolved_by'] = $request->user()->id;
-            } elseif ($data['status'] === 'pending' && $wasResolved) {
-                $data['resolved_at'] = null;
-                $data['resolved_by'] = null;
+            if (isset($data['status'])) {
+                if ($data['status'] === 'resolved' && ! $wasResolved) {
+                    $data['resolved_at'] = now();
+                    $data['resolved_by'] = $request->user()->id;
+                } elseif ($data['status'] === 'pending' && $wasResolved) {
+                    $data['resolved_at'] = null;
+                    $data['resolved_by'] = null;
+                }
             }
-        }
 
-        $pendingItem->update($data);
+            $pendingItem->update($data);
 
-        ActivityLogger::log(
-            action: 'pending_item_updated',
-            entityType: 'pending_item',
-            entityId: $pendingItem->id,
-            description: "Pendiente actualizado: {$pendingItem->orderItem->description}",
-            newValues: $data,
-            orderId: $pendingItem->order_id,
-        );
+            ActivityLogger::log(
+                action: 'pending_item_updated',
+                entityType: 'pending_item',
+                entityId: $pendingItem->id,
+                description: "Pendiente actualizado: {$pendingItem->orderItem->description}",
+                newValues: $data,
+                orderId: $pendingItem->order_id,
+            );
 
-        return response()->json(
-            $this->format($pendingItem->load(['order', 'orderItem.product', 'creator', 'resolver']))
-        );
+            return response()->json(
+                $this->format($pendingItem->load(['order', 'orderItem.product', 'creator', 'resolver']))
+            );
         });
     }
 
@@ -148,22 +148,22 @@ class PendingItemController extends Controller
                 return response()->json($lockedOrder['error'], $lockedOrder['status']);
             }
 
-        $description = $pendingItem->orderItem->description;
-        $orderId = $pendingItem->order_id;
-        $qty = $pendingItem->qty_missing;
+            $description = $pendingItem->orderItem->description;
+            $orderId = $pendingItem->order_id;
+            $qty = $pendingItem->qty_missing;
 
-        ActivityLogger::log(
-            action: 'pending_item_deleted',
-            entityType: 'pending_item',
-            entityId: null,
-            description: "Pendiente eliminado: {$description} ({$qty} unid.)",
-            oldValues: ['qty_missing' => $qty],
-            orderId: $orderId,
-        );
+            ActivityLogger::log(
+                action: 'pending_item_deleted',
+                entityType: 'pending_item',
+                entityId: null,
+                description: "Pendiente eliminado: {$description} ({$qty} unid.)",
+                oldValues: ['qty_missing' => $qty],
+                orderId: $orderId,
+            );
 
-        $pendingItem->delete();
+            $pendingItem->delete();
 
-        return response()->json(['message' => 'Pendiente eliminado']);
+            return response()->json(['message' => 'Pendiente eliminado']);
         });
     }
 

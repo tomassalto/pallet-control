@@ -69,44 +69,44 @@ class PhotoAnnotationController extends Controller
             }
             PalletBase::query()->whereKey($base->id)->sharedLock()->first();
 
-        // Contar anotaciones existentes antes de eliminarlas
-        $existingCount = $photo->annotations()->count();
+            // Contar anotaciones existentes antes de eliminarlas
+            $existingCount = $photo->annotations()->count();
 
-        // Eliminar anotaciones existentes
-        $photo->annotations()->delete();
+            // Eliminar anotaciones existentes
+            $photo->annotations()->delete();
 
-        // Crear nuevas anotaciones
-        $created = [];
-        foreach ($data['annotations'] as $annotationData) {
-            $annotation = PhotoAnnotation::create([
-                'photo_id' => $photo->id,
-                'order_item_id' => $annotationData['orderItemId'] ?? null,
-                'text' => $annotationData['text'],
-                'x' => $annotationData['x'],
-                'y' => $annotationData['y'],
-                'font_size' => $annotationData['fontSize'] ?? 36,
-                'color' => $annotationData['color'] ?? '#ffffff',
-            ]);
-            $created[] = $annotation;
-        }
+            // Crear nuevas anotaciones
+            $created = [];
+            foreach ($data['annotations'] as $annotationData) {
+                $annotation = PhotoAnnotation::create([
+                    'photo_id' => $photo->id,
+                    'order_item_id' => $annotationData['orderItemId'] ?? null,
+                    'text' => $annotationData['text'],
+                    'x' => $annotationData['x'],
+                    'y' => $annotationData['y'],
+                    'font_size' => $annotationData['fontSize'] ?? 36,
+                    'color' => $annotationData['color'] ?? '#ffffff',
+                ]);
+                $created[] = $annotation;
+            }
 
-        $annotationsCount = count($created);
-        $baseName = $base->name ?? "Base #{$base->id}";
+            $annotationsCount = count($created);
+            $baseName = $base->name ?? "Base #{$base->id}";
 
-        ActivityLogger::log(
-            action: 'photo_annotations_saved',
-            entityType: 'photo_annotation',
-            entityId: $photo->id,
-            description: "Anotaciones guardadas en foto de la base '{$baseName}' del pallet '{$pallet->code}': {$annotationsCount} anotación(es)" . ($existingCount > 0 ? " (reemplazaron {$existingCount} anterior(es))" : ''),
-            palletId: $pallet->id,
-            oldValues: $existingCount > 0 ? ['annotations_count' => $existingCount] : null,
-            newValues: ['annotations_count' => $annotationsCount],
-        );
+            ActivityLogger::log(
+                action: 'photo_annotations_saved',
+                entityType: 'photo_annotation',
+                entityId: $photo->id,
+                description: "Anotaciones guardadas en foto de la base '{$baseName}' del pallet '{$pallet->code}': {$annotationsCount} anotación(es)" . ($existingCount > 0 ? " (reemplazaron {$existingCount} anterior(es))" : ''),
+                palletId: $pallet->id,
+                oldValues: $existingCount > 0 ? ['annotations_count' => $existingCount] : null,
+                newValues: ['annotations_count' => $annotationsCount],
+            );
 
-        return response()->json([
-            'message' => 'Anotaciones guardadas',
-            'annotations' => $created,
-        ], 201);
+            return response()->json([
+                'message' => 'Anotaciones guardadas',
+                'annotations' => $created,
+            ], 201);
         });
     }
 }
