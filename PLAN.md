@@ -101,7 +101,7 @@ Dentro de cada categoría, por severidad (`AUDITORIA.md` §3). El detalle de "qu
 | H-031 | Sin CI de ningún tipo | 🟢 bajo | Alto | ✅ sí |
 | H-020 | Controladores validan inline — 🟡 parcial: fotos (D-022), pendientes, solicitudes de faltantes y `attachPallet` migrados; quedan 12 con inventario en `AUDITORIA.md` | 🔴 alto (por familias) | Bajo | 🟡 parcial |
 | H-049 | Mensajes de validación devueltos como claves sin traducir (`validation.required`) | 🟢 bajo | Bajo | ❌ no (requiere decisión de texto) |
-| H-050 | Id no numérico en regla `exists` produce `500` en PostgreSQL — 🟡 resuelto para pendientes, solicitudes de faltantes y `attachPallet` (`bail`+`integer` antes de `exists`; en Laravel 12 la guarda del validador ya evitaba el 500 donde `integer` precede a `exists`); otras familias y route binding inventariados en `AUDITORIA.md` | 🟢 bajo | Medio | 🟡 parcial |
+| H-050 | Id no tipado en regla `exists` o route binding sobre `bigint` produce `500` en PostgreSQL — 🟡 resuelto para pendientes, solicitudes de faltantes y `attachPallet` (`bail`+`integer` antes de `exists`; en Laravel 12 la guarda del validador ya evitaba el 500 donde `integer` precede a `exists`); otras familias y route binding inventariados en `AUDITORIA.md` | 🟢 bajo | Medio | 🟡 parcial |
 | H-021 / H-022 / H-023 / H-027 | Códigos HTTP inconsistentes (401/403/409 vs 422/400) — ✅ resueltos (R-07, D-025) | 🟢 bajo c/u | Bajo | 🟡 parcial (CI puede flaggear, no decidir) |
 | H-024 | Formato de error no estandarizado — ✅ resuelto | 🟡 medio (depende de H-018) | Bajo | ❌ no |
 | H-041 | Larastan/PHPStan no instalado | 🟢 bajo | Medio | ✅ sí |
