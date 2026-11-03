@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Helpers\ActivityLogger;
 use App\Helpers\TelegramNotifier;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AttachPalletToOrderRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Models\ActivityLog;
 use App\Models\Customer;
@@ -252,11 +253,9 @@ class OrderController extends Controller
     }
 
     // POST /orders/{order}/attach-pallet { pallet_id: 123 }
-    public function attachPallet(Request $request, Order $order)
+    public function attachPallet(AttachPalletToOrderRequest $request, Order $order)
     {
-        $data = $request->validate([
-            'pallet_id' => ['required', 'integer', 'exists:pallets,id'],
-        ]);
+        $data = $request->validated();
 
         $pallet = Pallet::findOrFail($data['pallet_id']);
 
