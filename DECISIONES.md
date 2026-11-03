@@ -927,3 +927,30 @@ D-026 dejó como trade-off explícito que crear, actualizar o eliminar bases y f
 Todo escritor de una entidad potencialmente finalizada ejecuta una consulta de lock adicional y serializa contra una transición en vuelo. Una revisión de faltante sobre un pedido `done` queda en `pending_review` hasta reabrir. El OCR iniciado antes de la finalización pierde su resultado (queda sólo log técnico). La mutación `updateStatus` del frontend apuntaba a una ruta inexistente y se corrige a `/orders/{id}` y `/pallets/{id}`.
 
 **Referencia normativa:** `BE-TX`, `BE-VALID`, `BE-ERR`, `BE-API`, `BE-ARCH`, `SEC-LOG`, `SEC-AUTHZ`, `QA-INVARIANT`, `QA-CONTRACT`, `QA-RESILIENCE`, `DOMINIO.md`, `FE-MUTATION`
+
+---
+
+## D-032 — Los filtros con allowlist rechazan valores desconocidos con `422`
+
+**Fecha:** 2026-11-03
+**Estado:** ✅ vigente
+
+**Contexto**
+`GET /admin/missing-item-requests` leía `status` sin validar: un valor desconocido respondía `200` con una lista vacía, indistinguible de "no hay solicitudes" y capaz de ocultar un error del consumidor (typo, estado nuevo no contemplado).
+
+**Opciones evaluadas**
+| Opción | A favor | En contra |
+|---|---|---|
+| A — conservar lectura cruda | Cero cambio de contrato | Un filtro inválido simula una colección vacía; contradice `BE-VALID` |
+| B — allowlist con `422` | El error se ve como error; consistente con `IndexPendingItemsRequest` | Cambio deliberado de contrato (`200 []` → `422 validation.in`) |
+
+**Decisión**
+Los filtros con allowlist rechazan valores desconocidos con `422`. Alcance actual: `status` de `GET /admin/missing-item-requests` (`in:pending_review,approved,rejected`).
+
+**Por qué**
+Un `422` distingue entrada inválida de vacío real y reproduce el criterio ya aplicado al listado de pendientes, el único consumidor registrado.
+
+**Trade-off aceptado**
+Un consumidor que enviara un `status` fuera del allowlist pasaría de lista vacía a `422`. Evidencia: el único consumidor, `usePendingItemsPage`, no envía `status` en absoluto (consulta el listado completo) y trata cualquier `4xx` como error con toast, nunca como lista vacía; `RequestCard` sólo emite `approved`/`rejected` en el PATCH. Rollback trivial: retirar `in:` si apareciera un consumidor incompatible.
+
+**Referencia normativa:** `BE-VALID`, `BE-API`, `QA-CONTRACT`, `H-020`
