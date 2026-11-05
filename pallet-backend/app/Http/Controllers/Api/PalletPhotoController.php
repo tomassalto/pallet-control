@@ -83,7 +83,8 @@ class PalletPhotoController extends Controller
                 return response()->json($lockedPallet['error'], $lockedPallet['status']);
             }
 
-            $photo = $pallet->photos()->lockForUpdate()->find($photoId);
+            $photoId = PalletPhoto::normalizeRouteId($photoId);
+            $photo = $photoId === null ? null : $pallet->photos()->lockForUpdate()->find($photoId);
             if (! $photo) {
                 return response()->json(['message' => 'Foto no encontrada'], 404);
             }

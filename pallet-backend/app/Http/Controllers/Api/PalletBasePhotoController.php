@@ -25,7 +25,7 @@ class PalletBasePhotoController extends Controller
     public function store(Request $request, Pallet $pallet, $baseId)
     {
         // Resolver la base manualmente
-        $base = PalletBase::findOrFail($baseId);
+        $base = PalletBase::findOrFailRouteId($baseId);
 
         // Verificar que la base pertenece al pallet
         if ($base->pallet_id !== $pallet->id) {
@@ -84,7 +84,7 @@ class PalletBasePhotoController extends Controller
     public function destroy(Pallet $pallet, $baseId, $photoId)
     {
         // Resolver la base manualmente
-        $base = PalletBase::findOrFail($baseId);
+        $base = PalletBase::findOrFailRouteId($baseId);
 
         // Verificar que la base pertenece al pallet
         if ($base->pallet_id !== $pallet->id) {
@@ -102,7 +102,8 @@ class PalletBasePhotoController extends Controller
             }
             PalletBase::query()->whereKey($base->id)->sharedLock()->first();
 
-            $photo = $base->photos()->lockForUpdate()->find($photoId);
+            $photoId = PalletBasePhoto::normalizeRouteId($photoId);
+            $photo = $photoId === null ? null : $base->photos()->lockForUpdate()->find($photoId);
             if (! $photo) {
                 return response()->json(['message' => 'Foto no encontrada'], 404);
             }

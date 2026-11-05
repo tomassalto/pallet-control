@@ -6,6 +6,7 @@ use App\Helpers\ActivityLogger;
 use App\Http\Controllers\Controller;
 use App\Models\Pallet;
 use App\Models\PalletBase;
+use App\Models\PalletBasePhoto;
 use App\Models\PhotoAnnotation;
 use App\Services\FinalizationService;
 use Illuminate\Http\Request;
@@ -20,12 +21,13 @@ class PhotoAnnotationController extends Controller
     // GET /pallets/{pallet}/bases/{base}/photos/{photo}/annotations
     public function index(Pallet $pallet, $baseId, $photoId)
     {
-        $base = PalletBase::findOrFail($baseId);
+        $base = PalletBase::findOrFailRouteId($baseId);
         if ($base->pallet_id !== $pallet->id) {
             return response()->json(['message' => 'Base no encontrada'], 404);
         }
 
-        $photo = $base->photos()->find($photoId);
+        $photoId = PalletBasePhoto::normalizeRouteId($photoId);
+        $photo = $photoId === null ? null : $base->photos()->find($photoId);
         if (! $photo) {
             return response()->json(['message' => 'Foto no encontrada'], 404);
         }
@@ -40,12 +42,13 @@ class PhotoAnnotationController extends Controller
     // POST /pallets/{pallet}/bases/{base}/photos/{photo}/annotations
     public function store(Request $request, Pallet $pallet, $baseId, $photoId)
     {
-        $base = PalletBase::findOrFail($baseId);
+        $base = PalletBase::findOrFailRouteId($baseId);
         if ($base->pallet_id !== $pallet->id) {
             return response()->json(['message' => 'Base no encontrada'], 404);
         }
 
-        $photo = $base->photos()->find($photoId);
+        $photoId = PalletBasePhoto::normalizeRouteId($photoId);
+        $photo = $photoId === null ? null : $base->photos()->find($photoId);
         if (! $photo) {
             return response()->json(['message' => 'Foto no encontrada'], 404);
         }

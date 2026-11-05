@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RejectsInvalidIntegerRouteBindings;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
 class PalletPhoto extends Model
 {
+    use RejectsInvalidIntegerRouteBindings;
+
     protected $fillable = [
         'pallet_id',
         'path',
