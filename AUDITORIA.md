@@ -590,8 +590,8 @@ otro origen se cuente como `22P02`.
 
 | Parámetro | Destino / PK | Rutas | Resolución | Protección | Estado PostgreSQL |
 |---|---|---|---|---|---|
-| `{order}` | `Order` · orders · bigint | 18 (show, patch, attach/detach, activity-logs, can-finalize, finalize, reopen, tickets anidados, import, items) | implícito | ninguna | 🔴 vulnerable |
-| `{pallet}` | `Pallet` · pallets · bigint | 22 (show, patch, delete, activity-logs, can-finalize, finalize, reopen, attach-order, photos, bases anidadas, anotaciones) | implícito | ninguna | 🔴 vulnerable |
+| `{order}` | `Order` · orders · bigint | 18 (show, patch, attach/detach, activity-logs, can-finalize, finalize, reopen, tickets anidados, import, items) | implícito + trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404 | 🟢 protegido |
+| `{pallet}` | `Pallet` · pallets · bigint | 22 (show, patch, delete, activity-logs, can-finalize, finalize, reopen, attach-order, photos, bases anidadas, anotaciones, detach-pallet) | implícito + trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404 | 🟢 protegido |
 | `{customer}` | `Customer` · customers · bigint | 1 (GET show) | implícito | ninguna | 🔴 vulnerable |
 | `{item}` | `OrderItem` · order_items · bigint | 1 (PATCH order-items) | implícito | ninguna | 🔴 vulnerable |
 | `{ticket}` | `OrderTicket` · order_tickets · bigint | 6 (destroy, photos, ocr-status, highlights, trigger-ocr, destroyPhoto) | implícito, sin scope de padre | segmento sin protección; pertenencia al pedido verificada en controlador (404) | 🔴 vulnerable |
@@ -679,17 +679,59 @@ caracterizados en ambos contratos. En PostgreSQL las excepciones de clase 22
 `ModelNotFoundException` y las pruebas de no-consulta confirman que la PK
 bigint nunca se consulta con un segmento inválido.
 
+**Corrección (núcleo `{order}`/`{pallet}`, 2026-11-05, rama
+`hardening/order-pallet-bigint-bindings`, base `042fac7`):** se aplicó el
+mismo trait `RejectsInvalidIntegerRouteBindings` (D-033) a `Order` y
+`Pallet`, sin copiar `resolveRouteBinding` ni tocar el trait, controladores
+ni servicios. Las 40 rutas afectadas (18 con `{order}` + 22 con `{pallet}`,
+una compartida: `DELETE /orders/{order}/detach-pallet/{pallet}`) resuelven
+por binding implícito sobre la PK bigint y quedan cubiertas por la guarda:
+un segmento que no es entero ≥ 0 dentro del rango devuelve `null` →
+`ModelNotFoundException` → `404` dentro de `SubstituteBindings`, antes de
+emitir la consulta por PK. `{order}` precede a `{ticket}`/`{photo}` en las
+rutas anidadas y `{pallet}` precede a `{base}`: un padre inválido corta
+antes de intentar los bindings hijos, que siguen sin protección (deuda).
+Las resoluciones manuales `{base}`/`{photo}` de fotos y anotaciones no se
+ven afectadas: reciben ids válidos o escalares y conservan su forma de
+defecto.
+
+Contrato fijado en ambos motores
+(`tests/Feature/Routing/OrderPalletRouteBindingContractTest.php` — 14
+tests/550 assertions en SQLite — y su espejo
+`tests/Integration/Postgres/OrderPalletRouteBindingContractTest.php`,
+grupo `postgres` — 6 tests/439 assertions): las 18 rutas `{order}` y las
+22 `{pallet}` se ejercitaron con segmentos inválidos
+(`abc`, `12abc`, `1.5`, `-1`, `01`, overflow) → `404` **sin emitir la
+consulta por PK** (probado con `DB::listen` sobre `orders`/`pallets` y,
+en rutas anidadas, sobre `order_tickets`/`order_ticket_photos`/
+`pallet_bases`); numérico inexistente → `404` con la consulta emitida;
+válido → flujo normal (show, PATCH de estado, tickets, attach/detach,
+items, import hasta validación, finalize/reopen, bases, photos,
+attach-order, DELETE). La precedencia quedó acreditada: anónimo `401`,
+inactivo `404`/`401`, sin-rol `404`/`403`, binding antes del Form Request
+(`404` con payload inválido) y entidad `done` `409` sólo después de
+resolver el binding. Un test estructural inventaría las rutas: exige 18
+`{order}` + 22 `{pallet}`, el type-hint `Order`/`Pallet` en cada acción y
+el trait en ambos modelos — una ruta futura que escape del binding
+esperado lo rompe. En PostgreSQL las excepciones de clase 22
+(`22P02`/`22003`) desaparecieron para esta familia: `excepcionDe` acredita
+`ModelNotFoundException` y las pruebas de no-consulta confirman que la PK
+bigint nunca se consulta con un segmento inválido. Los casos de
+`{order}`/`{pallet}` de `BigintRouteBindingCharacterizationTest` (SQLite y
+`postgres`) pasaron a contrato 404 y la caracterización quedó sólo con
+las familias todavía vulnerables.
+
 **Estado:** 🟡 parcial. Cerradas: las reglas `exists` no tipadas de pendientes y
 solicitudes de faltantes (`bail` + `integer`) y los bindings de `{pendingItem}`,
-`{user}` y `{missingItemRequest}` con el trait común
-`RejectsInvalidIntegerRouteBindings` (`2f2a502`/`911a041` pendientes;
-familia admin en `hardening/admin-bigint-route-bindings`, D-033). Abiertas: 7
-bindings implícitos sobre bigint sin protección — `{order}` (18 rutas),
-`{pallet}` (22), `{ticket}` (6), `{photo}` de tickets (4), `{base}` de
-PalletBaseController (4), `{customer}` (1), `{item}` (1) — las resoluciones
-manuales de `{base}`/`{photo}` en fotos y anotaciones, y el `{id}` int de
-admin storage (`TypeError` en ambos motores); el trabajo por familias sigue
-bajo H-020 con evidencia del grupo `postgres` en Actions run `41965294771`.
+`{user}`, `{missingItemRequest}` y el núcleo `{order}`/`{pallet}` con el trait
+común `RejectsInvalidIntegerRouteBindings` (`2f2a502`/`911a041` pendientes;
+familias admin y order/pallet en `hardening/*-bigint-route-bindings`, D-033).
+Abiertas: 5 bindings implícitos sobre bigint sin protección — `{ticket}` (6
+rutas), `{photo}` de tickets (4), `{base}` de PalletBaseController (4),
+`{customer}` (1), `{item}` (1) — las resoluciones manuales de
+`{base}`/`{photo}` en fotos y anotaciones, y el `{id}` int de admin storage
+(`TypeError` en ambos motores); el trabajo por familias sigue bajo H-020
+con evidencia del grupo `postgres` en Actions run `41965294771`.
 
 #### H-051 — El service worker persistía respuestas autenticadas y evidencia privada entre sesiones
 ```
