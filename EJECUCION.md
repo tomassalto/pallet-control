@@ -588,7 +588,22 @@ Corrección del gate PostgreSQL (run 41585098217 falló): `test_finalize_de_pedi
 
 Evidencia CI: Actions run `41587490864` sobre `3388488` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
-## Última sesión cerrada — advisories Symfony del 2026-11-04 (H-042)
+## Última sesión cerrada — inventario de route bindings bigint (H-050)
+
+Rama `audit/bigint-route-bindings`, creada desde `origin/security/symfony-advisories-2026-11-04` (`734af12`, verificado como HEAD de la base con working tree limpio). Se aplicaron `BE-API`, `BE-ERR`, `BE-DATA`, `BE-VALID`, `SEC-INPUT`, `SEC-AUTHZ`, `SEC-LOG`, `QA-CONTRACT`, `QA-RISK`, `QA-DATA`, `QA-GATE`, `BIBLIAS-GOBERNANZA.md` y D-031. Alcance: sólo auditoría y caracterización — dos suites nuevas, trigger `audit/**` en el workflow y documentación. Sin solución transversal, sin `whereNumber()` masivo, sin modelos tocados, sin avance de H-020 y sin frontend.
+
+1. Inventario: 17 parámetros dinámicos en `routes/api.php` clasificados en binding implícito sobre bigint (`{order}` ×18 rutas, `{pallet}` ×22, `{customer}`, `{item}`, `{ticket}` ×6, `{photo}` tickets ×4, `{base}` ×4, `{user}` ×2, `{missingItemRequest}`), resolución manual sobre bigint (`{base}` ×4, `{photo}` ×4 en fotos de pallet/base y anotaciones), `{pendingItem}` ya protegido con `resolveRouteBinding`, `{id}` de admin storage con type-hint `int`, `{id}` de `/auth/verify` (método inexistente), `{token}` con regex y `{ean}` escalar. Matriz completa en `AUDITORIA.md` H-050.
+2. Caracterización SQLite (`tests/Feature/Routing/BigintRouteBindingCharacterizationTest.php`, 16 tests/122 assertions): todo segmento no numérico (`abc`, `12abc`, `-1`, `1.5`, overflow) devuelve `404` en bindings implícitos y resoluciones manuales — la comparación `id = 'abc'` simplemente no encuentra fila. Registrado como divergencia, no como evidencia de seguridad.
+3. Caracterización PostgreSQL (`tests/Integration/Postgres/BigintRouteBindingCharacterizationTest.php`, grupo `postgres`): cada caso captura la excepción real sin handler (`QueryException` SQLSTATE `22P02`/`22003` para bindings y resoluciones manuales, `TypeError` para el `int $id`, `Error` para la ruta muerta, `ModelNotFoundException` para `-1` e ids inexistentes) y luego acredita el `500` genérico con `error_id` — ningún `500` ajeno se cuenta como `22P02`. Nominados para reemplazo por tests de contrato 404 durante la corrección.
+4. Precedencia medida: `auth:sanctum` (401) → binding (404/500) → `user.active` (401) → `has.role`/`admin` (403) → Form Request. Anónimo recibe 401 antes del binding; inactivo, sin-rol y no-admin reciben el resultado del binding antes que su 401/403. Por eso `whereNumber()` queda descartado para rutas autenticadas (convertiría el 401 en 404 en el matching).
+5. Pertenencia de anidados: Laravel resuelve hijos por id global; controladores/servicios verifican padre y responden `404` — ningún hijo ajeno se opera como propio. Sin hallazgo de ownership.
+6. Hallazgos nuevos: `{id}` int de admin storage devuelve `500` por `TypeError` en **ambos** motores (variante PHP del defecto, no depende de PostgreSQL) y las rutas `/auth/verify/{id}` + `/auth/email/resend` apuntan a métodos inexistentes → nuevo hallazgo H-052. H-050 pasa de cerrado a **parcial** en `AUDITORIA.md`/`PLAN.md` con la matriz separando protegido/vulnerable/no aplica; el plan de corrección por familias y las alternativas (resolución por modelo, binding explícito, mecanismo común, `whereNumber`) quedan registrados sin elegir arquitectura.
+7. Corrección documental menor: la evaluación de alcanzabilidad de H-042 decía "ninguna" superficie Symfony era ejercida; corregido a "la mayoría no se alcanzaba directamente" con `Request::getBaseUrl()` sí alcanzable por request, mitigado por proxy y ya parchado. Sin tocar el cierre ni la evidencia.
+8. Gates locales (PHP 8.4.24, Composer 2.10.2): `pint --test` verde, PHPStan 89 archivos sin errores ni baseline nuevo, suite SQLite completa 394 tests/1601 assertions (2 skips preexistentes de benchmark), `composer audit` → 0 advisories. Grupo `postgres` y build de imagen no corren en esta estación (sin servidor PG ni Docker); los acredita CI.
+
+Commits: `6c3e886` (inventario y tests de caracterización + trigger `audit/**`), documentación y plan de corrección, y evidencia CI en los siguientes. Actions run: ver entrada de evidencia más abajo.
+
+## Sesión anterior — advisories Symfony del 2026-11-04 (H-042)
 
 Rama `security/symfony-advisories-2026-11-04`, creada desde `origin/hardening/pending-item-route-binding` (`7ccd2e0`, verificado como HEAD de la base con working tree limpio). Se aplicaron `DO-SUPPLY`, `DO-CI`, `DO-GATE`, `SEC-SUPPLY`, `SEC-GATE`, `QA-SEC`, `QA-RISK`, `QA-GATE`, `BE-GATE` y D-004/D-029 como precedentes (aquí hubo parche directo: no aplicó excepción). Alcance: sólo `pallet-backend/composer.lock` y documentación; sin cambios de código, constraints ni frontend.
 
@@ -647,7 +662,7 @@ Pendiente: resto del inventario de H-020 (12 controladores + listados) y de H-05
 
 ## Próxima sesión
 
-Sin bloque autónomo asignado. Candidatos: perfilado de `GET /api/v1/orders` (hot path del baseline 2026-11-02), `GAP-RETENTION` (requiere decisión de negocio), retiro de los overrides de `D-029` cuando upstream fije rangos parcheados, siguiente familia de H-020 (con el inventario restante de H-050), H-049 y política H-009.
+Sin bloque autónomo asignado. Candidatos: corrección de la familia 1 de bindings bigint (admin: `{user}`, `{missingItemRequest}`) con el mecanismo elegido en la revisión del plan de H-050, perfilado de `GET /api/v1/orders` (hot path del baseline 2026-11-02), `GAP-RETENTION` (requiere decisión de negocio), retiro de los overrides de `D-029` cuando upstream fije rangos parcheados, siguiente familia de H-020, H-052 (implementar o retirar las rutas de verificación), H-049 y política H-009.
 
 ## Sesiones R-02 a R-07
 

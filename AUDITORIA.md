@@ -425,13 +425,15 @@ de `symfony/symfony`; los parches están en 5.4.56/6.4.50/7.4.23/8.1.11 según c
 | GHSA-6prc-h956-hxjq | symfony/filesystem | 8.1.5 | 8.1.11 | cualquier prefijo antes de `://` tratado como raíz, paths podían escapar de su base | llega por `aws/aws-sdk-php` (cliente R2 en producción); las rutas de upload pasan por `league/flysystem` y validación propia, no por `Path::isAbsolute` con input externo |
 | CVE-2026-118516 | symfony/routing | 7.4.22 | 7.4.23 | host placeholders en matchers compilados podían matchear el inicio del path, bypasseando control de acceso por path | Laravel usa su propio router; `symfony/routing` es dependencia transitiva declarada por `laravel/framework` pero no despacha requests |
 
-Evaluación de alcanzabilidad: ninguna superficie vulnerable es ejercida por el código de
-la aplicación — los advisories pegan en componentes Symfony que Laravel no usa para
-seguridad de requests (firewall, fragments, matchers compilados), en una dependencia
-sólo-dev (`yaml`/`sail`) o en paths que no reciben input externo (`filesystem` vía SDK).
-`GHSA-5mx8-mwrp-5693` (`getBaseUrl`) sí corre en cada request, pero el host lo fija el
-proxy; se parchó igual porque existía versión compatible, como exige `DO-SUPPLY`
-(la alcanzabilidad informa prioridad, no excusa el audit rojo).
+Evaluación de alcanzabilidad: la mayoría de las superficies vulnerables no se alcanzaban
+directamente desde el código de la aplicación — los advisories pegan en componentes
+Symfony que Laravel no usa para seguridad de requests (firewall, fragments, matchers
+compilados), en una dependencia sólo-dev (`yaml`/`sail`) o en paths que no reciben input
+externo (`filesystem` vía SDK). La excepción es `GHSA-5mx8-mwrp-5693`:
+`Request::getBaseUrl()` sí se ejecuta en cada request Laravel, aunque el host real lo
+fija el proxy de OnRender (mitigación de despliegue) y la versión instalada ya incluye
+el parche. Se parchó todo igual porque existía versión compatible, como exige
+`DO-SUPPLY` (la alcanzabilidad informa prioridad, no excusa el audit rojo).
 
 Comando: `composer update symfony/http-foundation symfony/http-kernel symfony/routing
 symfony/filesystem symfony/yaml` → 5 updates, 0 installs, 0 removals, 0 paquetes
@@ -567,8 +569,85 @@ Origen:      caracterización de H-020 (pendientes)
 
 **Resolución (route binding de pendientes):** `PATCH`/`DELETE /pending-items/{pendingItem}` resolvían el segmento con el binding implícito, que consultaba `id = 'abc'` y producía `500` `22P02` en PostgreSQL (acreditado antes del cambio; SQLite ya devolvía `404`). `PendingItem::resolveRouteBinding` ahora devuelve `null` para cualquier segmento que no sea un entero no negativo dentro del rango bigint (`filter_var` + `min_range: 0`), antes de la comparación; el framework emite el `404` estándar del binding (`ModelNotFoundException`), en el mismo punto de la precedencia vigente (`auth:sanctum` → binding → `user.active` → `has.role` → Form Request). Se descartó `whereNumber()` porque falla en el matching de la ruta, antes de todo middleware, y convertiría el `401` de anónimo/inactivo en `404`. Caracterización: 11 tests SQLite (43 assertions) congelaron precedencia y contrato; la evidencia PostgreSQL previa mostró `500` en PATCH y DELETE para `'abc'`; tras el fix `PendingItemRouteBindingTest` acredita `404` para `'abc'`, `'12abc'`, `'1.5'`, `'-1'` y overflow de bigint, más `404`/`200` sin cambios para ids inexistentes y válidos.
 
-**Inventario restante de la misma falla:** sin `500` real confirmado. Las reglas `exists` sin `bail` (`PhotoAnnotationController`, `AdjustPalletBaseItemRequest`, `MigratePalletBaseRequest`, `StoreOrderRequest`, `StorePalletBaseRequest`) tienen `integer` previo y están cubiertas por la guarda de Laravel 12; su uniformización de `bail` sigue bajo H-020. Otros bindings implícitos sobre `bigint` (`{order}`, `{pallet}`, `{item}`, etc.) comparten la misma forma de defecto — no verificados en este bloque; se cubren al migrar cada familia en H-020.
-**Estado:** ✅ resuelto en `2f2a502` (caracterización y evidencia del `500`) y `911a041` (corrección); todos los `500` `22P02` confirmados quedaron eliminados. Trabajo remanente homogéneo (`bail` uniforme y guardas de binding por familia) se trackea bajo H-020.
+**Inventario restante de la misma falla:** las reglas `exists` sin `bail` (`PhotoAnnotationController`, `AdjustPalletBaseItemRequest`, `MigratePalletBaseRequest`, `StoreOrderRequest`, `StorePalletBaseRequest`) tienen `integer` previo y están cubiertas por la guarda de Laravel 12; su uniformización de `bail` sigue bajo H-020. Los demás bindings implícitos sobre `bigint` quedaron como sospechosos no verificados hasta la auditoría dedicada que sigue.
+
+**Auditoría de bindings bigint (2026-11-05, rama `audit/bigint-route-bindings`, base `734af12`):**
+inventario completo de los parámetros dinámicos de `routes/api.php` con caracterización
+en ambos motores. Todas las PKs de negocio son `$table->id()` → `bigint`. El binding
+implícito corre en `SubstituteBindings` dentro de la precedencia vigente
+`auth:sanctum` (401) → binding (404/500) → `user.active` (401) → `has.role`/`admin`
+(403) → Form Request (422). En SQLite todo segmento no numérico responde 404 (la
+comparación `id = 'abc'` simplemente no encuentra fila); en PostgreSQL la misma
+comparación aborta con `SQLSTATE[22P02]` (`22003` en overflow de bigint) y el handler
+global devuelve el `500` genérico con `error_id`. Evidencia:
+`tests/Feature/Routing/BigintRouteBindingCharacterizationTest.php` (16 tests en
+SQLite — el 404 local **no** es evidencia de seguridad para PostgreSQL) y su espejo
+`tests/Integration/Postgres/BigintRouteBindingCharacterizationTest.php` (grupo
+`postgres`), que captura la excepción real antes del handler para que ningún `500` de
+otro origen se cuente como `22P02`.
+
+**Matriz de parámetros dinámicos (`routes/api.php`, 2026-11-05):**
+
+| Parámetro | Destino / PK | Rutas | Resolución | Protección | Estado PostgreSQL |
+|---|---|---|---|---|---|
+| `{order}` | `Order` · orders · bigint | 18 (show, patch, attach/detach, activity-logs, can-finalize, finalize, reopen, tickets anidados, import, items) | implícito | ninguna | 🔴 vulnerable |
+| `{pallet}` | `Pallet` · pallets · bigint | 22 (show, patch, delete, activity-logs, can-finalize, finalize, reopen, attach-order, photos, bases anidadas, anotaciones) | implícito | ninguna | 🔴 vulnerable |
+| `{customer}` | `Customer` · customers · bigint | 1 (GET show) | implícito | ninguna | 🔴 vulnerable |
+| `{item}` | `OrderItem` · order_items · bigint | 1 (PATCH order-items) | implícito | ninguna | 🔴 vulnerable |
+| `{ticket}` | `OrderTicket` · order_tickets · bigint | 6 (destroy, photos, ocr-status, highlights, trigger-ocr, destroyPhoto) | implícito, sin scope de padre | segmento sin protección; pertenencia al pedido verificada en controlador (404) | 🔴 vulnerable |
+| `{photo}` (tickets) | `OrderTicketPhoto` · bigint | 4 (ocr-status, highlights, trigger-ocr, destroyPhoto) | implícito | segmento sin protección; pertenencia verificada en controlador | 🔴 vulnerable |
+| `{base}` (PalletBaseController) | `PalletBase` · bigint | 4 (update, adjust-item, destroy, migrate) | implícito | segmento sin protección; pertenencia verificada en controlador/servicio | 🔴 vulnerable |
+| `{base}` (fotos/anotaciones) | `PalletBase::findOrFail($baseId)` | 4 (store/destroy foto de base, index/store anotaciones) | manual | ninguna | 🔴 vulnerable (misma forma de defecto) |
+| `{photo}` (pallet/base/anotaciones) | `->find($photoId)` manual | 4 (destroy foto pallet, destroy foto base, index/store anotaciones) | manual | ninguna | 🔴 vulnerable (misma forma de defecto) |
+| `{pendingItem}` | `PendingItem` · bigint | 2 (PATCH, DELETE) | implícito + `resolveRouteBinding` tipado | ✅ entero ≥ 0 o `null` → 404 | 🟢 protegido |
+| `{user}` | `User` · users · bigint | 2 (PATCH role, POST toggle-active) | implícito | ninguna | 🔴 vulnerable |
+| `{missingItemRequest}` | `MissingItemRequest` · bigint | 1 (PATCH review) | implícito | ninguna | 🔴 vulnerable |
+| `{id}` (admin storage) | `Pallet`/`Order` por `whereKey` | 2 (DELETE storage/pallets, storage/orders) | type-hint `int $id` | coerción PHP | 🟠 500 por `TypeError` en **ambos** motores |
+| `{id}` (`/auth/verify`) | — | 1 (GET verify) | método inexistente | — | ⚪ no aplica → H-052 |
+| `{token}` | `public_token` de Order | 2 (GET order público, POST missing-items) | escalar + `where('[A-Za-z0-9]{48}')` | ✅ regex de ruta | 🟢 protegido |
+| `{ean}` | `Product::where('ean')` | 1 (GET by-ean, público) | escalar saneado a dígitos | ✅ string, sin bigint | ⚪ no aplica |
+
+**Hallazgos de la caracterización:**
+- Precedencia: anónimo recibe `401` antes del binding; inactivo, sin-rol y no-admin
+  reciben el resultado del binding (`404` SQLite / `500` PostgreSQL) antes que su
+  `401`/`403`. `whereNumber()` movería ese corte al matching de ruta y convertiría
+  también el `401` de anónimo en `404` — mismo motivo por el que se descartó para
+  `{pendingItem}`.
+- Pertenencia: los hijos anidados se resuelven por id global (Laravel no scopea
+  bindings implícitos por defecto) y el controlador/servicio verifica el padre
+  (ticket↔order, photo↔ticket, base↔pallet) respondiendo `404`: ningún hijo ajeno se
+  opera como propio. Sin hallazgo de ownership.
+- Efectos secundarios: cero filas y cero `activity_logs` ante cualquier segmento
+  inválido; el `500` expone sólo el cuerpo genérico con `error_id` correlacionado.
+- `{id}` de admin storage produce `500` por `TypeError` en ambos motores — variante
+  PHP del mismo defecto, independiente del motor de base de datos.
+- `/auth/verify/{id}` y `/auth/email/resend` apuntan a métodos inexistentes de
+  `AuthController` (`500` por `Error`, independiente del motor): registrado como H-052.
+
+**Plan de corrección recomendado (inventario hecho; arquitectura por decidir):**
+- Familia 1 — admin: `{user}`, `{missingItemRequest}` (escrituras privilegiadas).
+- Familia 2 — núcleo anidado: `{order}`, `{pallet}`, `{ticket}`, `{photo}` de tickets.
+- Familia 3 — simples: `{customer}`, `{item}`, `{base}` implícito.
+- Familia 4 — resoluciones manuales `{base}`/`{photo}` (normalizar el segmento antes
+  de `findOrFail`/`find`, o migrarlas a bindings tipados al tocar cada familia de H-020).
+- Familia 5 — `{id}` de admin storage (`int` → normalización explícita o restricción).
+- Alternativas evaluadas: (a) `resolveRouteBinding` tipado por modelo — conserva la
+  precedencia y es el patrón ya probado en `PendingItem`, pero toca ~9 modelos;
+  (b) `Route::bind` explícito en un provider — efecto equivalente, centralizado fuera
+  del modelo; (c) mecanismo común reutilizable (trait o clase base con la regla
+  entero ≥ 0 compartida) — cubre todos los implícitos de una vez, pero no las
+  resoluciones manuales ni el `int $id`; (d) `whereNumber()` — cambia `401`/`403` a
+  `404` al fallar en matching de ruta: aceptable en rutas públicas, no en las
+  autenticadas. Candidata para implícitos: (c) implementado sobre (a)/(b) con un
+  contrato común; las manuales exigen normalización propia en cada punto.
+
+**Estado:** 🟡 parcial. Cerradas: las reglas `exists` no tipadas de pendientes y
+solicitudes de faltantes (`bail` + `integer`) y el binding de `{pendingItem}` con
+`resolveRouteBinding` tipado (`2f2a502` caracterización, `911a041` corrección).
+Abiertas: 9 bindings implícitos y 4 puntos de resolución manual confirmados con
+`500`/`22P02` en PostgreSQL por la matriz de arriba, el `{id}` int de admin storage
+(`TypeError`, ambos motores) y la uniformización de `bail` — todo el trabajo por
+familias sigue bajo H-020.
 
 #### H-051 — El service worker persistía respuestas autenticadas y evidencia privada entre sesiones
 ```
@@ -599,6 +678,23 @@ la primera versión ejecutaba la purga fire-and-forget (`void clearPrivateCaches
 
 **Evidencia:** inspección del `sw.js` anterior con las dos rutas y sus expiraciones vs. el nuevo sin ninguna y con `importScripts("sw-cleanup.js")`. 59 tests: unitarios de `clearPrivateCaches` (nombres exactos, cache ajena preservada, idempotencia, sin Cache API, fallos de `keys`/`delete`), de política sobre `pwa-workbox.config.js` y `vite.config.js`, de barrera con promesas diferidas (React no monta ni login/registro publican token/usuario antes de la purga; fallo de Cache API no bloquea el arranque), de `activate` evaluando `sw-cleanup.js` con `self`/`caches` falsos (borra exactamente las dos caches, preserva precache y ajenas, tolera Cache API rota), e integrados con `AuthProvider` (logout y `401` purgan además de token/usuario/queries). `scripts/verify-sw.mjs` falla el build de CI si `sw.js` contiene `api-cache`, `photos-cache`, `NetworkFirst`, `CacheFirst` o `api/v1`, si falta precache del shell, `manifest.webmanifest`, el `importScripts` de `sw-cleanup.js` o el propio archivo con `activate` y ambos nombres. Limitación: jsdom no ejecuta un service worker real; la limpieza en `activate` se acredita evaluando el script con el contrato del evento y verificando su inclusión en el artefacto, no por una corrida E2E del SW viejo → nuevo.
 **Estado:** ✅ resuelto en `0938c88` y la carrera corregida en `51b476d`; Actions run `41580895922` con `ci`, `postgres-concurrency` y `container-security` verdes.
+
+#### H-052 — Las rutas de verificación de email apuntan a métodos inexistentes
+```
+Severidad:   🟢 bajo · Categoría: calidad / contrato
+Ubicación:   routes/api.php — GET /auth/verify/{id} → AuthController::verifyEmail,
+             POST /auth/email/resend → AuthController::resendVerification
+Referencia:  `BE-API`, `BE-ERR`
+Origen:      inventario de bindings bigint (H-050, 2026-11-05)
+```
+**Qué está pasando:** ambas rutas están registradas pero `AuthController` no define
+`verifyEmail` ni `resendVerification`: cualquier request llega al dispatcher y produce
+`Error` ("undefined method") → `500` genérico en ambos motores, independiente del
+segmento. El frontend no consume estos endpoints (sin referencias en `src/`) y el
+primer usuario salta la verificación por diseño, así que hoy no hay flujo roto visible;
+la ruta nombrada `verification.verify` existe por si se habilita `MustVerifyEmail`.
+**Estado:** 🔲 abierto. Opciones: implementar los métodos (con el contrato de
+verificación de Laravel) o retirar ambas rutas junto con su `name()`.
 
 #### H-028 — `RESET_ON_STARTUP=true` borra toda la DB operativa
 ```
