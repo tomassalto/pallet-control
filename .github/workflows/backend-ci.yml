@@ -2,7 +2,7 @@ name: Backend CI
 
 on:
   push:
-    branches: [master, 'modernizacion/**', 'hardening/**', 'quality/**', 'security/**']
+    branches: [master, 'modernizacion/**', 'hardening/**', 'quality/**', 'security/**', 'audit/**']
   pull_request:
 
 defaults:
