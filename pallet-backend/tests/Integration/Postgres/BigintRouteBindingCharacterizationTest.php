@@ -34,9 +34,11 @@ use Throwable;
  * Familias ya corregidas con contrato propio (404, sin QueryException)
  * y fuera de esta caracterización: {pendingItem}
  * (`PendingItemRouteBindingTest`), la familia admin
- * {user}/{missingItemRequest} y el núcleo {order}/{pallet}
- * (`AdminRouteBindingContractTest` y `OrderPalletRouteBindingContractTest`,
- * trait `RejectsInvalidIntegerRouteBindings`).
+ * {user}/{missingItemRequest}, el núcleo {order}/{pallet} y
+ * {ticket}/{photo} de tickets (`AdminRouteBindingContractTest`,
+ * `OrderPalletRouteBindingContractTest` y
+ * `TicketPhotoRouteBindingContractTest`, trait
+ * `RejectsInvalidIntegerRouteBindings`).
  *
  * La captura con withoutExceptionHandling prueba el origen real de cada
  * 500 (QueryException con SQLSTATE de clase 22, o TypeError para el
@@ -145,14 +147,10 @@ class BigintRouteBindingCharacterizationTest extends TestCase
     {
         Sanctum::actingAs($this->usuario());
         $pallet = Pallet::factory()->create();
-        $order = Order::factory()->create();
-        $ticket = OrderTicket::create(['order_id' => $order->id, 'code' => 'T1']);
 
         $casos = [
             'PATCH order-items' => fn () => $this->patchJson('/api/v1/order-items/abc', ['qty' => 5]),
             'PATCH bases' => fn () => $this->patchJson("/api/v1/pallets/{$pallet->id}/bases/abc", ['name' => 'x']),
-            'DELETE tickets' => fn () => $this->deleteJson("/api/v1/orders/{$order->id}/tickets/abc"),
-            'GET ocr-status' => fn () => $this->getJson("/api/v1/orders/{$order->id}/tickets/{$ticket->id}/photos/abc/ocr-status"),
         ];
 
         foreach ($casos as $contexto => $request) {

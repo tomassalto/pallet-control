@@ -35,10 +35,11 @@ use Tests\TestCase;
  *
  * Familias ya corregidas con contrato propio y fuera de esta
  * caracterización: {pendingItem} (`PendingItemRouteBindingContractTest`),
- * la familia admin {user}/{missingItemRequest} y el núcleo {order}/
+ * la familia admin {user}/{missingItemRequest}, el núcleo {order}/
  * {pallet} (`AdminRouteBindingContractTest` y
- * `OrderPalletRouteBindingContractTest`, trait
- * `RejectsInvalidIntegerRouteBindings`). Ver AUDITORIA.md H-050.
+ * `OrderPalletRouteBindingContractTest`) y {ticket}/{photo} de tickets
+ * (`TicketPhotoRouteBindingContractTest`), todos vía el trait
+ * `RejectsInvalidIntegerRouteBindings` (D-033). Ver AUDITORIA.md H-050.
  */
 class BigintRouteBindingCharacterizationTest extends TestCase
 {
@@ -86,24 +87,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
             // StorePalletBaseRequest igual: gana el binding de {base}.
             $this->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$seg}", ['name' => 'x'])
                 ->assertNotFound("PATCH bases/{$seg}");
-        }
-
-        $this->assertDatabaseCount('activity_logs', 0);
-    }
-
-    #[Test]
-    public function binding_implicito_anidado_ticket_y_foto(): void
-    {
-        Sanctum::actingAs($this->usuario());
-        $order = Order::factory()->create();
-        $ticket = OrderTicket::create(['order_id' => $order->id, 'code' => 'T1']);
-
-        foreach (self::SEGMENTOS_INVALIDOS as $seg) {
-            $this->deleteJson("/api/v1/orders/{$order->id}/tickets/{$seg}")
-                ->assertNotFound("DELETE tickets/{$seg}");
-
-            $this->getJson("/api/v1/orders/{$order->id}/tickets/{$ticket->id}/photos/{$seg}/ocr-status")
-                ->assertNotFound("GET ocr-status photo/{$seg}");
         }
 
         $this->assertDatabaseCount('activity_logs', 0);
