@@ -645,9 +645,9 @@ otro origen se cuente como `22P02`.
 solicitudes de faltantes (`bail` + `integer`) y el binding de `{pendingItem}` con
 `resolveRouteBinding` tipado (`2f2a502` caracterización, `911a041` corrección).
 Abiertas: 9 bindings implícitos y 4 puntos de resolución manual confirmados con
-`500`/`22P02` en PostgreSQL por la matriz de arriba, el `{id}` int de admin storage
-(`TypeError`, ambos motores) y la uniformización de `bail` — todo el trabajo por
-familias sigue bajo H-020.
+`500`/`22P02` en PostgreSQL por la matriz de arriba (evidencia: grupo `postgres` en
+Actions run `41965294771`, verde), el `{id}` int de admin storage (`TypeError`, ambos
+motores) y la uniformización de `bail` — todo el trabajo por familias sigue bajo H-020.
 
 #### H-051 — El service worker persistía respuestas autenticadas y evidencia privada entre sesiones
 ```

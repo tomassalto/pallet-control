@@ -601,7 +601,7 @@ Rama `audit/bigint-route-bindings`, creada desde `origin/security/symfony-adviso
 7. Corrección documental menor: la evaluación de alcanzabilidad de H-042 decía "ninguna" superficie Symfony era ejercida; corregido a "la mayoría no se alcanzaba directamente" con `Request::getBaseUrl()` sí alcanzable por request, mitigado por proxy y ya parchado. Sin tocar el cierre ni la evidencia.
 8. Gates locales (PHP 8.4.24, Composer 2.10.2): `pint --test` verde, PHPStan 89 archivos sin errores ni baseline nuevo, suite SQLite completa 394 tests/1601 assertions (2 skips preexistentes de benchmark), `composer audit` → 0 advisories. Grupo `postgres` y build de imagen no corren en esta estación (sin servidor PG ni Docker); los acredita CI.
 
-Commits: `6c3e886` (inventario y tests de caracterización + trigger `audit/**`), documentación y plan de corrección, y evidencia CI en los siguientes. Actions run: ver entrada de evidencia más abajo.
+Commits: `6c3e886` (inventario y tests de caracterización + trigger `audit/**`), `744d3c0` (documentación, matriz H-050, plan de corrección y corrección H-042/H-052) y el de evidencia CI. Actions run `41965492370` sobre `744d3c0` con `ci`, `postgres-concurrency` y `container-security` verdes; el run `41965294771` sobre `6c3e886` también quedó verde en los tres jobs — allí el grupo `postgres` acreditó el `500`/`22P02` vigente en PostgreSQL 17 (los tests de caracterización afirman la excepción real y el cuerpo genérico).
 
 ## Sesión anterior — advisories Symfony del 2026-11-04 (H-042)
 
