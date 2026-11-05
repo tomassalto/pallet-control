@@ -406,6 +406,41 @@ Remediado con overrides acotados en `D-029`; antes: 2 bajos + 13 moderados, desp
 4 bajos, 0 moderados. No se aplicó `npm audit fix --force` (proponía un downgrade mayor
 de `vite-plugin-pwa`).
 
+**Actualización 2026-11-04 (rama `security/symfony-advisories-2026-11-04`, base `7ccd2e0`):**
+una ola de advisories Symfony publicada el 2026-11-04 dejó `composer audit` en rojo con
+8 advisories en 5 paquetes (`DO-SUPPLY`/`SEC-SUPPLY`). Se aplicó la actualización mínima
+compatible dentro de cada línea — `7.4.22 → 7.4.23` y `8.1.5`/`8.1.10 → 8.1.11` — sin
+cambios en `composer.json`, sin upgrades de major y sin ignores. Fuentes oficiales:
+`symfony.com/blog/symfony-7-4-23-released` (2026-11-04) y el changelog `v8.1.10...v8.1.11`
+de `symfony/symfony`; los parches están en 5.4.56/6.4.50/7.4.23/8.1.11 según cada rama.
+
+| Advisory | Paquete | Antes | Después | Superficie vulnerable | Alcance en el proyecto |
+|---|---|---|---|---|---|
+| GHSA-hwfg-qwvh-2wfx | symfony/yaml | 8.1.10 | 8.1.11 | tiempos de parseo exponenciales/cuadráticos; decodificación CSV/YAML en HttpKernel sin `acceptFormat` | `symfony/yaml` sólo llega por `laravel/sail` (`require-dev`, fuera de la imagen `--no-dev`); la app no usa `#[MapRequestPayload]` ni formatos YAML |
+| GHSA-wg5q-m2ww-f3c9 | symfony/http-kernel | 7.4.22 | 7.4.23 | fragmentos inline (ESI/HInclude) + headers `Forwarded-*` no confiables en el request principal | Laravel no usa el fragment renderer de Symfony; no hay `_fragment` ni ESI configurado |
+| GHSA-xg2q-4rrq-657q | symfony/http-foundation | 7.4.22 | 7.4.23 | el shortcut `private_ranges` de trusted proxies aceptaba IPv4-mapped/6to4/Teredo/NAT64 como proxies | `TrustProxies` de Laravel nunca pasa el shortcut: usa IPs explícitas o `*`→`REMOTE_ADDR`; la app no configura `trustProxies()` |
+| CVE-2026-118514 | symfony/http-foundation | 7.4.22 | 7.4.23 | `MethodRequestMatcher` (HEAD bypassea `methods` de access_control) — fix incompleto de CVE-2026-45075 | `symfony/security-http` no está instalado; el matcher es del firewall Symfony, no del router de Laravel |
+| GHSA-3h27-hjv7-fqjx | symfony/http-foundation | 7.4.22 | 7.4.23 | path rules frente a PHP bypasseables agregando el path al script name | idem: feature del firewall Symfony Security, sin equivalente en Laravel |
+| GHSA-5mx8-mwrp-5693 | symfony/http-foundation | 7.4.22 | 7.4.23 | URLs generadas podían apuntar a un host elegido por el cliente (`Request::getBaseUrl()`) | código alcanzable — todo request Laravel lo ejecuta — pero el host real lo fija el proxy de OnRender; corregido de todas formas |
+| GHSA-6prc-h956-hxjq | symfony/filesystem | 8.1.5 | 8.1.11 | cualquier prefijo antes de `://` tratado como raíz, paths podían escapar de su base | llega por `aws/aws-sdk-php` (cliente R2 en producción); las rutas de upload pasan por `league/flysystem` y validación propia, no por `Path::isAbsolute` con input externo |
+| CVE-2026-118516 | symfony/routing | 7.4.22 | 7.4.23 | host placeholders en matchers compilados podían matchear el inicio del path, bypasseando control de acceso por path | Laravel usa su propio router; `symfony/routing` es dependencia transitiva declarada por `laravel/framework` pero no despacha requests |
+
+Evaluación de alcanzabilidad: ninguna superficie vulnerable es ejercida por el código de
+la aplicación — los advisories pegan en componentes Symfony que Laravel no usa para
+seguridad de requests (firewall, fragments, matchers compilados), en una dependencia
+sólo-dev (`yaml`/`sail`) o en paths que no reciben input externo (`filesystem` vía SDK).
+`GHSA-5mx8-mwrp-5693` (`getBaseUrl`) sí corre en cada request, pero el host lo fija el
+proxy; se parchó igual porque existía versión compatible, como exige `DO-SUPPLY`
+(la alcanzabilidad informa prioridad, no excusa el audit rojo).
+
+Comando: `composer update symfony/http-foundation symfony/http-kernel symfony/routing
+symfony/filesystem symfony/yaml` → 5 updates, 0 installs, 0 removals, 0 paquetes
+ajenos. `composer validate` OK, `composer install` desde lock sin cambios pendientes,
+`composer audit` → 0 advisories. Gates: Pint `--test` verde, PHPStan sin errores ni
+baseline nuevo, suite SQLite 378 tests/1479 assertions (2 skips preexistentes).
+PostgreSQL y container-security quedan acreditados por el job `postgres-concurrency` y
+`container-security` de CI (sin servidor local en esta estación).
+
 #### H-043 — Un `401` autenticado no invalidaba el usuario en memoria
 ```
 Severidad:   🟡 medio · Categoría: seguridad (sesión frontend)

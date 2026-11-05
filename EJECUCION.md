@@ -588,7 +588,21 @@ Corrección del gate PostgreSQL (run 41585098217 falló): `test_finalize_de_pedi
 
 Evidencia CI: Actions run `41587490864` sobre `3388488` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
-## Última sesión cerrada — route binding numérico de pending items (H-050)
+## Última sesión cerrada — advisories Symfony del 2026-11-04 (H-042)
+
+Rama `security/symfony-advisories-2026-11-04`, creada desde `origin/hardening/pending-item-route-binding` (`7ccd2e0`, verificado como HEAD de la base con working tree limpio). Se aplicaron `DO-SUPPLY`, `DO-CI`, `DO-GATE`, `SEC-SUPPLY`, `SEC-GATE`, `QA-SEC`, `QA-RISK`, `QA-GATE`, `BE-GATE` y D-004/D-029 como precedentes (aquí hubo parche directo: no aplicó excepción). Alcance: sólo `pallet-backend/composer.lock` y documentación; sin cambios de código, constraints ni frontend.
+
+1. Evidencia previa: `composer audit --format=json` reportó 8 advisories en 5 paquetes, todos publicados el 2026-11-04 — `symfony/http-foundation` 7.4.22 (GHSA-xg2q-4rrq-657q trusted proxies `private_ranges`, CVE-2026-118514 HEAD vs `MethodRequestMatcher`, GHSA-3h27-hjv7-fqjx path rules, GHSA-5mx8-mwrp-5693 host en URLs generadas), `symfony/http-kernel` 7.4.22 (GHSA-wg5q-m2ww-f3c9 fragmentos inline + payloads CSV/YAML), `symfony/routing` 7.4.22 (CVE-2026-118516 host placeholders), `symfony/filesystem` 8.1.5 (GHSA-6prc-h956-hxjq prefijo `://` como raíz) y `symfony/yaml` 8.1.10 (GHSA-hwfg-qwvh-2wfx parseo exponencial/cuadrático). Rangos afectados parcheados en 7.4.23 y 8.1.11.
+2. Fuentes oficiales: `symfony.com/blog/symfony-7-4-23-released` (2026-11-04) y changelog `v8.1.10...v8.1.11` de `symfony/symfony`; ambos releases son security releases del mismo día.
+3. Alcance de dependencias: `http-foundation`/`http-kernel`/`routing` los exige `laravel/framework ^7.2.0` (rama 7.4); `filesystem` lo exige `aws/aws-sdk-php` (cliente R2, producción); `yaml` sólo llega por `laravel/sail` (`require-dev`, fuera de la imagen `--no-dev`).
+4. Actualización mínima: `composer update symfony/http-foundation symfony/http-kernel symfony/routing symfony/filesystem symfony/yaml` → exactamente 5 updates, 0 installs, 0 removals; diff del lock limitado a versión/reference/time de esos 5 paquetes. Sin `--with-all-dependencies` (no hizo falta), sin tocar `composer.json`, sin ignores.
+5. Alcanzabilidad evaluada por advisory (detalle en `AUDITORIA.md` H-042): firewall Symfony Security, fragmentos ESI/HInclude, matchers compilados y el shortcut `private_ranges` no son ejercidos por Laravel; `yaml` es dev-only; `filesystem` no recibe paths externos; `getBaseUrl()` sí corre por request pero el host lo fija el proxy. Se parchó todo igual: existía versión compatible y `DO-SUPPLY` no admite "no alcanzable" como excusa del audit.
+6. Gates locales (PHP 8.4.27, Composer 2.10.2): `composer validate` OK, `composer install --dry-run` "Nothing to install" (lock sincronizado), `composer audit` → 0 advisories, `pint --test` verde, PHPStan 89 archivos sin errores ni baseline nuevo, suite SQLite completa 378 tests/1479 assertions (2 skips preexistentes). Grupo `postgres` y build de imagen no corren en esta estación (sin servidor PG ni Docker); los acredita CI.
+7. Verificación de superficies: `bootstrap/app.php` sólo define aliases de middleware (sin `trustProxies`); `TrustProxies` de Laravel usa IPs explícitas o `*`, nunca `private_ranges`; no hay `MapRequestPayload`, `_fragment` ni uso de `symfony/routing` en `app/`; uploads pasan por `league/flysystem`, no por `symfony/filesystem`.
+
+Commits: `1567882` (lockfile) y el de documentación. Evidencia CI: pendiente al cierre de esta entrada — se registra en commit posterior con el run id.
+
+## Sesión anterior — route binding numérico de pending items (H-050)
 
 Rama `hardening/pending-item-route-binding`, creada desde `origin/hardening/order-attach-pallet-validation` (`cc5bedc`, verificado como HEAD de la base con working tree limpio y descendiente de `c25ca82`). Se aplicaron `BE-API`, `BE-VALID`, `BE-ERR`, `BE-DATA`, `SEC-INPUT`, `SEC-AUTHZ`, `SEC-LOG`, `QA-CONTRACT`, `QA-RISK`, `QA-DATA`, `QA-GATE`, `DOMINIO.md` y D-031. Alcance: sólo `PATCH`/`DELETE /pending-items/{pendingItem}` y la resolución de `PendingItem $pendingItem`; H-049 sin tocar, sin GAP.
 
