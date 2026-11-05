@@ -600,7 +600,7 @@ Rama `security/symfony-advisories-2026-11-04`, creada desde `origin/hardening/pe
 6. Gates locales (PHP 8.4.27, Composer 2.10.2): `composer validate` OK, `composer install --dry-run` "Nothing to install" (lock sincronizado), `composer audit` → 0 advisories, `pint --test` verde, PHPStan 89 archivos sin errores ni baseline nuevo, suite SQLite completa 378 tests/1479 assertions (2 skips preexistentes). Grupo `postgres` y build de imagen no corren en esta estación (sin servidor PG ni Docker); los acredita CI.
 7. Verificación de superficies: `bootstrap/app.php` sólo define aliases de middleware (sin `trustProxies`); `TrustProxies` de Laravel usa IPs explícitas o `*`, nunca `private_ranges`; no hay `MapRequestPayload`, `_fragment` ni uso de `symfony/routing` en `app/`; uploads pasan por `league/flysystem`, no por `symfony/filesystem`.
 
-Commits: `1567882` (lockfile) y el de documentación. Evidencia CI: pendiente al cierre de esta entrada — se registra en commit posterior con el run id.
+Commits: `1567882` (lockfile), `6b84017` (documentación) y `c69f87b` (trigger `security/**` en el workflow). El patrón de branches del workflow no cubría `security/*`, así que se agregó de forma aditiva para que el gate exigido pudiera ejecutarse; ningún check se debilitó. Actions run `41947422812` sobre `c69f87b` con `ci` (incluye `composer audit` en 0 advisories), `postgres-concurrency` y `container-security` verdes.
 
 ## Sesión anterior — route binding numérico de pending items (H-050)
 
