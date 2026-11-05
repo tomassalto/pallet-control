@@ -9,7 +9,6 @@ use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
 use App\Models\Pallet;
 use App\Models\PalletBase;
-use App\Models\PalletBasePhoto;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -17,8 +16,8 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * H-050 — CARACTERIZACIÓN (SQLite) de los route bindings y resoluciones
- * manuales sobre PKs bigint que SIGUEN vulnerables tras la corrección
+ * H-050 — CARACTERIZACIÓN (SQLite) de los route bindings y parámetros
+ * escalares sobre PKs bigint que SIGUEN vulnerables tras la corrección
  * por familias.
  *
  * Qué registra esta suite:
@@ -38,13 +37,13 @@ use Tests\TestCase;
  * la familia admin {user}/{missingItemRequest}, el núcleo {order}/
  * {pallet} (`AdminRouteBindingContractTest` y
  * `OrderPalletRouteBindingContractTest`), {ticket}/{photo} de tickets
- * (`TicketPhotoRouteBindingContractTest`) y los 4 bindings implícitos
+ * (`TicketPhotoRouteBindingContractTest`), los 4 bindings implícitos
  * {base} de PalletBaseController
- * (`PalletBaseRouteBindingContractTest`), todos vía el trait
- * `RejectsInvalidIntegerRouteBindings` (D-033). Las resoluciones
- * manuales {base}/{photo} de fotos y anotaciones, {customer},
- * {item} y el {id} int de Admin Storage siguen acá. Ver AUDITORIA.md
- * H-050.
+ * (`PalletBaseRouteBindingContractTest`) y las 5 resoluciones manuales
+ * {base}/{photo} de fotos y anotaciones
+ * (`ManualPhotoParameterContractTest`), todos gobernados por el trait
+ * `RejectsInvalidIntegerRouteBindings` (D-033). {customer}, {item} y el
+ * {id} int de Admin Storage siguen acá. Ver AUDITORIA.md H-050.
  */
 class BigintRouteBindingCharacterizationTest extends TestCase
 {
@@ -87,45 +86,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
             // nunca llega a la validación ni a OrderItemService.
             $this->patchJson("/api/v1/order-items/{$seg}", ['qty' => 5])
                 ->assertNotFound("PATCH order-items/{$seg}");
-        }
-
-        $this->assertDatabaseCount('activity_logs', 0);
-    }
-
-    // ── Resoluciones manuales sobre bigint (misma forma de defecto) ────────
-
-    #[Test]
-    public function resoluciones_manuales_devuelven_404_en_sqlite(): void
-    {
-        Sanctum::actingAs($this->usuario());
-        $pallet = Pallet::factory()->create();
-        $base = PalletBase::factory()->for($pallet)->create();
-        $basePhoto = PalletBasePhoto::create([
-            'base_id' => $base->id,
-            'path' => 'p.webp',
-            'original_name' => 'p',
-        ]);
-
-        foreach (self::SEGMENTOS_INVALIDOS as $seg) {
-            // PalletBase::findOrFail($baseId) antes de validar la foto.
-            $this->postJson("/api/v1/pallets/{$pallet->id}/bases/{$seg}/photos")
-                ->assertNotFound("POST bases/{$seg}/photos");
-
-            // $pallet->photos()->find($photoId).
-            $this->deleteJson("/api/v1/pallets/{$pallet->id}/photos/{$seg}")
-                ->assertNotFound("DELETE pallet photos/{$seg}");
-
-            // findOrFail($baseId) en el GET de anotaciones.
-            $this->getJson("/api/v1/pallets/{$pallet->id}/bases/{$seg}/photos/{$basePhoto->id}/annotations")
-                ->assertNotFound("GET annotations base/{$seg}");
-
-            // $base->photos()->find($photoId).
-            $this->getJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/photos/{$seg}/annotations")
-                ->assertNotFound("GET annotations photo/{$seg}");
-
-            // DELETE de foto de base: findOrFail($baseId) primero.
-            $this->deleteJson("/api/v1/pallets/{$pallet->id}/bases/{$seg}/photos/{$basePhoto->id}")
-                ->assertNotFound("DELETE base photo base/{$seg}");
         }
 
         $this->assertDatabaseCount('activity_logs', 0);
@@ -249,10 +209,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
 
         $this->patchJson("/api/v1/pallets/{$palletA->id}/bases/{$baseAjena->id}", ['name' => 'x'])
             ->assertNotFound();
-
-        $this->getJson("/api/v1/pallets/{$palletA->id}/bases/{$baseAjena->id}/photos/1/annotations")
-            ->assertNotFound()
-            ->assertJsonPath('message', 'Base no encontrada');
 
         $this->assertDatabaseCount('activity_logs', 0);
     }

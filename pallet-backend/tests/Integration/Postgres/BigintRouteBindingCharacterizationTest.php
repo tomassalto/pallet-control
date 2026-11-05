@@ -8,7 +8,6 @@ use App\Models\OrderTicket;
 use App\Models\OrderTicketPhoto;
 use App\Models\Pallet;
 use App\Models\PalletBase;
-use App\Models\PalletBasePhoto;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
@@ -21,7 +20,7 @@ use Throwable;
 
 /**
  * H-050 — CARACTERIZACIÓN (PostgreSQL) de los route bindings y
- * resoluciones manuales sobre PKs bigint que SIGUEN vulnerables tras la
+ * parámetros escalares sobre PKs bigint que SIGUEN vulnerables tras la
  * corrección por familias.
  *
  * ATENCIÓN: estos tests acreditan el comportamiento DEFECTUOSO vigente —
@@ -35,14 +34,15 @@ use Throwable;
  * y fuera de esta caracterización: {pendingItem}
  * (`PendingItemRouteBindingTest`), la familia admin
  * {user}/{missingItemRequest}, el núcleo {order}/{pallet},
- * {ticket}/{photo} de tickets y los 4 bindings implícitos {base} de
- * PalletBaseController (`AdminRouteBindingContractTest`,
+ * {ticket}/{photo} de tickets, los 4 bindings implícitos {base} de
+ * PalletBaseController y las 5 resoluciones manuales {base}/{photo}
+ * de fotos y anotaciones (`AdminRouteBindingContractTest`,
  * `OrderPalletRouteBindingContractTest`,
- * `TicketPhotoRouteBindingContractTest` y
- * `PalletBaseRouteBindingContractTest`, trait
- * `RejectsInvalidIntegerRouteBindings`). Las resoluciones manuales
- * {base}/{photo} de fotos y anotaciones, {customer}, {item} y el {id}
- * int de Admin Storage siguen acá.
+ * `TicketPhotoRouteBindingContractTest`,
+ * `PalletBaseRouteBindingContractTest` y
+ * `ManualPhotoParameterContractTest`, trait
+ * `RejectsInvalidIntegerRouteBindings`, D-033). {customer}, {item} y
+ * el {id} int de Admin Storage siguen acá.
  *
  * La captura con withoutExceptionHandling prueba el origen real de cada
  * 500 (QueryException con SQLSTATE de clase 22, o TypeError para el
@@ -153,34 +153,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
 
         $casos = [
             'PATCH order-items' => fn () => $this->patchJson('/api/v1/order-items/abc', ['qty' => 5]),
-        ];
-
-        foreach ($casos as $contexto => $request) {
-            $this->afirmarErrorDeTipo22($this->excepcionDe($request), $contexto);
-            $this->afirmar500Generico($request(), $contexto);
-        }
-
-        $this->assertSame(0, DB::table('activity_logs')->count());
-    }
-
-    // ── Resoluciones manuales: misma forma de defecto sin binding ──────────
-
-    public function test_resoluciones_manuales_producen_el_mismo_500_22p02(): void
-    {
-        Sanctum::actingAs($this->usuario());
-        $pallet = Pallet::factory()->create();
-        $base = PalletBase::factory()->for($pallet)->create();
-        $photo = PalletBasePhoto::create(['base_id' => $base->id, 'path' => 'p.webp', 'original_name' => 'p']);
-
-        $casos = [
-            // PalletBase::findOrFail($baseId) antes de validar el archivo.
-            'POST bases/{base}/photos' => fn () => $this->postJson("/api/v1/pallets/{$pallet->id}/bases/abc/photos"),
-            // $pallet->photos()->find($photoId).
-            'DELETE pallets/{pallet}/photos/{photo}' => fn () => $this->deleteJson("/api/v1/pallets/{$pallet->id}/photos/abc"),
-            // Anotaciones: findOrFail($baseId) y find($photoId) manuales.
-            'GET annotations {base}' => fn () => $this->getJson("/api/v1/pallets/{$pallet->id}/bases/abc/photos/{$photo->id}/annotations"),
-            'GET annotations {photo}' => fn () => $this->getJson("/api/v1/pallets/{$pallet->id}/bases/{$base->id}/photos/abc/annotations"),
-            'DELETE base photos {base}' => fn () => $this->deleteJson("/api/v1/pallets/{$pallet->id}/bases/abc/photos/{$photo->id}"),
         ];
 
         foreach ($casos as $contexto => $request) {

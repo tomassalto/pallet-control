@@ -37,8 +37,9 @@ use Tests\TestCase;
  * tipo; el inventario automático y el test estructural garantizan que
  * ninguna ruta futura escape del binding esperado. Las otras 4 rutas
  * con {base} (fotos y anotaciones de base) resuelven el segmento a mano
- * con el escalar $baseId y quedan fuera de esta familia — ver la matriz
- * de AUDITORIA.md H-050.
+ * con el escalar $baseId y tienen contrato propio en
+ * ManualPhotoParameterContractTest — ver la matriz de AUDITORIA.md
+ * H-050.
  */
 class PalletBaseRouteBindingContractTest extends TestCase
 {
@@ -252,7 +253,8 @@ class PalletBaseRouteBindingContractTest extends TestCase
 
         // Las otras 4 rutas con {base} (fotos y anotaciones de base)
         // resuelven el segmento a mano con el escalar $baseId: quedan
-        // fuera del trait y siguen como deuda de H-050.
+        // fuera del binding implícito y tienen contrato propio en
+        // ManualPhotoParameterContractTest (misma autoridad D-033).
         $this->assertCount(4, $rutasManuales, 'Se esperaban 4 rutas con {base} de resolución manual');
         foreach ($rutasManuales as $route) {
             $this->assertNull(
