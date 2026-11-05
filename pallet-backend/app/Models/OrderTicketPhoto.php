@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RejectsInvalidIntegerRouteBindings;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
 
 class OrderTicketPhoto extends Model
 {
+    use RejectsInvalidIntegerRouteBindings;
+
     protected $fillable = [
         'ticket_id',
         'path',
