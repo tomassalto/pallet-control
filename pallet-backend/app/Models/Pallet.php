@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RejectsInvalidIntegerRouteBindings;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany; // usado por bases() y photo
 
 class Pallet extends Model
 {
-    use HasFactory;
+    use HasFactory, RejectsInvalidIntegerRouteBindings;
 
     protected $fillable = ['code', 'status', 'note', 'created_by'];
 

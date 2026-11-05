@@ -33,9 +33,10 @@ use Throwable;
  *
  * Familias ya corregidas con contrato propio (404, sin QueryException)
  * y fuera de esta caracterización: {pendingItem}
- * (`PendingItemRouteBindingTest`) y la familia admin
- * {user}/{missingItemRequest} (`AdminRouteBindingContractTest`, trait
- * `RejectsInvalidIntegerRouteBindings`).
+ * (`PendingItemRouteBindingTest`), la familia admin
+ * {user}/{missingItemRequest} y el núcleo {order}/{pallet}
+ * (`AdminRouteBindingContractTest` y `OrderPalletRouteBindingContractTest`,
+ * trait `RejectsInvalidIntegerRouteBindings`).
  *
  * La captura con withoutExceptionHandling prueba el origen real de cada
  * 500 (QueryException con SQLSTATE de clase 22, o TypeError para el
@@ -114,17 +115,13 @@ class BigintRouteBindingCharacterizationTest extends TestCase
     {
         Sanctum::actingAs($this->usuario());
         Customer::factory()->create();
-        Order::factory()->create();
-        Pallet::factory()->create();
 
         foreach (self::SEGMENTOS_22P02 as $seg) {
-            foreach (['orders', 'pallets', 'customers'] as $recurso) {
-                $this->afirmarErrorDeTipo22(
-                    $this->excepcionDe(fn () => $this->getJson("/api/v1/{$recurso}/{$seg}")),
-                    "GET {$recurso}/{$seg}",
-                );
-                $this->afirmar500Generico($this->getJson("/api/v1/{$recurso}/{$seg}"), "GET {$recurso}/{$seg}");
-            }
+            $this->afirmarErrorDeTipo22(
+                $this->excepcionDe(fn () => $this->getJson("/api/v1/customers/{$seg}")),
+                "GET customers/{$seg}",
+            );
+            $this->afirmar500Generico($this->getJson("/api/v1/customers/{$seg}"), "GET customers/{$seg}");
         }
 
         $this->assertSame(0, DB::table('activity_logs')->count());
@@ -136,12 +133,12 @@ class BigintRouteBindingCharacterizationTest extends TestCase
 
         // '-1' es un bigint válido: la consulta corre y no encuentra fila —
         // ModelNotFoundException (404), no QueryException.
-        $e = $this->excepcionDe(fn () => $this->getJson('/api/v1/orders/-1'));
+        $e = $this->excepcionDe(fn () => $this->getJson('/api/v1/customers/-1'));
         $this->assertInstanceOf(ModelNotFoundException::class, $e);
-        $this->getJson('/api/v1/orders/-1')->assertNotFound();
+        $this->getJson('/api/v1/customers/-1')->assertNotFound();
 
         // Numérico inexistente dentro de rango: 404.
-        $this->getJson('/api/v1/orders/99999')->assertNotFound();
+        $this->getJson('/api/v1/customers/99999')->assertNotFound();
     }
 
     public function test_bindings_implicitos_en_escritura_y_anidados(): void
@@ -156,7 +153,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
             'PATCH bases' => fn () => $this->patchJson("/api/v1/pallets/{$pallet->id}/bases/abc", ['name' => 'x']),
             'DELETE tickets' => fn () => $this->deleteJson("/api/v1/orders/{$order->id}/tickets/abc"),
             'GET ocr-status' => fn () => $this->getJson("/api/v1/orders/{$order->id}/tickets/{$ticket->id}/photos/abc/ocr-status"),
-            'POST finalize (padre)' => fn () => $this->postJson('/api/v1/orders/abc/finalize'),
         ];
 
         foreach ($casos as $contexto => $request) {
@@ -222,16 +218,16 @@ class BigintRouteBindingCharacterizationTest extends TestCase
     public function test_precedencia_anonimo_y_activos(): void
     {
         // Anónimo: auth:sanctum corta antes del binding — 401, no 500.
-        $this->getJson('/api/v1/orders/abc')->assertUnauthorized();
+        $this->getJson('/api/v1/customers/abc')->assertUnauthorized();
 
         // Inactivo: el binding precede a user.active — 500 por 22P02, no 401.
         // Divergencia respecto a SQLite (que devuelve 404 en este punto).
         Sanctum::actingAs(User::factory()->inactive()->withRole()->create());
         $this->afirmarErrorDeTipo22(
-            $this->excepcionDe(fn () => $this->getJson('/api/v1/orders/abc')),
-            'inactivo + orders/abc',
+            $this->excepcionDe(fn () => $this->getJson('/api/v1/customers/abc')),
+            'inactivo + customers/abc',
         );
-        $this->afirmar500Generico($this->getJson('/api/v1/orders/abc'), 'inactivo + orders/abc');
+        $this->afirmar500Generico($this->getJson('/api/v1/customers/abc'), 'inactivo + customers/abc');
     }
 
     public function test_precedencia_binding_antes_de_has_role(): void

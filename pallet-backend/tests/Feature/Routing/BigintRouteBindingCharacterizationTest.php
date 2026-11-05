@@ -34,9 +34,10 @@ use Tests\TestCase;
  *   excepción: el TypeError de coerción PHP produce 500 en AMBOS motores.
  *
  * Familias ya corregidas con contrato propio y fuera de esta
- * caracterización: {pendingItem} (`PendingItemRouteBindingContractTest`)
- * y la familia admin {user}/{missingItemRequest}
- * (`AdminRouteBindingContractTest`, trait
+ * caracterización: {pendingItem} (`PendingItemRouteBindingContractTest`),
+ * la familia admin {user}/{missingItemRequest} y el núcleo {order}/
+ * {pallet} (`AdminRouteBindingContractTest` y
+ * `OrderPalletRouteBindingContractTest`, trait
  * `RejectsInvalidIntegerRouteBindings`). Ver AUDITORIA.md H-050.
  */
 class BigintRouteBindingCharacterizationTest extends TestCase
@@ -62,12 +63,8 @@ class BigintRouteBindingCharacterizationTest extends TestCase
     {
         Sanctum::actingAs($this->usuario());
         Customer::factory()->create();
-        Order::factory()->create();
-        Pallet::factory()->create();
 
         foreach (self::SEGMENTOS_INVALIDOS as $seg) {
-            $this->getJson("/api/v1/orders/{$seg}")->assertNotFound("GET orders/{$seg}");
-            $this->getJson("/api/v1/pallets/{$seg}")->assertNotFound("GET pallets/{$seg}");
             $this->getJson("/api/v1/customers/{$seg}")->assertNotFound("GET customers/{$seg}");
         }
 
@@ -109,8 +106,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
                 ->assertNotFound("GET ocr-status photo/{$seg}");
         }
 
-        // Un segmento inválido en el PADRE también corta antes que el hijo.
-        $this->deleteJson("/api/v1/orders/abc/tickets/{$ticket->id}")->assertNotFound();
         $this->assertDatabaseCount('activity_logs', 0);
     }
 
@@ -211,7 +206,7 @@ class BigintRouteBindingCharacterizationTest extends TestCase
     #[Test]
     public function anonimo_recibe_401_antes_del_binding(): void
     {
-        $this->getJson('/api/v1/orders/abc')
+        $this->getJson('/api/v1/customers/abc')
             ->assertUnauthorized()
             ->assertExactJson(['message' => 'Unauthenticated.']);
     }
@@ -222,10 +217,10 @@ class BigintRouteBindingCharacterizationTest extends TestCase
         // SQLite: 404 (en PostgreSQL este mismo caso es 500 — el binding
         // precede a user.active en ambos motores).
         Sanctum::actingAs(User::factory()->inactive()->withRole()->create());
-        $order = Order::factory()->create();
+        $customer = Customer::factory()->create();
 
-        $this->getJson('/api/v1/orders/abc')->assertNotFound();
-        $this->getJson("/api/v1/orders/{$order->id}")->assertUnauthorized();
+        $this->getJson('/api/v1/customers/abc')->assertNotFound();
+        $this->getJson("/api/v1/customers/{$customer->id}")->assertUnauthorized();
     }
 
     #[Test]
@@ -288,6 +283,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
         // sigue siendo el único guardián del segmento.
         Sanctum::actingAs(User::factory()->create());
 
-        $this->getJson('/api/v1/orders/abc')->assertNotFound();
+        $this->getJson('/api/v1/customers/abc')->assertNotFound();
     }
 }
