@@ -34,11 +34,15 @@ use Throwable;
  * Familias ya corregidas con contrato propio (404, sin QueryException)
  * y fuera de esta caracterización: {pendingItem}
  * (`PendingItemRouteBindingTest`), la familia admin
- * {user}/{missingItemRequest}, el núcleo {order}/{pallet} y
- * {ticket}/{photo} de tickets (`AdminRouteBindingContractTest`,
- * `OrderPalletRouteBindingContractTest` y
- * `TicketPhotoRouteBindingContractTest`, trait
- * `RejectsInvalidIntegerRouteBindings`).
+ * {user}/{missingItemRequest}, el núcleo {order}/{pallet},
+ * {ticket}/{photo} de tickets y los 4 bindings implícitos {base} de
+ * PalletBaseController (`AdminRouteBindingContractTest`,
+ * `OrderPalletRouteBindingContractTest`,
+ * `TicketPhotoRouteBindingContractTest` y
+ * `PalletBaseRouteBindingContractTest`, trait
+ * `RejectsInvalidIntegerRouteBindings`). Las resoluciones manuales
+ * {base}/{photo} de fotos y anotaciones, {customer}, {item} y el {id}
+ * int de Admin Storage siguen acá.
  *
  * La captura con withoutExceptionHandling prueba el origen real de cada
  * 500 (QueryException con SQLSTATE de clase 22, o TypeError para el
@@ -146,11 +150,9 @@ class BigintRouteBindingCharacterizationTest extends TestCase
     public function test_bindings_implicitos_en_escritura_y_anidados(): void
     {
         Sanctum::actingAs($this->usuario());
-        $pallet = Pallet::factory()->create();
 
         $casos = [
             'PATCH order-items' => fn () => $this->patchJson('/api/v1/order-items/abc', ['qty' => 5]),
-            'PATCH bases' => fn () => $this->patchJson("/api/v1/pallets/{$pallet->id}/bases/abc", ['name' => 'x']),
         ];
 
         foreach ($casos as $contexto => $request) {

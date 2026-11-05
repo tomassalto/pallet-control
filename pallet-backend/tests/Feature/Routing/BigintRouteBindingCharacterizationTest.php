@@ -37,9 +37,14 @@ use Tests\TestCase;
  * caracterización: {pendingItem} (`PendingItemRouteBindingContractTest`),
  * la familia admin {user}/{missingItemRequest}, el núcleo {order}/
  * {pallet} (`AdminRouteBindingContractTest` y
- * `OrderPalletRouteBindingContractTest`) y {ticket}/{photo} de tickets
- * (`TicketPhotoRouteBindingContractTest`), todos vía el trait
- * `RejectsInvalidIntegerRouteBindings` (D-033). Ver AUDITORIA.md H-050.
+ * `OrderPalletRouteBindingContractTest`), {ticket}/{photo} de tickets
+ * (`TicketPhotoRouteBindingContractTest`) y los 4 bindings implícitos
+ * {base} de PalletBaseController
+ * (`PalletBaseRouteBindingContractTest`), todos vía el trait
+ * `RejectsInvalidIntegerRouteBindings` (D-033). Las resoluciones
+ * manuales {base}/{photo} de fotos y anotaciones, {customer},
+ * {item} y el {id} int de Admin Storage siguen acá. Ver AUDITORIA.md
+ * H-050.
  */
 class BigintRouteBindingCharacterizationTest extends TestCase
 {
@@ -76,17 +81,12 @@ class BigintRouteBindingCharacterizationTest extends TestCase
     public function binding_implicito_escritura_devuelve_404_antes_del_form_request(): void
     {
         Sanctum::actingAs($this->usuario());
-        $pallet = Pallet::factory()->create();
 
         foreach (self::SEGMENTOS_INVALIDOS as $seg) {
             // UpdateOrderItemRequest existe, pero el binding corre antes:
             // nunca llega a la validación ni a OrderItemService.
             $this->patchJson("/api/v1/order-items/{$seg}", ['qty' => 5])
                 ->assertNotFound("PATCH order-items/{$seg}");
-
-            // StorePalletBaseRequest igual: gana el binding de {base}.
-            $this->patchJson("/api/v1/pallets/{$pallet->id}/bases/{$seg}", ['name' => 'x'])
-                ->assertNotFound("PATCH bases/{$seg}");
         }
 
         $this->assertDatabaseCount('activity_logs', 0);
