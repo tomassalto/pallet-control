@@ -670,7 +670,7 @@ Rama `hardening/admin-bigint-route-bindings`, creada desde `origin/audit/bigint-
 4. Gates locales (PHP 8.4.27): `pint --test` verde, PHPStan sin errores ni baseline nuevo (`--memory-limit=1G`), suite SQLite completa 408 tests/1668 assertions (2 skips de benchmark preexistentes), grupo `postgres` completo 52 tests/708 assertions contra PostgreSQL 17.11 local y `composer audit` → 0 advisories. Frontend sin cambios.
 5. Deuda restante exacta: 7 bindings implícitos sin protección (`{order}` ×18 rutas, `{pallet}` ×22, `{ticket}` ×6, `{photo}` de tickets ×4, `{base}` ×4, `{customer}` ×1, `{item}` ×1), las resoluciones manuales de `{base}`/`{photo}` en fotos y anotaciones, y el `{id}` int de admin storage (`TypeError`, ambos motores). H-050 sigue **parcial**; el trabajo por familias continúa bajo H-020.
 
-Commits: `6e67373` (trait + tests) y el de documentación; la evidencia CI se registra en el commit siguiente.
+Commits: `6e67373` (trait + tests), `39fb906` (documentación) y el de evidencia CI. Actions run `41970190863` sobre `39fb906` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 Pendiente: siguientes familias de bindings bigint con el trait (núcleo anidado `{order}`/`{pallet}`/`{ticket}`/`{photo}`, simples `{customer}`/`{item}`/`{base}`), resoluciones manuales `{base}`/`{photo}` (normalización propia en cada punto), `{id}` de admin storage, resto de H-020 y H-049.
 
