@@ -597,8 +597,8 @@ otro origen se cuente como `22P02`.
 | `{ticket}` | `OrderTicket` · order_tickets · bigint | 6 (destroy, photos, ocr-status, highlights, trigger-ocr, destroyPhoto) | implícito + trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404; pertenencia al pedido verificada en controlador (404) | � protegido |
 | `{photo}` (tickets) | `OrderTicketPhoto` · bigint | 4 (ocr-status, highlights, trigger-ocr, destroyPhoto) | implícito + trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404; pertenencia verificada en controlador | � protegido |
 | `{base}` (PalletBaseController) | `PalletBase` · pallet_bases · bigint | 4 (update, adjust-item, destroy, migrate) | implícito + trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404; pertenencia pallet↔base verificada en controlador/servicio (404) | � protegido |
-| `{base}` (fotos/anotaciones) | `PalletBase::findOrFail($baseId)` | 4 (store/destroy foto de base, index/store anotaciones) | manual | ninguna | 🔴 vulnerable (misma forma de defecto) |
-| `{photo}` (pallet/base/anotaciones) | `->find($photoId)` manual | 4 (destroy foto pallet, destroy foto base, index/store anotaciones) | manual | ninguna | 🔴 vulnerable (misma forma de defecto) |
+| `{base}` (fotos/anotaciones) | `PalletBase::findOrFailRouteId($baseId)` | 4 (store/destroy foto de base, index/store anotaciones) | manual + `findOrFailRouteId` del trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404 sin consultar; pertenencia pallet↔base en controlador (404) | 🟢 protegido |
+| `{photo}` (pallet/base/anotaciones) | `PalletBasePhoto`/`PalletPhoto::normalizeRouteId` + `find` por relación | 4 (destroy foto pallet, destroy foto base, index/store anotaciones) | manual + `normalizeRouteId` del trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404 sin consultar; pertenencia foto↔base/pallet por relación en controlador (404) | 🟢 protegido |
 | `{pendingItem}` | `PendingItem` · bigint | 2 (PATCH, DELETE) | implícito + trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404 | 🟢 protegido |
 | `{user}` | `User` · users · bigint | 2 (PATCH role, POST toggle-active) | implícito + trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404 | 🟢 protegido |
 | `{missingItemRequest}` | `MissingItemRequest` · bigint | 1 (PATCH review) | implícito + trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404 | 🟢 protegido |
@@ -630,6 +630,9 @@ otro origen se cuente como `22P02`.
 - Familia 3 — simples: `{customer}`, `{item}`, `{base}` implícito.
 - Familia 4 — resoluciones manuales `{base}`/`{photo}` (normalizar el segmento antes
   de `findOrFail`/`find`, o migrarlas a bindings tipados al tocar cada familia de H-020).
+  ✅ aplicada 2026-11-06: el trait D-033 expuso `normalizeRouteId`/`findOrFailRouteId`
+  como autoridad común y las 5 rutas de fotos/anotaciones la adoptaron en su punto de
+  resolución (`hardening/manual-photo-bigint-parameters`).
 - Familia 5 — `{id}` de admin storage (`int` → normalización explícita o restricción).
 - Alternativas evaluadas: (a) `resolveRouteBinding` tipado por modelo — conserva la
   precedencia y es el patrón ya probado en `PendingItem`, pero toca ~9 modelos;
@@ -816,17 +819,82 @@ Los casos `{base}` implícitos de
 a contrato 404 y la caracterización quedó sólo con las familias todavía
 vulnerables.
 
+**Corrección (resoluciones manuales `{base}`/`{photo}` de fotos y
+anotaciones, 2026-11-06, rama `hardening/manual-photo-bigint-parameters`,
+base `3b6971b`):** el trait `RejectsInvalidIntegerRouteBindings` (D-033)
+expuso su contrato de segmento como API pública reutilizable —
+`normalizeRouteId()` (segmento → `?int`) y `findOrFailRouteId()`
+(segmento → modelo o `ModelNotFoundException`) — con una sola
+implementación del `filter_var` ya gobernado; la guarda de
+`integerRouteBindingValue` delega en `normalizeRouteId` sin cambiar el
+comportamiento de los bindings implícitos. Se aplicó el trait a
+`PalletBasePhoto` y `PalletPhoto` (modelos cuyas PKs aparecen como
+parámetros manuales) y se actualizaron las 5 rutas afectadas — 4
+apariciones de `{base}` (POST/DELETE foto de base, GET/POST
+anotaciones) y 4 de `{photo}` (DELETE foto de pallet, DELETE foto de
+base, GET/POST anotaciones), con 3 rutas que contienen ambos parámetros
+— en el punto exacto donde cada acción resolvía el segmento:
+`PalletBase::findOrFailRouteId` sustituye al `findOrFail` global de la
+base y `normalizeRouteId` antecede al `find` por relación
+(`$base->photos()`, `$pallet->photos()`), que conserva su scope de
+ownership. La precedencia no cambia: la resolución manual corre dentro
+de la acción, después de `auth:sanctum` → `{pallet}` → `user.active` →
+`has.role`, así que inactivo (`401`) y sin-rol en escritura (`403`)
+nunca llegan al segmento, y `done` conserva su `409` en el punto exacto
+donde cada acción lo evaluaba (los DELETE lockean el pallet antes de
+buscar la foto; las anotaciones resuelven la foto antes de abrir la
+transacción).
+
+Contrato fijado en ambos motores
+(`tests/Feature/Routing/ManualPhotoParameterContractTest.php` — 19
+tests/329 assertions en SQLite — y su espejo
+`tests/Integration/Postgres/ManualPhotoParameterContractTest.php`,
+grupo `postgres` — 5 tests/210 assertions): segmentos inválidos (`abc`,
+`12abc`, `1.5`, `-1`, `01`, overflow `99999999999999999999`/
+`9223372036854775808`) → `404` **sin emitir la consulta por PK**
+(`DB::listen`: `pallet_bases` intacto para `{base}` inválido;
+`pallet_photos`/`pallet_base_photos`/`photo_annotations` intactos para
+`{photo}` inválido; los padres válidos sí consultan); numérico
+inexistente (`0`, `99999`, `9223372036854775807`) → `404` **con** la
+consulta emitida; válido, `+id` y espacios exteriores → flujo normal
+según D-033. Ownership: base de otro pallet → `"Base no encontrada"`,
+foto de otra base o de otro pallet → `"Foto no encontrada"`, sin acceso
+cruzado por id. Precedencias acreditadas: anónimo `401`, inactivo `401`
+con segmento válido o inválido (a diferencia del binding implícito, que
+responde `404`), sin-rol `403` en escrituras y `404` en el GET de
+anotaciones, `{pallet}` inválido corta antes de consultar bases/fotos,
+base inválida corta antes de consultar fotos, payload inválido → `422`
+sólo tras resolver los segmentos y pallet `done` → `409` en su punto
+exacto (incluido `done` + segmento de foto inválido en los DELETE, que
+lockean el pallet antes de buscar la foto). Efectos preservados: upload
+válido `201` con archivo en disco, upload sobre `done` `409` con
+compensación (cero archivos), DELETE válido con
+`pending_file_deletions` durable y auditoría atómica, anotaciones con
+reemplazo atómico y log, y repetición → `404`. Un test estructural
+inventaría las rutas: exige exactamente las 5 con parámetros escalares
+sin type-hint (4 apariciones `{base}`, 4 `{photo}`, 3 rutas con ambos),
+los tokens de la autoridad común en cada acción y el trait en los tres
+modelos — una ruta manual nueva o una acción que deje de usar la
+autoridad lo rompe. En PostgreSQL `excepcionDe` acredita
+`ModelNotFoundException` para `{base}` y respuesta `404` limpia para
+`{photo}`: antes del cambio ambos producían `QueryException`
+`22P02`/`22003` → `500` genérico (caracterización previa: 9 tests).
+Los casos manuales de `BigintRouteBindingCharacterizationTest` (SQLite
+y `postgres`) pasaron a contrato 404 y la caracterización quedó sólo
+con las familias todavía vulnerables.
+
 **Estado:** 🟡 parcial. Cerradas: las reglas `exists` no tipadas de pendientes y
 solicitudes de faltantes (`bail` + `integer`) y los bindings de `{pendingItem}`,
 `{user}`, `{missingItemRequest}`, el núcleo `{order}`/`{pallet}`, la familia
-`{ticket}`/`{photo}` de tickets y los 4 bindings implícitos `{base}` de
-PalletBaseController con el trait común
+`{ticket}`/`{photo}` de tickets, los 4 bindings implícitos `{base}` de
+PalletBaseController y las 5 resoluciones manuales `{base}`/`{photo}` de
+fotos y anotaciones con la API pública del trait
 `RejectsInvalidIntegerRouteBindings` (`2f2a502`/`911a041` pendientes;
-familias admin, order/pallet, ticket/photo y pallet-base en
-`hardening/*-bigint-route-bindings`, D-033). Abiertas: 2 bindings
+familias admin, order/pallet, ticket/photo, pallet-base y
+manual-photo en `hardening/*-bigint-route-bindings` /
+`hardening/manual-photo-bigint-parameters`, D-033). Abiertas: 2 bindings
 implícitos sobre bigint sin protección — `{customer}` (1) y `{item}`
-(1) — las resoluciones manuales de `{base}`/`{photo}` en fotos y
-anotaciones, y el `{id}` int de admin storage (`TypeError` en ambos
+(1) — y el `{id}` int de admin storage (`TypeError` en ambos
 motores); el trabajo por familias sigue bajo H-020.
 
 #### H-051 — El service worker persistía respuestas autenticadas y evidencia privada entre sesiones
