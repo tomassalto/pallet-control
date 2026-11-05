@@ -732,7 +732,7 @@ Rama `hardening/manual-photo-bigint-parameters`, creada desde `origin/hardening/
 6. Gates locales (PHP 8.4.27): `pint --test` verde, PHPStan sin errores ni baseline nuevo (`--memory-limit=1G`), suite SQLite completa y grupo `postgres` completo contra PostgreSQL 17 local, `composer audit` → 0 advisories. Frontend sin cambios.
 7. Deuda restante exacta: 2 bindings implícitos sobre bigint sin protección — `{customer}` (1) y `{item}` (1) — y el `{id}` int de admin storage (`TypeError` en ambos motores). H-050 sigue **parcial**; el trabajo por familias continúa bajo H-020.
 
-Commits: pendiente de registro al cerrar el bloque. Actions run pendiente sobre el HEAD final (`ci`, `postgres-concurrency`, `container-security`).
+Commits: `ec33591` (código: trait + modelos + controladores + baseline), `2f31f77` (tests de contrato y caracterización), `e8af855` (documentación) y el de evidencia CI. Actions run `42000393766` sobre `e8af855` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 Pendiente: bindings `{customer}` y `{item}` con el trait, `{id}` de admin storage, resto de H-020 y H-049.
 
