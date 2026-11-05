@@ -731,7 +731,7 @@ rutas), `{photo}` de tickets (4), `{base}` de PalletBaseController (4),
 `{customer}` (1), `{item}` (1) — las resoluciones manuales de
 `{base}`/`{photo}` en fotos y anotaciones, y el `{id}` int de admin storage
 (`TypeError` en ambos motores); el trabajo por familias sigue bajo H-020
-con evidencia del grupo `postgres` en Actions run `41965294771`.
+con evidencia del grupo `postgres` en Actions run `41978757215`.
 
 #### H-051 — El service worker persistía respuestas autenticadas y evidencia privada entre sesiones
 ```

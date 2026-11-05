@@ -685,7 +685,7 @@ Rama `hardening/order-pallet-bigint-bindings`, creada desde `origin/hardening/ad
 5. Gates locales (PHP 8.4.27): `pint --test` verde, PHPStan sin errores ni baseline nuevo (`--memory-limit=1G`), suite SQLite completa 422 tests/2207 assertions (2 skips de benchmark preexistentes), grupo `postgres` completo 58 tests/1090 assertions contra PostgreSQL local (incluye `FinalizationConcurrencyTest`, `FinalizedEntityImmutabilityTest`, `OrderPalletAssociationTest`, stock/migración y OCR/fotos sin cambios de contrato) y `composer audit` → 0 advisories. Frontend sin cambios.
 6. Deuda restante exacta: 5 bindings implícitos sobre bigint sin protección — `{ticket}` (6 rutas), `{photo}` de tickets (4), `{base}` de PalletBaseController (4), `{customer}` (1), `{item}` (1) — las resoluciones manuales de `{base}`/`{photo}` en fotos y anotaciones, y el `{id}` int de admin storage (`TypeError` en ambos motores). H-050 sigue **parcial**; el trabajo por familias continúa bajo H-020.
 
-Commits: `pendiente` (trait + tests), `pendiente` (documentación) y el de evidencia CI. Evidencia CI: pendiente de Actions.
+Commits: `a4a3c96` (trait + tests), `ca9467f` (documentación) y el de evidencia CI. Actions run `41978757215` sobre `ca9467f` con `ci`, `postgres-concurrency` y `container-security` verdes.
 
 Pendiente: siguientes familias de bindings bigint con el trait (`{ticket}`/`{photo}` de tickets, `{base}` de PalletBaseController, `{customer}`, `{item}`), resoluciones manuales `{base}`/`{photo}` (normalización propia en cada punto), `{id}` de admin storage, resto de H-020 y H-049.
 
