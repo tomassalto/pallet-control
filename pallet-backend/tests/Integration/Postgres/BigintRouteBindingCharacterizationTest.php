@@ -20,16 +20,22 @@ use Tests\TestCase;
 use Throwable;
 
 /**
- * H-050 — CARACTERIZACIÓN PREVIA (PostgreSQL) del inventario de route
- * bindings y resoluciones manuales sobre PKs bigint.
+ * H-050 — CARACTERIZACIÓN (PostgreSQL) de los route bindings y
+ * resoluciones manuales sobre PKs bigint que SIGUEN vulnerables tras la
+ * corrección por familias.
  *
  * ATENCIÓN: estos tests acreditan el comportamiento DEFECTUOSO vigente —
  * un segmento no numérico llega sin tipo a la comparación `id = '...'`
  * contra bigint, PostgreSQL responde SQLSTATE[22P02] (o 22003 en
  * overflow) y el handler global traduce la QueryException al 500 genérico.
- * El 500 NO es el contrato deseado: existe aquí sólo para demostrar el
- * defecto y esta clase queda nominada para su reemplazo por tests de
- * contrato (404 uniforme) durante la corrección por familias.
+ * El 500 NO es el contrato deseado: es temporal y queda acotado a las
+ * familias aún no corregidas de la matriz de AUDITORIA.md H-050.
+ *
+ * Familias ya corregidas con contrato propio (404, sin QueryException)
+ * y fuera de esta caracterización: {pendingItem}
+ * (`PendingItemRouteBindingTest`) y la familia admin
+ * {user}/{missingItemRequest} (`AdminRouteBindingContractTest`, trait
+ * `RejectsInvalidIntegerRouteBindings`).
  *
  * La captura con withoutExceptionHandling prueba el origen real de cada
  * 500 (QueryException con SQLSTATE de clase 22, o TypeError para el
@@ -161,24 +167,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
         $this->assertSame(0, DB::table('activity_logs')->count());
     }
 
-    public function test_bindings_implicitos_admin(): void
-    {
-        Sanctum::actingAs($this->admin());
-        User::factory()->create();
-
-        $casos = [
-            'PATCH admin/users' => fn () => $this->patchJson('/api/v1/admin/users/abc/role', ['role' => 'admin']),
-            'PATCH missing-item-requests' => fn () => $this->patchJson('/api/v1/admin/missing-item-requests/abc', ['status' => 'rejected']),
-        ];
-
-        foreach ($casos as $contexto => $request) {
-            $this->afirmarErrorDeTipo22($this->excepcionDe($request), $contexto);
-            $this->afirmar500Generico($request(), $contexto);
-        }
-
-        $this->assertSame(0, DB::table('activity_logs')->count());
-    }
-
     // ── Resoluciones manuales: misma forma de defecto sin binding ──────────
 
     public function test_resoluciones_manuales_producen_el_mismo_500_22p02(): void
@@ -229,24 +217,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
         $this->assertSame(0, DB::table('activity_logs')->count());
     }
 
-    // ── Binding ya protegido (H-050 resuelto para esta familia) ────────────
-
-    public function test_pending_item_protegido_devuelve_404(): void
-    {
-        Sanctum::actingAs($this->usuario());
-
-        foreach (['abc', '12abc', '1.5', '-1', '99999999999999999999'] as $seg) {
-            // El resolveRouteBinding tipado devuelve null sin consultar:
-            // ModelNotFoundException (404), nunca QueryException.
-            $e = $this->excepcionDe(fn () => $this->patchJson("/api/v1/pending-items/{$seg}", ['status' => 'resolved']));
-            $this->assertInstanceOf(ModelNotFoundException::class, $e, "PATCH {$seg}");
-            $this->patchJson("/api/v1/pending-items/{$seg}", ['status' => 'resolved'])->assertNotFound();
-            $this->deleteJson("/api/v1/pending-items/{$seg}")->assertNotFound();
-        }
-
-        $this->assertSame(0, DB::table('activity_logs')->count());
-    }
-
     // ── Precedencia en PostgreSQL ──────────────────────────────────────────
 
     public function test_precedencia_anonimo_y_activos(): void
@@ -264,7 +234,7 @@ class BigintRouteBindingCharacterizationTest extends TestCase
         $this->afirmar500Generico($this->getJson('/api/v1/orders/abc'), 'inactivo + orders/abc');
     }
 
-    public function test_precedencia_binding_antes_de_rol_y_admin(): void
+    public function test_precedencia_binding_antes_de_has_role(): void
     {
         // Sin rol en escritura: el binding precede a has.role — 500, no 403.
         Sanctum::actingAs(User::factory()->create());
@@ -273,14 +243,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
             'sin-rol + order-items/abc',
         );
         $this->afirmar500Generico($this->patchJson('/api/v1/order-items/abc', ['qty' => 5]), 'sin-rol + order-items/abc');
-
-        // No admin: el binding precede a AdminMiddleware — 500, no 403.
-        Sanctum::actingAs($this->usuario());
-        $this->afirmarErrorDeTipo22(
-            $this->excepcionDe(fn () => $this->patchJson('/api/v1/admin/users/abc/role', ['role' => 'admin'])),
-            'no-admin + admin/users/abc',
-        );
-        $this->afirmar500Generico($this->patchJson('/api/v1/admin/users/abc/role', ['role' => 'admin']), 'no-admin + admin/users/abc');
     }
 
     // ── Pertenencia de hijos anidados ──────────────────────────────────────

@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RejectsInvalidIntegerRouteBindings;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PendingItem extends Model
 {
+    use RejectsInvalidIntegerRouteBindings;
+
     protected $fillable = [
         'order_id',
         'order_item_id',
@@ -23,25 +26,6 @@ class PendingItem extends Model
         return [
             'resolved_at' => 'datetime',
         ];
-    }
-
-    /**
-     * H-050: el segmento de ruta llega sin tipo; un id que no es un entero
-     * dentro del rango bigint no debe llegar a la comparación por `id`
-     * (PostgreSQL responde SQLSTATE[22P02] → 500). Devolver null reproduce
-     * el 404 estándar del binding implícito en el mismo punto de la
-     * precedencia (auth → binding → user.active → has.role → validación),
-     * sin consultar la base.
-     */
-    public function resolveRouteBinding($value, $field = null)
-    {
-        $id = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
-
-        if ($id === false) {
-            return null;
-        }
-
-        return $this->resolveRouteBindingQuery($this, $id, $field)->first();
     }
 
     public function order(): BelongsTo

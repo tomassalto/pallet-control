@@ -17,9 +17,9 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * H-050 — CARACTERIZACIÓN PREVIA (SQLite) del inventario de route bindings
- * y resoluciones manuales sobre PKs bigint, ejecutada ANTES de cualquier
- * corrección transversal.
+ * H-050 — CARACTERIZACIÓN (SQLite) de los route bindings y resoluciones
+ * manuales sobre PKs bigint que SIGUEN vulnerables tras la corrección
+ * por familias.
  *
  * Qué registra esta suite:
  * - SQLite compara el segmento crudo contra la PK sin error de tipo:
@@ -29,13 +29,15 @@ use Tests\TestCase;
  *   y el handler global responde 500 (evidencia en
  *   `tests/Integration/Postgres/BigintRouteBindingCharacterizationTest.php`,
  *   grupo `postgres`). El 500 acreditado allí es el DEFECTO vigente, no el
- *   contrato deseado.
+ *   contrato deseado — temporal hasta que cada familia se corrija.
  * - `StorageController::{deletePallet,deleteOrder}(int $id)` es la
  *   excepción: el TypeError de coerción PHP produce 500 en AMBOS motores.
  *
- * Estos casos quedan nominados para su reemplazo por tests de contrato
- * (404 uniforme en ambos motores) durante la corrección por familias.
- * Ver AUDITORIA.md H-050 (matriz de bindings).
+ * Familias ya corregidas con contrato propio y fuera de esta
+ * caracterización: {pendingItem} (`PendingItemRouteBindingContractTest`)
+ * y la familia admin {user}/{missingItemRequest}
+ * (`AdminRouteBindingContractTest`, trait
+ * `RejectsInvalidIntegerRouteBindings`). Ver AUDITORIA.md H-050.
  */
 class BigintRouteBindingCharacterizationTest extends TestCase
 {
@@ -112,23 +114,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
         $this->assertDatabaseCount('activity_logs', 0);
     }
 
-    #[Test]
-    public function bindings_implicitos_admin_devuelven_404_en_sqlite(): void
-    {
-        Sanctum::actingAs($this->admin());
-        $target = User::factory()->create();
-
-        foreach (self::SEGMENTOS_INVALIDOS as $seg) {
-            $this->patchJson("/api/v1/admin/users/{$seg}/role", ['role' => 'admin'])
-                ->assertNotFound("PATCH admin/users/{$seg}");
-
-            $this->patchJson("/api/v1/admin/missing-item-requests/{$seg}", ['status' => 'rejected'])
-                ->assertNotFound("PATCH missing-item-requests/{$seg}");
-        }
-
-        $this->assertDatabaseCount('activity_logs', 0);
-    }
-
     // ── Resoluciones manuales sobre bigint (misma forma de defecto) ────────
 
     #[Test]
@@ -184,23 +169,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
 
             $this->deleteJson("/api/v1/admin/storage/orders/{$seg}")
                 ->assertStatus(500, "DELETE storage/orders/{$seg}");
-        }
-
-        $this->assertDatabaseCount('activity_logs', 0);
-    }
-
-    // ── Binding protegido {pendingItem}: contrato ya corregido ─────────────
-
-    #[Test]
-    public function pending_item_protegido_devuelve_404(): void
-    {
-        Sanctum::actingAs($this->usuario());
-
-        foreach (self::SEGMENTOS_INVALIDOS as $seg) {
-            $this->patchJson("/api/v1/pending-items/{$seg}", ['status' => 'resolved'])
-                ->assertNotFound("PATCH pending-items/{$seg}");
-            $this->deleteJson("/api/v1/pending-items/{$seg}")
-                ->assertNotFound("DELETE pending-items/{$seg}");
         }
 
         $this->assertDatabaseCount('activity_logs', 0);
@@ -269,17 +237,6 @@ class BigintRouteBindingCharacterizationTest extends TestCase
         // SQLite: 404 del binding antes que el 403 de has.role.
         $this->patchJson('/api/v1/order-items/abc', ['qty' => 5])->assertNotFound();
         $this->patchJson("/api/v1/order-items/{$item->id}", ['qty' => 5])->assertForbidden();
-    }
-
-    #[Test]
-    public function usuario_no_admin_recibe_el_binding_antes_del_403_admin(): void
-    {
-        // El grupo admin está dentro de auth+active pero el binding corre
-        // antes que AdminMiddleware.
-        Sanctum::actingAs($this->usuario());
-
-        $this->patchJson('/api/v1/admin/users/abc/role', ['role' => 'admin'])->assertNotFound();
-        $this->patchJson('/api/v1/admin/users/1/role', ['role' => 'admin'])->assertForbidden();
     }
 
     // ── Pertenencia de hijos anidados (ownership) ──────────────────────────

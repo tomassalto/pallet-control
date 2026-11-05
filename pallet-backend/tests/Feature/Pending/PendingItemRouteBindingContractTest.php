@@ -152,6 +152,34 @@ class PendingItemRouteBindingContractTest extends TestCase
             ->assertNotFound();
     }
 
+    #[Test]
+    public function segmentos_limite_del_filtro_enteros_conservan_su_semantica(): void
+    {
+        // El trait común usa filter_var(FILTER_VALIDATE_INT, min_range 0):
+        // acepta signo '+' y espacios alrededor del número — se normalizan
+        // al id y el binding resuelve, así que un payload inválido llega a
+        // la validación (422) en lugar de cortar en el binding (404).
+        // Rechaza ceros a la izquierda. Estos casos no estaban
+        // caracterizados antes del refactor al trait (H-050, D-033).
+        Sanctum::actingAs($this->usuario());
+        $pending = $this->pendiente();
+
+        $payloadInvalido = ['status' => 'invalido'];
+
+        foreach (['+' . $pending->id, '%20' . $pending->id] as $seg) {
+            $this->patchJson("/api/v1/pending-items/{$seg}", $payloadInvalido)
+                ->assertUnprocessable("segmento aceptado {$seg}");
+        }
+
+        foreach (['0' . $pending->id, '00' . $pending->id] as $seg) {
+            $this->patchJson("/api/v1/pending-items/{$seg}", $payloadInvalido)
+                ->assertNotFound("segmento rechazado {$seg}");
+        }
+
+        $this->assertDatabaseCount('pending_items', 1);
+        $this->assertDatabaseCount('activity_logs', 0);
+    }
+
     // ── Ids válidos: comportamiento normal conservado ──────────────────────
 
     #[Test]

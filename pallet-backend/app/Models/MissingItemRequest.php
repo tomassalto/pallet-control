@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RejectsInvalidIntegerRouteBindings;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MissingItemRequest extends Model
 {
+    use RejectsInvalidIntegerRouteBindings;
+
     protected $fillable = [
         'order_id',
         'order_item_id',
