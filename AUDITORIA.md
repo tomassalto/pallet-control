@@ -599,9 +599,9 @@ otro origen se cuente como `22P02`.
 | `{base}` (PalletBaseController) | `PalletBase` · bigint | 4 (update, adjust-item, destroy, migrate) | implícito | segmento sin protección; pertenencia verificada en controlador/servicio | 🔴 vulnerable |
 | `{base}` (fotos/anotaciones) | `PalletBase::findOrFail($baseId)` | 4 (store/destroy foto de base, index/store anotaciones) | manual | ninguna | 🔴 vulnerable (misma forma de defecto) |
 | `{photo}` (pallet/base/anotaciones) | `->find($photoId)` manual | 4 (destroy foto pallet, destroy foto base, index/store anotaciones) | manual | ninguna | 🔴 vulnerable (misma forma de defecto) |
-| `{pendingItem}` | `PendingItem` · bigint | 2 (PATCH, DELETE) | implícito + `resolveRouteBinding` tipado | ✅ entero ≥ 0 o `null` → 404 | 🟢 protegido |
-| `{user}` | `User` · users · bigint | 2 (PATCH role, POST toggle-active) | implícito | ninguna | 🔴 vulnerable |
-| `{missingItemRequest}` | `MissingItemRequest` · bigint | 1 (PATCH review) | implícito | ninguna | 🔴 vulnerable |
+| `{pendingItem}` | `PendingItem` · bigint | 2 (PATCH, DELETE) | implícito + trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404 | 🟢 protegido |
+| `{user}` | `User` · users · bigint | 2 (PATCH role, POST toggle-active) | implícito + trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404 | 🟢 protegido |
+| `{missingItemRequest}` | `MissingItemRequest` · bigint | 1 (PATCH review) | implícito + trait `RejectsInvalidIntegerRouteBindings` | ✅ entero ≥ 0 o `null` → 404 | 🟢 protegido |
 | `{id}` (admin storage) | `Pallet`/`Order` por `whereKey` | 2 (DELETE storage/pallets, storage/orders) | type-hint `int $id` | coerción PHP | 🟠 500 por `TypeError` en **ambos** motores |
 | `{id}` (`/auth/verify`) | — | 1 (GET verify) | método inexistente | — | ⚪ no aplica → H-052 |
 | `{token}` | `public_token` de Order | 2 (GET order público, POST missing-items) | escalar + `where('[A-Za-z0-9]{48}')` | ✅ regex de ruta | 🟢 protegido |
@@ -638,16 +638,58 @@ otro origen se cuente como `22P02`.
   entero ≥ 0 compartida) — cubre todos los implícitos de una vez, pero no las
   resoluciones manuales ni el `int $id`; (d) `whereNumber()` — cambia `401`/`403` a
   `404` al fallar en matching de ruta: aceptable en rutas públicas, no en las
-  autenticadas. Candidata para implícitos: (c) implementado sobre (a)/(b) con un
-  contrato común; las manuales exigen normalización propia en cada punto.
+  autenticadas. **Elegida para implícitos: (c) como trait
+  `RejectsInvalidIntegerRouteBindings` (D-033), aplicada por familia sobre (a)**;
+  las manuales exigen normalización propia en cada punto.
+
+**Corrección (familia admin + mecanismo común, 2026-11-05, rama
+`hardening/admin-bigint-route-bindings`, base `1cebe12`):** se implementó el
+trait `App\Models\Concerns\RejectsInvalidIntegerRouteBindings` y se aplicó a
+`User`, `MissingItemRequest` y `PendingItem`; la implementación duplicada de
+`PendingItem::resolveRouteBinding` se eliminó sin cambiar su contrato. La
+guarda sólo actúa cuando el binding apunta a la PK entera del modelo (campo
+nulo → route key = key name, `getKeyType() === 'int'`): un segmento que no es
+un entero no negativo dentro del rango bigint se rechaza con `filter_var`
+(`FILTER_VALIDATE_INT`, `min_range: 0`) devolviendo `null` →
+`ModelNotFoundException` → `404` dentro de `SubstituteBindings`, antes de
+emitir la consulta por PK; los ids válidos se normalizan a `int` y delegan en
+`resolveRouteBindingQuery` sin cambios. Bindings sobre campos alternativos
+(`{modelo:campo}`) y PKs string conservan la resolución por defecto.
+`resolveSoftDeletableRouteBinding` recibe la misma guarda
+(`withoutGlobalScope(SoftDeletingScope::class)`, equivalente al `withTrashed`
+del framework) para futuros modelos con SoftDeletes. No se creó `BaseModel` ni
+se tocó la herencia del dominio.
+
+Contrato fijado en ambos motores (`tests/Feature/Admin/AdminRouteBindingContractTest.php`
+y su espejo `tests/Integration/Postgres/AdminRouteBindingContractTest.php`,
+grupo `postgres`; `PendingItemRouteBindingContractTest` como regresión del
+trait): `abc`, `12abc`, `1.5`, `-1`, `01`, overflow (`99999999999999999999`,
+`9223372036854775808`) → `404` **sin emitir la consulta por PK** (probado con
+`DB::listen`, no sólo por el código de estado); numérico inexistente → `404`
+con la consulta emitida; válido sin admin → `403`; válido con admin → flujo
+normal (cambio de rol con revocación de tokens D-007 y auditoría, toggle
+active con revocación, revisión de faltante con pendiente derivado y log,
+segunda revisión `409`, pedido `done` `409`); inválido → cero cambios, cero
+pendientes derivados y cero `activity_logs`. La precedencia
+`auth:sanctum` → binding → `user.active` → `admin` → Form Request quedó
+acreditada: anónimo `401`, inactivo `404`/`401`, no-admin `404`/`403`. Los
+casos límite del filtro (`+id`, espacios, ceros a la izquierda) quedaron
+caracterizados en ambos contratos. En PostgreSQL las excepciones de clase 22
+(`22P02`/`22003`) desaparecieron para esta familia: `excepcionDe` acredita
+`ModelNotFoundException` y las pruebas de no-consulta confirman que la PK
+bigint nunca se consulta con un segmento inválido.
 
 **Estado:** 🟡 parcial. Cerradas: las reglas `exists` no tipadas de pendientes y
-solicitudes de faltantes (`bail` + `integer`) y el binding de `{pendingItem}` con
-`resolveRouteBinding` tipado (`2f2a502` caracterización, `911a041` corrección).
-Abiertas: 9 bindings implícitos y 4 puntos de resolución manual confirmados con
-`500`/`22P02` en PostgreSQL por la matriz de arriba (evidencia: grupo `postgres` en
-Actions run `41965294771`, verde), el `{id}` int de admin storage (`TypeError`, ambos
-motores) y la uniformización de `bail` — todo el trabajo por familias sigue bajo H-020.
+solicitudes de faltantes (`bail` + `integer`) y los bindings de `{pendingItem}`,
+`{user}` y `{missingItemRequest}` con el trait común
+`RejectsInvalidIntegerRouteBindings` (`2f2a502`/`911a041` pendientes;
+familia admin en `hardening/admin-bigint-route-bindings`, D-033). Abiertas: 7
+bindings implícitos sobre bigint sin protección — `{order}` (18 rutas),
+`{pallet}` (22), `{ticket}` (6), `{photo}` de tickets (4), `{base}` de
+PalletBaseController (4), `{customer}` (1), `{item}` (1) — las resoluciones
+manuales de `{base}`/`{photo}` en fotos y anotaciones, y el `{id}` int de
+admin storage (`TypeError` en ambos motores); el trabajo por familias sigue
+bajo H-020 con evidencia del grupo `postgres` en Actions run `41965294771`.
 
 #### H-051 — El service worker persistía respuestas autenticadas y evidencia privada entre sesiones
 ```

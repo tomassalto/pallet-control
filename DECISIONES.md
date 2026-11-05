@@ -954,3 +954,32 @@ Un `422` distingue entrada inválida de vacío real y reproduce el criterio ya a
 Un consumidor que enviara un `status` fuera del allowlist pasaría de lista vacía a `422`. Evidencia: el único consumidor, `usePendingItemsPage`, no envía `status` en absoluto (consulta el listado completo) y trata cualquier `4xx` como error con toast, nunca como lista vacía; `RequestCard` sólo emite `approved`/`rejected` en el PATCH. Rollback trivial: retirar `in:` si apareciera un consumidor incompatible.
 
 **Referencia normativa:** `BE-VALID`, `BE-API`, `QA-CONTRACT`, `H-020`
+
+---
+
+## D-033 — Trait de modelo para rechazar bindings implícitos no enteros sobre PK bigint
+
+**Fecha:** 2026-11-05
+**Estado:** ✅ vigente
+
+**Contexto**
+La auditoría H-050 confirmó que el binding implícito compara el segmento de ruta (string sin tipo) contra PKs `bigint`: en PostgreSQL un valor no numérico aborta con `SQLSTATE[22P02]`/`22003` y el handler global responde `500` genérico; en SQLite devuelve `404` sin evidencia de seguridad. La corrección de `{pendingItem}` ya había introducido `resolveRouteBinding` con `filter_var` (`FILTER_VALIDATE_INT`, `min_range: 0`), pero copiarlo por modelo no escala a las familias restantes de la matriz. La elección de mecanismo quedó como candidata (c) del plan de corrección registrado en `AUDITORIA.md`.
+
+**Opciones evaluadas**
+| Opción | A favor | En contra |
+|---|---|---|
+| A — `resolveRouteBinding` copiado por modelo | Explícito y probado en `PendingItem` | Duplica la regla en cada modelo; deriva de contrato |
+| B — `Route::bind` en un provider | Centralizado en un punto | Efecto equivalente fuera del modelo; no reutiliza la resolución por defecto ni los scoped bindings |
+| C — trait `RejectsInvalidIntegerRouteBindings` | Regla única junto al modelo; conserva `resolveRouteBindingQuery`, scoped bindings y `resolveSoftDeletableRouteBinding`; extensible por familia | Sólo cubre bindings implícitos, no resoluciones manuales ni type-hints escalares |
+| D — `whereNumber()` en la ruta | Una restricción por ruta | Rechaza en el matching de ruta, antes de todo middleware: convierte el `401` de anónimo/inactivo en `404` y rompe la precedencia vigente |
+
+**Decisión**
+Los modelos cuyo binding implícito apunta a una PK entera adoptan el trait `App\Models\Concerns\RejectsInvalidIntegerRouteBindings`. La guarda sólo aplica cuando el campo de binding es la PK numérica del modelo (campo nulo → route key = key name y `getKeyType() === 'int'`): bindings sobre campos alternativos (`{modelo:campo}`) y PKs string conservan la resolución por defecto del framework. Un segmento inválido devuelve `null` → `ModelNotFoundException` → `404` dentro de `SubstituteBindings`, sin consultar la tabla; los válidos se normalizan a `int` antes de `resolveRouteBindingQuery`. `resolveSoftDeletableRouteBinding` recibe la misma guarda (`withoutGlobalScope(SoftDeletingScope::class)`, equivalente al `withTrashed` del framework) para futuros modelos con SoftDeletes. No se crea `BaseModel` ni se cambia la herencia del dominio. Alcance inicial: `User`, `MissingItemRequest` y `PendingItem` (refactor de su implementación duplicada sin cambio de contrato). Las resoluciones manuales `{base}`/`{photo}` y el `{id}` int de admin storage quedan fuera del trait por forma de defecto distinta.
+
+**Por qué**
+El trait mantiene la precedencia `auth:sanctum` → binding → `user.active` → `has.role`/`admin` → Form Request (el rechazo ocurre en `SubstituteBindings`, no en el matching de ruta), no toca middleware, casts ni captura de `QueryException`, y concentra la regla entero ≥ 0 en un solo punto auditable para las familias restantes de H-050.
+
+**Trade-off aceptado**
+`filter_var` acepta `+id` y espacios alrededor del número (se normalizan al id antes de consultar) y rechaza ceros a la izquierda — contrato fijado en tests, idéntico al ya acreditado en `PendingItem`. La guarda no protege bindings con campo explícito distinto de la PK ni resoluciones manuales: cada familia debe revisar su forma de defecto antes de adoptar el trait o normalizar el segmento en su punto.
+
+**Referencia normativa:** `BE-API`, `BE-DATA`, `BE-ERR`, `SEC-INPUT`, `QA-CONTRACT`, `H-050`, `AUDITORIA.md`
